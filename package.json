@@ -2,13 +2,13 @@
   "name": "kira",
   "version": "1.0.0",
   "private": true,
-  "description": "Kira, the bot of Ludovic's Discord server: server layout, moderation, new videos and releases",
+  "description": "Kira, the bot of Ludovic's Discord server: layout, onboarding, moderation, levels, voice rooms, mod-mail, hall of fame, feeds",
   "type": "module",
   "main": "src/bot.js",
   "scripts": {
     "setup": "node src/setup.js",
     "start": "node src/bot.js",
-    "check": "node --check src/bot.js && node --check src/setup.js && node --check src/config.js && node --check src/feeds.js && node --check src/store.js"
+    "check": "for f in src/*.js src/features/*.js; do node --check $f || exit 1; done"
   },
   "engines": {
     "node": ">=20"
