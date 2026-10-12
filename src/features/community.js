@@ -171,15 +171,30 @@ export async function onMessage(msg) {
 }
 
 export function setup() {
-  client.on('guildMemberAdd', async (m) => {
-    if (m.guild.id !== GUILD_ID || m.user.bot) return;
+  // Welcomes in #general, grouped: one message for up to 5 people, a single "welcome everyone" beyond that.
+  const arrivals = [];
+  let flushTimer = null;
+  async function flush() {
+    flushTimer = null;
+    const people = arrivals.splice(0);
+    if (!people.length) return;
     const c = state.channels;
+    const guide = `Start with <#${c.welcome}> (roles), <#${c.rules}> and <#${c.faq}>, then say hi in <#${c.introductions}>. Building something? <#${c.communityprojects}>. Making videos? <#${c.creatorschat}>. Beats or raps? <#${c.beats}>.`;
+    const few = people.length <= 5;
+    const guild = client.guilds.cache.get(GUILD_ID);
     await channel('general')?.send({
-      content: `<@${m.id}>`,
-      embeds: [new EmbedBuilder().setColor(COLOR).setThumbnail(m.user.displayAvatarURL({ size: 256 }))
-        .setDescription(`👋 Welcome to **ludovic's server**, <@${m.id}>! You're member **#${m.guild.memberCount}**.\n\nStart with <#${c.welcome}> and <#${c.rules}>, pick your roles there, and say hi in <#${c.introductions}>. Building something? <#${c.communityprojects}>. Making beats or rapping? <#${c.beats}>.`)],
-      allowedMentions: { users: [m.id] },
-    });
+      content: few ? people.map((id) => `<@${id}>`).join(' ') : undefined,
+      embeds: [new EmbedBuilder().setColor(COLOR)
+        .setDescription(few
+          ? `👋 Welcome to **ludovic's server**${people.length > 1 ? ', all of you' : ''}! We're **${guild?.memberCount ?? '?'}** now.\n\n${guide}`
+          : `👋 Welcome to the **${people.length}** people who just joined! We're **${guild?.memberCount ?? '?'}** now.\n\n${guide}`)],
+      allowedMentions: { users: few ? people : [] },
+    }).catch(console.error);
+  }
+  client.on('guildMemberAdd', (m) => {
+    if (m.guild.id !== GUILD_ID || m.user.bot) return;
+    arrivals.push(m.id);
+    flushTimer ??= setTimeout(() => flush().catch(console.error), 15_000);
   });
 
   client.on('interactionCreate', async (i) => { if (i.isButton() && i.guildId === GUILD_ID) await onButton(i).catch(console.error); });

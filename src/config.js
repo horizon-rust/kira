@@ -28,6 +28,9 @@ export const ROLES = [
   { key: 'beatmaker', was: 'creator', name: '🥁 Beatmaker', color: 0xff8ad8, self: true, label: 'Beatmaker' },
   { key: 'rapper', name: '🎤 Rapper', color: 0xe056fd, self: true, label: 'Rapper' },
   { key: 'singer', name: '🎶 Singer', color: 0xf8a5c2, self: true, label: 'Singer' },
+  { key: 'youtuber', name: '🎬 YouTuber', color: 0xff0000, self: true, label: 'YouTuber' },
+  { key: 'editor', name: '✂️ Editor', color: 0x48dbfb, self: true, label: 'Editor' },
+  { key: 'designer', name: '🖼️ Thumbnail artist', color: 0xfeca57, self: true, label: 'Thumbnail artist' },
   { key: 'lvl5', name: 'lvl 5', color: 0x95a5a6, level: 5 },
   { key: 'lvl10', name: 'lvl 10', color: 0x7ed6df, level: 10 },
   { key: 'lvl20', name: 'lvl 20', color: 0x22a6b3, level: 20 },
@@ -44,59 +47,160 @@ export const ROLES = [
 
 // Channel types: text, voice, forum, announcement.
 // readonly: everyone reads, only staff and Kira post. staff: only mods see it. posts: 'staff' → only staff open forum posts.
-// react: the reactions Kira adds to every new forum post. threads: Kira opens a thread on every message (comments).
 // locked: a voice channel nobody joins by themselves (Ludovic or a mod moves people in). lobby: join it to get your own room.
+// Forums: `guide` is the post guidelines Discord shows above the forum, and the pinned "how to post" post;
+// `template` is what a post must look like; `check` is what Kira verifies on each new post (missing → it asks,
+// still missing after an hour → the post is closed); `tags` are [emoji, name, staffOnly]; `done` is the tag
+// /done puts on a post (solved, taken, found…); `react` the reactions Kira adds; `every` the minimum time
+// between two posts by the same member (seconds); `gallery` for media forums.
 // `was` on a category: the name it had, so setup moves it instead of making a new one.
+// `retired`: channels setup deletes if no member ever wrote in them.
+
+const LINK_OR_FILE = 'a file or a link';
+
 export const LAYOUT = [
   {
-    key: 'start', was: '👋 start here', category: '👋 start here',
+    key: 'start', category: '👋 start here',
     channels: [
-      { key: 'welcome', name: 'welcome', type: 'text', readonly: true, topic: 'Who I am, what this server is, and your roles.' },
-      { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'Read these. Kira enforces them.' },
+      { key: 'welcome', name: 'welcome', type: 'text', readonly: true, topic: 'Start here: what this server is, where everything is, and your roles (buttons below).' },
+      { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
+      { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: roles, levels, voice rooms, posting, Horizon, reaching the mods.' },
       { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'New videos and big news. Pick the 🔔 Videos role to get pinged.' },
     ],
   },
   {
-    key: 'general', was: '💬 community', category: '💬 general',
+    key: 'general', category: '💬 general',
     channels: [
-      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything. English please, so everyone can follow.' },
-      { key: 'introductions', name: 'introductions', type: 'text', topic: 'Say hi: who you are, what you build or make, what brought you here.', slowmode: 60 },
-      { key: 'offtopic', name: 'off-topic', type: 'text', topic: 'Everything else. Any language.' },
-      { key: 'memes', name: 'memes', type: 'text', topic: 'Memes. Keep them SFW.' },
-      { key: 'halloffame', name: 'hall-of-fame', type: 'text', readonly: true, topic: 'Messages that got 5 ⭐. React ⭐ to a message you love.' },
-      { key: 'botcommands', name: 'bot-commands', type: 'text', topic: '/rank, /leaderboard, /remind and the rest of Kira. Level-ups are announced here.' },
+      { key: 'general', name: 'general', type: 'text', slowmode: 3, topic: 'Talk about anything. English please, so everyone can follow. Topics have their own channels below.' },
+      { key: 'introductions', name: 'introductions', type: 'text', slowmode: 300, pin: 'intro', topic: 'Say hi once, with the template in the pinned message. One introduction per person.' },
+      { key: 'offtopic', name: 'off-topic', type: 'text', slowmode: 3, topic: 'Everything that fits nowhere else. Any language.' },
+      { key: 'memes', name: 'memes', type: 'text', slowmode: 10, topic: 'Memes and funny stuff. SFW only. No XP here.' },
+      {
+        key: 'resources', name: 'resources', type: 'forum', every: 3600, reaction: '👍',
+        topic: 'Useful tools, guides, kits and assets for coding, music and video.',
+        tags: [['🤖', 'ai and code'], ['🎤', 'music'], ['🎬', 'video'], ['🎨', 'design'], ['📚', 'guide'], ['🆓', 'free'], ['💰', 'paid']],
+        guide: 'One resource per post: a tool, a guide, a kit, a preset, a plugin. **Legal stuff only**: no cracked software, no ripped or leaked assets (instant ban). Search before posting, it might be here already.',
+        template: '**What it is:** one or two sentences\n**Link:** where to get it\n**Free or paid:** free / paid (price)\n**Why it\'s good:** what it helped you with',
+        check: { media: true, needs: [['What it is', /what it is/i], ['Free or paid', /free or paid|price|\bfree\b|\bpaid\b/i]] },
+      },
+      { key: 'halloffame', name: 'hall-of-fame', type: 'text', readonly: true, topic: 'Messages that got 5 ⭐. React ⭐ to a message you love to send it here.' },
+      { key: 'botcommands', name: 'bot-commands', type: 'text', topic: 'Use Kira here: /rank, /leaderboard, /remind, /userinfo… Level-ups are announced here. No XP here.' },
     ],
   },
   {
-    key: 'vibe', was: '🤖 ai coding', category: '🤖 vibe coding',
+    key: 'mine', category: "🛠️ ludovic's projects",
     channels: [
-      { key: 'aicoding', name: 'vibe-coding', type: 'text', topic: 'Harnesses, models, prompts, workflows: Claude Code, Codex and the rest.' },
-      { key: 'rewrites', name: 'rewrites', type: 'text', topic: 'Decompiles, ports and rewrites done with agents: games, apps, anything. No leaked or pirated files.' },
-      { key: 'communityprojects', name: 'community-projects', type: 'forum', react: ['🔥'], topic: 'Your projects: one post each, with a link, screenshots and what you used. Post updates in your thread. Self-promo is fine here.', tags: ['game', 'app', 'tool', 'website', 'ai agent', 'rewrite', 'music', 'open source', 'wip', 'released'] },
-      { key: 'showcase', name: 'showcase', type: 'text', threads: true, topic: 'Quick clips and screenshots of what you built. Kira opens a thread on each one for comments.' },
-      { key: 'help', name: 'help', type: 'forum', topic: 'Stuck with an agent, a build or a setup? Open a post.', tags: ['claude code', 'codex', 'setup', 'build', 'solved'] },
+      { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the roadmap, the disclaimer.' },
+      { key: 'horizonchat', name: 'horizon-chat', type: 'text', slowmode: 3, topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' },
+      {
+        key: 'horizonbugs', name: 'horizon-bugs', type: 'forum', every: 600,
+        topic: 'One bug per post, with the template. Search first: if it\'s already reported, add your details in that post.',
+        tags: [['💥', 'crash'], ['🖼️', 'rendering'], ['🎮', 'gameplay'], ['🌍', 'world gen'], ['⚡', 'performance'], ['🔊', 'sound'], ['🖥️', 'install / launch'], ['🔍', 'confirmed', true], ['🔁', 'duplicate', true], ['✅', 'fixed', true]],
+        guide: 'One bug per post. **Search first**: if someone already reported it, reply in their post instead. Title: what\'s broken, in a few words ("Water renders black on AMD"). Pick a tag. Kira checks that the template is filled in; posts without it are closed after an hour.',
+        template: '**What I did:** the steps, one per line\n**What happened:**\n**What I expected:**\n**Horizon version:** release or commit\n**OS, CPU, GPU:**\n+ a screenshot, a video or the log file if you have one',
+        check: { min: 80, needs: [['What I did', /what i did|steps/i], ['What happened', /what happened|happen/i], ['What I expected', /expect/i], ['OS, CPU, GPU', /\b(os|windows|linux|mac|macos|gpu|nvidia|amd|intel|radeon|geforce)\b/i]] },
+      },
+      {
+        key: 'horizonideas', name: 'horizon-ideas', type: 'forum', every: 1800, react: ['👍', '👎'],
+        topic: 'One idea per post, with the template. Vote with 👍 and 👎: the most wanted ones go on the roadmap.',
+        tags: [['⚡', 'performance'], ['🧩', 'modding'], ['🌐', 'multiplayer'], ['🤖', 'mcp / agents'], ['🎬', 'video studio'], ['🎮', 'gameplay'], ['💡', 'other'], ['📌', 'planned', true], ['✅', 'done', true], ['❌', "won't do", true]],
+        guide: 'One idea per post. **Search first** and vote 👍 on the existing post rather than making a new one. Title: the idea in a few words. Horizon aims at 100% vanilla behaviour first: ideas that change gameplay come after that. Kira closes posts without the template after an hour.',
+        template: '**The idea:**\n**Why:** what it makes better\n**How it could work:** (optional)',
+        check: { min: 40, needs: [['The idea', /the idea|idea/i], ['Why', /why/i]] },
+      },
+      {
+        key: 'projects', name: 'projects', type: 'forum', readonly: true, gallery: true,
+        topic: 'Every project of mine, one post each, with its links. Questions and feedback: #project-feedback (or the Horizon channels).',
+        tags: [['🎮', 'game'], ['🎨', 'lsuite'], ['📱', 'app'], ['🧪', 'research']],
+        guide: 'The catalogue of my projects: one post each, kept up to date. You can\'t reply here: ask questions and give feedback in #project-feedback, and for Horizon in #horizon-chat, #horizon-bugs and #horizon-ideas.',
+      },
+      {
+        key: 'feedback', name: 'project-feedback', type: 'forum', every: 600, react: ['👍', '👎'],
+        topic: 'Questions, bugs and ideas for lsuite, DISPO and my other projects (not Horizon: it has its own channels). Tag the project and the kind of post.',
+        tags: [['🎨', 'lsuite'], ['🎵', 'ryolune'], ['🎬', 'kimchi'], ['🖼️', 'nori'], ['📄', 'folio'], ['🎸', 'DISPO'], ['🧪', 'research'], ['🐛', 'bug'], ['💡', 'idea'], ['❓', 'question'], ['✅', 'done', true]],
+        done: '✅ done',
+        guide: 'For lsuite (ryolune, kimchi, nori, folio), DISPO and my research projects. **Horizon has its own channels.** Two tags: the project, and bug / idea / question. Search first. For a bug, give the steps, what you expected, the version and your OS. When your question is answered, type `/done`.',
+        template: '**Project:** which app\n**Details:** your question, idea, or the bug: steps, what you expected, version, OS',
+        check: { min: 40, needs: [['Project', /project|lsuite|ryolune|kimchi|nori|folio|dispo|pokemon|obsidian/i], ['Details', /details|steps|expect|why|how|\?/i]] },
+      },
+      { key: 'releases', name: 'releases', type: 'text', readonly: true, topic: 'Every new release of my open-source projects, posted by Kira. Pick the 📦 Releases role to get pinged.' },
+    ],
+  },
+  {
+    key: 'vibe', category: '🤖 vibe coding',
+    channels: [
+      { key: 'aicoding', name: 'vibe-coding', type: 'text', slowmode: 3, topic: 'Building with AI: harnesses, models, prompts, workflows (Claude Code, Codex and the rest). Problems → #help. Your projects → #community-projects.' },
+      { key: 'rewrites', name: 'rewrites', type: 'text', slowmode: 3, topic: 'Decompiles, ports and rewrites with agents (Skate 3, Minecraft…): techniques and progress. Never share game files, leaked code or ROMs.' },
+      {
+        key: 'communityprojects', name: 'community-projects', type: 'forum', every: 21600, gallery: true, reaction: '🔥', react: ['🔥'],
+        topic: 'Your projects: one post per project, with the template. Post updates in your own post, not a new one. Self-promo is fine here.',
+        tags: [['🎮', 'game'], ['📱', 'app'], ['🛠️', 'tool'], ['🌐', 'website'], ['🤖', 'ai agent'], ['🔁', 'rewrite'], ['🎵', 'music'], ['🎬', 'video'], ['📖', 'open source'], ['🚧', 'wip'], ['🚀', 'released']],
+        guide: 'One post per project, and **updates go in your own post** (one new post every 6 hours at most). Show it: a screenshot or a video is required. Pick at least one tag. Self-promo is fine here and only here. No malware, no piracy, no rewrites shipping someone else\'s files.',
+        template: '**What it is:** one or two sentences\n**Link:** where to try it or see the code\n**Made with:** the tools and models you used\n**Looking for:** feedback, testers, contributors… (optional)\n+ at least one screenshot or video',
+        check: { min: 60, files: true, needs: [['What it is', /what it is/i], ['Made with', /made with|built with|using|claude|codex|gpt|cursor/i]] },
+      },
+      {
+        key: 'help', name: 'help', type: 'forum', every: 300, done: '✅ solved',
+        topic: 'Stuck with an agent, a build or a setup? One post per problem, with the template. Type /done when it\'s solved.',
+        tags: [['🧠', 'claude code'], ['💻', 'codex'], ['🧰', 'other tool'], ['⚙️', 'setup'], ['🏗️', 'build error'], ['🧩', 'mcp'], ['✅', 'solved', true]],
+        guide: 'One problem per post. Title: the problem in one line ("Claude Code can\'t find cargo on Windows"). Paste errors as text in a code block (between ``` ```), not as photos of your screen. Never paste API keys or tokens. When it\'s solved, type `/done` in your post so others find the answer.',
+        template: '**What I\'m trying to do:**\n**What happens instead:** the error, in a code block\n**What I tried:**\n**Setup:** OS, tool, model',
+        check: { min: 60, needs: [["What I'm trying to do", /trying to do|trying|want to/i], ['What happens instead', /happens|error|instead/i], ['Setup', /setup|windows|linux|mac|os\b|claude|codex/i]] },
+      },
       { key: 'coding', name: 'Coding together', type: 'voice' },
     ],
   },
   {
-    key: 'mine', was: "🛠️ ludovic's projects", category: "🛠️ ludovic's projects",
+    key: 'creators', category: '🎬 creators',
     channels: [
-      { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, how to get it, the roadmap.' },
-      { key: 'horizonchat', name: 'horizon-chat', type: 'text', topic: 'Talk about Horizon.' },
-      { key: 'horizonideas', name: 'horizon-suggestions', type: 'forum', react: ['👍', '👎'], topic: 'One idea per post. Kira adds 👍 and 👎: vote on the ones you want.', tags: ['performance', 'modding', 'multiplayer', 'mcp / agents', 'video studio', 'other', 'planned', 'done'] },
-      { key: 'horizonbugs', name: 'horizon-bugs', type: 'forum', topic: 'One bug per post: what you did, what happened, what you expected, your OS and GPU. Screenshots help.', tags: ['crash', 'rendering', 'gameplay', 'world gen', 'performance', 'confirmed', 'fixed'] },
-      { key: 'projects', name: 'projects', type: 'forum', posts: 'staff', topic: 'One post per project: Horizon, lsuite, DISPO and the rest. Ask questions and give feedback in its post.', tags: ['game', 'lsuite', 'app', 'research'] },
-      { key: 'feedback', name: 'feedback', type: 'forum', react: ['👍', '👎'], topic: 'Ideas and bugs for lsuite, DISPO and my other projects. Tag the project.', tags: ['lsuite', 'ryolune', 'kimchi', 'nori', 'folio', 'DISPO', 'other', 'bug', 'idea'] },
-      { key: 'releases', name: 'releases', type: 'text', readonly: true, topic: 'Every new release of my open-source projects. Pick the 📦 Releases role to get pinged.' },
+      { key: 'creatorschat', name: 'creators-chat', type: 'text', slowmode: 3, topic: 'YouTubers, editors, thumbnail artists: growth, the algorithm, editing, gear. Feedback on a video → #video-feedback. Jobs → #hire.' },
+      {
+        key: 'videofeedback', name: 'video-feedback', type: 'forum', every: 21600, gallery: true, react: ['🔥'],
+        topic: 'Get feedback on a video, a short, an edit, a thumbnail or a title. One post each, with the template.',
+        tags: [['🎞️', 'video'], ['📱', 'short'], ['✂️', 'edit'], ['🖼️', 'thumbnail'], ['🏷️', 'title'], ['📺', 'channel review']],
+        guide: 'One post per video (or thumbnail, or title), one new post every 6 hours at most. Say what you want feedback on. Give feedback to others too: that\'s how this works. Be honest and kind: critique the work, never the person.',
+        template: '**Link or file:** the video, short, edit or thumbnail\n**Niche and channel size:**\n**Feedback wanted on:** hook, pacing, editing, sound, thumbnail, title…',
+        check: { media: true, needs: [['Feedback wanted on', /feedback|wanted|hook|pacing|thumbnail|title/i]] },
+      },
+      {
+        key: 'hire', name: 'hire', type: 'forum', every: 21600, done: '✅ filled',
+        topic: 'Paid work for creators: hire an editor, a thumbnail artist, a scriptwriter… or offer your services. With the template.',
+        tags: [['📢', 'hiring'], ['🙋', 'for hire'], ['✂️', 'editor'], ['🖼️', 'thumbnails'], ['✍️', 'script'], ['🎙️', 'voice-over'], ['🎵', 'music / sfx'], ['💻', 'developer'], ['✅', 'filled', true]],
+        guide: 'Two tags: **hiring** or **for hire**, and the job. One post every 6 hours at most. Paid work only: no "exposure", no "revenue share" with no money. **For hire**: a portfolio link is required. Deals are between you: the mods don\'t check payments, so ask for half up front and keep everything in writing. Scams are banned; report them with `/report`. When it\'s done, type `/done`.',
+        template: '**Role:** editor, thumbnail artist, scriptwriter…\n**Portfolio / examples:** links\n**Budget or rates:** real money\n**Availability or deadline:**\n**Contact:** DMs or e-mail',
+        check: { min: 60, needs: [['Role', /role|editor|thumbnail|script|voice|music|developer/i], ['Budget or rates', /budget|rate|\$|€|£|usd|eur|paid|per (video|hour|min)/i], ['Contact', /contact|dm|e-?mail|@/i]] },
+      },
+      { key: 'editing', name: 'Editing room', type: 'voice' },
     ],
   },
   {
     key: 'music', category: '🎤 music',
     channels: [
-      { key: 'musicchat', name: 'music-chat', type: 'text', topic: 'Rap, beats, gear, plugins, what you listen to.' },
-      { key: 'beats', name: 'beats', type: 'forum', react: ['🔥'], topic: 'Beatmakers: one prod per post (audio file or link), with the BPM, the key and the vibe. Rappers: reply in the post if you want it.', tags: ['trap', 'drill', 'boom bap', 'rage', 'r&b', 'jersey', 'afro', 'free', 'for sale', 'taken'] },
-      { key: 'collabs', name: 'collabs', type: 'forum', topic: 'Looking for a beatmaker, a rapper, a feature or someone to mix? Post what you need and what you bring.', tags: ['rapper wanted', 'beatmaker wanted', 'feature', 'mix / master', 'found'] },
-      { key: 'tracks', name: 'tracks', type: 'text', threads: true, topic: 'Finished songs and demos. Kira opens a thread on each one for feedback.' },
+      { key: 'musicchat', name: 'music-chat', type: 'text', slowmode: 3, topic: 'Rap, beats, plugins, gear, what you listen to. Prods → #beats, songs → #tracks, looking for someone → #collabs.' },
+      {
+        key: 'beats', name: 'beats', type: 'forum', every: 1800, reaction: '🔥', react: ['🔥'], done: '🔒 taken',
+        topic: 'Beatmakers: one beat per post, with the template. Rappers: reply in the post if you want it.',
+        tags: [['🔥', 'trap'], ['🔪', 'drill'], ['📦', 'boom bap'], ['⚡', 'rage'], ['💜', 'r&b'], ['🎉', 'jersey'], ['🌍', 'afro'], ['🌙', 'lo-fi'], ['🎹', 'other'], ['🆓', 'free'], ['💰', 'for sale'], ['🔒', 'taken', true]],
+        guide: '**One beat per post**, one new post every 30 minutes at most. Title: the beat\'s name and style ("Midnight — dark trap"). Two tags: the style, and free or for sale. The audio file (mp3 or wav) or a link (YouTube, SoundCloud, BeatStars…) is required. Rappers: reply in the post to get it, and always credit the beatmaker. When it\'s gone, type `/done`.',
+        template: '**BPM:**\n**Key:**\n**Vibe / type beat:**\n**License:** free (non-profit) / lease / exclusive, with the price\n**Contact:** DMs, e-mail or your store\n+ the audio file or a link',
+        check: { media: true, needs: [['BPM', /bpm|\b\d{2,3}\s*bpm/i], ['Key', /key/i], ['License', /licen[cs]e|free|lease|exclusive|price/i]] },
+      },
+      {
+        key: 'collabs', name: 'collabs', type: 'forum', every: 3600, done: '✅ found',
+        topic: 'Looking for a rapper, a beatmaker, a singer, a feature, someone to mix? One post, with the template.',
+        tags: [['🎤', 'rapper wanted'], ['🥁', 'beatmaker wanted'], ['🎶', 'singer wanted'], ['🤝', 'feature'], ['🎚️', 'mix / master'], ['🆓', 'free'], ['💰', 'paid'], ['✅', 'found', true]],
+        guide: 'Say what you need and what you bring, with a link to your work. One post every hour at most. Free or paid: say it. When you\'ve found someone, type `/done`. Scams or stolen beats: `/report`.',
+        template: '**Looking for:**\n**I bring:** your skills, with a link to your work\n**Style / references:**\n**Free or paid:**',
+        check: { min: 50, needs: [['Looking for', /looking for|need|wanted/i], ['I bring', /i bring|i make|i rap|i sing|my work|portfolio|soundcloud|youtube|http/i], ['Free or paid', /free|paid|\$|€|price/i]] },
+      },
+      {
+        key: 'trackposts', name: 'tracks', type: 'forum', every: 3600, reaction: '🔥', react: ['🔥'],
+        topic: 'Your finished songs and demos, one per post, with the template. Feedback goes in the post.',
+        tags: [['🎤', 'rap'], ['🎶', 'singing'], ['🧪', 'demo'], ['✅', 'finished'], ['🎚️', 'mix feedback'], ['✍️', 'lyrics feedback']],
+        guide: 'One song per post, one new post every hour at most. **Credit the beatmaker** (required). The audio file or a link is required. Say what you want feedback on, and give some to others.',
+        template: '**Artist:**\n**Beat by:** credit the beatmaker\n**Feedback wanted on:** flow, lyrics, mix, the hook…\n+ the audio file or a link',
+        check: { media: true, needs: [['Beat by', /beat by|prod|produced/i], ['Feedback wanted on', /feedback|wanted/i]] },
+      },
       { key: 'studio', name: 'Studio', type: 'voice' },
     ],
   },
@@ -104,7 +208,6 @@ export const LAYOUT = [
     key: 'voice', category: '🔊 voice',
     channels: [
       { key: 'lounge', name: 'Lounge', type: 'voice' },
-      { key: 'chill', name: 'Chill', type: 'voice' },
       { key: 'gaming', name: 'Gaming', type: 'voice' },
       { key: 'waiting', name: '⏳ waiting room', type: 'voice' },
       { key: 'ludovic', name: '🎙️ ludovic', type: 'voice', locked: true },
@@ -112,16 +215,23 @@ export const LAYOUT = [
     ],
   },
   {
-    key: 'staff', was: '🛡️ staff', category: '🛡️ staff', staff: true,
+    key: 'staff', category: '🛡️ staff', staff: true,
     channels: [
       { key: 'modchat', name: 'mod-chat', type: 'text', staff: true },
-      { key: 'modlog', name: 'mod-log', type: 'text', staff: true, topic: 'Kira logs here: joins (and the invite they used), leaves, deleted and edited messages, warnings, timeouts, bans, AutoMod.' },
+      { key: 'modlog', name: 'mod-log', type: 'text', staff: true, topic: 'Kira logs here: joins (and the invite they used), leaves, deleted and edited messages, warnings, timeouts, bans, raids, AutoMod.' },
       { key: 'reports', name: 'reports', type: 'text', staff: true, topic: 'Reports from members: /report and "Report to mods" on a message.' },
-      { key: 'modmail', name: 'mod-mail', type: 'text', staff: true, topic: 'Members DM Kira; each conversation is a thread here. Write in the thread to answer (start with // for a note they don\'t see).' },
+      { key: 'modmail', name: 'mod-mail', type: 'text', staff: true, topic: "Members DM Kira; each conversation is a thread here. Write in the thread to answer (start with // for a note they don't see, //close to close)." },
       { key: 'discordupdates', name: 'discord-updates', type: 'text', staff: true, topic: 'Messages from Discord to community servers.' },
     ],
   },
 ];
+
+export const RETIRED = ['showcase', 'tracks', 'chill'];
+
+// Pinned messages in text channels.
+export const PINS = {
+  intro: '👋 **Introduce yourself** (once), like this:\n\n**Name:** what we call you\n**What I do:** vibe coding, beats, rap, videos, editing…\n**What I\'m working on:**\n**Where to find me:** (optional: YouTube, GitHub, SoundCloud…)\n\nOne message, one introduction. To chat, go to #general.',
+};
 
 // Public repositories announced in #releases (orion-aic is never promoted).
 export const RELEASE_REPOS = ['horizon', 'lsuite', 'ryolune', 'kimchi', 'nori', 'folio', 'PokemonSunNative', 'obsidian-360'];
@@ -131,12 +241,23 @@ export const FEED_EVERY_MS = 10 * 60 * 1000;
 // Moderation knobs.
 export const MOD = {
   floodMessages: 6, floodWindowMs: 8_000,        // 6 messages in 8 s
-  repeatCount: 3, repeatWindowMs: 60_000,        // the same message 3 times in a minute
-  floodTimeoutMs: 10 * 60_000,                   // → 10 min timeout
+  repeatCount: 3, repeatWindowMs: 60_000,        // the same message 3 times in a minute (any channels)
+  // Spam timeouts get longer each time within a day: 10 min, 1 h, 1 day.
+  spamTimeoutsMs: [10 * 60_000, 60 * 60_000, 24 * 60 * 60_000],
   newAccountDays: 3,                             // accounts younger than this can't post links
   warnLimit: 3, warnWindowDays: 30, warnTimeoutMs: 60 * 60_000, // 3 warnings in 30 days → 1 h timeout
-  raidJoins: 8, raidWindowMs: 60_000,            // 8 joins in a minute → raid mode (highest verification level)
-  capsMin: 25, capsRatio: 0.8,                   // a long message almost all in capitals is deleted
+  capsMin: 25, capsRatio: 0.8,                   // a long message almost all in capitals is removed
+  emojiMax: 15,                                  // more emojis than this in one message is removed
+  dangerousFiles: /\.(exe|scr|bat|cmd|com|msi|ps1|vbs|jar|apk|dll|lnk|reg|hta|iso|img)$/i,
+  // Raids are bursts of brand-new accounts, not a busy evening: 15 accounts younger than 7 days
+  // joining within 2 minutes → raid mode (verified phone needed, DMs between members paused) for an hour.
+  raidYoungDays: 7, raidJoins: 15, raidWindowMs: 120_000, raidHoldMs: 60 * 60_000,
+  // A channel moving faster than this gets an automatic slowmode, removed when it calms down.
+  autoSlowmode: [[60, 15], [30, 5]],             // [messages per minute, seconds of slowmode]
+  // Greetings and join logs are grouped when many people arrive at once.
+  joinBatchMs: 60_000,
+  // Forum posts that don't follow the template are closed after this long.
+  formatGraceMs: 60 * 60_000,
 };
 
 // Levels: XP for talking (once a minute) and for time in voice with others.
@@ -151,15 +272,22 @@ export const WELCOME = {
   title: "Welcome to ludovic's server",
   description: [
     "Hey, I'm **Ludovic**. I direct AI agents to build software, and I make videos about it.",
+    'This is my community: people who build with AI, make videos, make music, or use what I make.',
     '',
-    'This server is my community: everyone who watches, builds with AI, makes music, or uses what I make.',
-    '• **💬 general**: hang out, introduce yourself, memes, the hall of fame',
-    '• **🤖 vibe coding**: harnesses, models, rewrites, and **your** projects',
-    "• **🛠️ ludovic's projects**: Horizon (Minecraft in Rust), lsuite, DISPO and the rest, with every release",
-    '• **🎤 music**: beatmakers drop their prods, rappers find beats, collabs and tracks',
-    '• **🔊 voice**: join **➕ create your room** to get your own voice channel for you and your friends',
+    '**Where things are**',
+    '💬 **general**: chat, introductions, memes, #resources, the #hall-of-fame',
+    "🛠️ **ludovic's projects**: Horizon (Minecraft in Rust) with its bugs and ideas, the catalogue of my projects, #releases",
+    '🤖 **vibe coding**: building with AI, rewrites, **your** projects in #community-projects, #help',
+    '🎬 **creators**: YouTubers, editors and thumbnail artists: #video-feedback and #hire',
+    '🎤 **music**: beatmakers post prods in #beats, rappers find them, #collabs and #tracks',
+    '🔊 **voice**: join **➕ create your room** for your own voice channel',
     '',
-    'Read the rules, then pick your roles with the buttons below. 🔔 Videos and 📦 Releases get you pinged. Talk and hang out in voice to level up (`/rank`). Need the mods? DM Kira.',
+    '**How it works**',
+    '• Channels with posts (forums) each have a template: read the pinned post before posting. Kira checks it.',
+    '• Questions? Everything is in #faq. Need a mod? Send Kira a DM.',
+    '• Talk and hang out in voice to level up (`/rank`).',
+    '',
+    'Read #rules, then pick your roles with the buttons below.',
   ].join('\n'),
   links: [
     ['YouTube', LINKS.youtube], ['Portfolio', LINKS.portfolio], ['GitHub', LINKS.github],
@@ -168,17 +296,33 @@ export const WELCOME = {
 };
 
 export const RULES = [
-  ['Be respectful', 'No harassment, hate speech, slurs, threats or personal attacks. Argue about ideas, not people.'],
-  ['No spam', 'No floods, no copy-pasted messages, no mass mentions, no unsolicited DMs. Self-promo only in #community-projects, #showcase, #beats and #tracks.'],
-  ['No piracy, no leaks', "Don't share or ask for game files, leaked code, cracked software or keys. Horizon needs your own copy of Minecraft."],
-  ['No scams or malware', 'No phishing, fake "free Nitro", or suspicious downloads. Accounts younger than 3 days can\'t post links.'],
-  ['Keep it SFW', 'No NSFW, gore or shock content, anywhere: names and avatars included.'],
-  ['Right channel', 'Horizon bugs in #horizon-bugs, Horizon ideas in #horizon-suggestions, everything else for my projects in #feedback. Prods in #beats, songs in #tracks.'],
-  ['Respect the music', "Don't steal or resell someone else's beat, and credit the beatmaker when you use a prod. Free beats are free for non-profit use unless the post says otherwise."],
+  ['Be respectful', 'No harassment, hate speech, slurs, threats or personal attacks. Critique the work, never the person.'],
+  ['No spam', 'No floods, no copy-pasted messages, no mass mentions, no unsolicited DMs, no unsolicited ads. Self-promo only in #community-projects, #beats, #tracks, #video-feedback and #hire.'],
+  ['No piracy, no leaks', "Don't share or ask for game files, ROMs, leaked code, cracked software, plugins or keys. Horizon needs your own copy of Minecraft."],
+  ['No scams or malware', 'No phishing, fake "free Nitro", or executables. Accounts younger than 3 days can\'t post links. Never pay someone outside a clear agreement.'],
+  ['Keep it SFW', 'No NSFW, gore or shock content, anywhere: names, avatars and statuses included.'],
+  ['Right channel, right format', 'Every channel says what it\'s for in its description. Forums have a template in their pinned post: posts without it are closed after an hour.'],
+  ['Respect people\'s work', "Don't steal or resell someone else's beat, edit or code. Credit the beatmaker when you use a prod. Free beats are for non-profit use unless the post says otherwise."],
   ['English in the main channels', 'So everyone can follow. Any language is fine in #off-topic.'],
+  ['No drama with the mods in public', 'Disagree with a decision? DM Kira: it reaches the mods privately.'],
   ["Discord's rules apply", 'Follow the Discord Terms of Service and Community Guidelines (13+).'],
 ];
-export const RULES_FOOTER = 'Kira and the mods enforce these: a warning, then a timeout, then a ban. 3 warnings in 30 days = a 1-hour timeout. Floods get an automatic 10-minute timeout.';
+export const RULES_FOOTER = 'Kira enforces these day and night: spam gets a timeout (10 min, then 1 h, then a day), then the mods warn, time out or ban. 3 warnings in 30 days = a 1-hour timeout.';
+
+export const FAQ = [
+  ['How do I get roles?', 'With the buttons in #welcome (click again to remove), or in **Channels & Roles** at the top of the channel list. Level roles come by themselves.'],
+  ['What are levels?', 'You earn XP by talking (once a minute) and by hanging out in voice with other people. lvl 5, 10, 20, 30 and 50 give a role. `/rank` shows yours, `/leaderboard` the top 10. #memes and #bot-commands give no XP.'],
+  ['Where do I post…?', '• a bug in Horizon → #horizon-bugs · an idea for Horizon → #horizon-ideas\n• a question or bug about lsuite, DISPO… → #project-feedback\n• your own project → #community-projects · a coding problem → #help\n• a beat → #beats · a song → #tracks · looking for a rapper or beatmaker → #collabs\n• a video to review → #video-feedback · a paid job → #hire\n• a tool, guide or kit → #resources'],
+  ['Why was my post closed?', 'Forum posts must follow the template in the forum\'s pinned post. Kira tells you in your post what\'s missing. Edit your first message (⋯ → Edit) within an hour and the post stays; otherwise it\'s closed, and you can post again with the template.'],
+  ['How do I mark my post as solved?', 'Type `/done` in your post (help, collabs, beats, hire, project feedback). It gets the right tag and closes.'],
+  ['How do I get my own voice channel?', 'Join **➕ create your room**: Kira makes you one and moves you in. `/room lock` (only people you invite), `/room invite @someone`, `/room private` (hidden), `/room limit 4`, `/room rename`. It disappears when it\'s empty.'],
+  ['What is 🎙️ ludovic?', "Ludovic's voice channel. Nobody joins it by themselves: wait in **⏳ waiting room** and he moves people in."],
+  ['Where do I download Horizon?', `${LINKS.horizon}. You need your own copy of Minecraft Java Edition: Horizon uses its textures and sounds. Read #horizon-info.`],
+  ['How do I reach the mods?', 'Send a DM to **Kira**: only the mods read it, and they answer through Kira. To report a message: right-click it → Apps → **Report to mods**, or `/report`.'],
+  ['Why can\'t I post links?', 'Accounts younger than 3 days can\'t post links: that\'s how most scams arrive. It goes away by itself.'],
+  ['Why is a channel in slowmode?', 'When a channel moves too fast to read, Kira turns on a slowmode by itself, and turns it off when it calms down.'],
+  ['Can I advertise my server, my channel, my product?', 'Only in the places made for it: #community-projects, #beats, #tracks, #video-feedback and #hire. Server invites are blocked everywhere.'],
+];
 
 export const HORIZON = {
   description: [

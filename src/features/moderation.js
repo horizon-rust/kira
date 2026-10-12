@@ -4,12 +4,15 @@ import {
   SlashCommandBuilder, ContextMenuCommandBuilder, ApplicationCommandType, PermissionFlagsBits as P,
   MessageFlags, GuildVerificationLevel, EmbedBuilder,
 } from 'discord.js';
-import { GUILD_ID, MOD } from '../config.js';
+import { GUILD_ID, MOD, LAYOUT } from '../config.js';
 import { client, state, save, channel, isStaff, clip, ago, modlog, parseDuration, human } from '../core.js';
 
 const URL_RE = /(https?:\/\/|www\.|discord\.gg\/)\S+/i;
 const recent = new Map(); // userId → [{ id, channelId, at, content }]
-const joins = [];         // timestamps of recent joins, for raid detection
+const youngJoins = [];    // timestamps of recent joins by young accounts, for raid detection
+const traffic = new Map(); // channelId → messages in the current minute
+const joinQueue = [];      // join / leave lines waiting to be logged together
+state.spamStrikes ??= {};  // userId → timestamps of automatic spam timeouts
 const invites = new Map(); // code → uses
 
 // ── Commands ────────────────────────────────────────────────────────────────
@@ -161,14 +164,38 @@ export const handlers = {
   async raidmode(i) {
     const on = i.options.getBoolean('on');
     await setRaidMode(i.guild, on, `by ${i.user.tag}`);
-    return i.reply(ephemeral(on ? 'Raid mode on: newcomers need a verified phone number.' : 'Raid mode off.'));
+    return i.reply(ephemeral(on ? 'Raid mode on for an hour: a verified phone number to talk, DMs between members paused.' : 'Raid mode off.'));
   },
 };
 
+// Raid mode: a verified phone number to talk, and DMs between members paused, for an hour (renewed while it lasts).
 async function setRaidMode(guild, on, why) {
-  await guild.setVerificationLevel(on ? GuildVerificationLevel.VeryHigh : GuildVerificationLevel.Medium, `raid mode ${on ? 'on' : 'off'} (${why})`);
-  state.raidmode = on; save();
-  await modlog(on ? '🚨 Raid mode ON' : 'Raid mode off', `${why}. Verification level: ${on ? 'very high (verified phone)' : 'medium'}. ${on ? 'Turn it off with `/raidmode on:false`.' : ''}`, on ? 0xff0000 : 0x2ecc71);
+  await guild.setVerificationLevel(on ? GuildVerificationLevel.VeryHigh : GuildVerificationLevel.High, `raid mode ${on ? 'on' : 'off'} (${why})`);
+  const until = on ? new Date(Date.now() + MOD.raidHoldMs).toISOString() : null;
+  await client.rest.put(`/guilds/${guild.id}/incident-actions`, { body: { dms_disabled_until: until, invites_disabled_until: null } }).catch((e) => console.error('incident actions', e.message));
+  state.raidmode = on ? Date.now() + MOD.raidHoldMs : false; save();
+  await modlog(on ? '🚨 Raid mode ON' : 'Raid mode off', `${why}. Verification: ${on ? 'very high (verified phone), DMs between members paused. Off by itself after an hour of calm, or `/raidmode on:false`.' : 'back to high.'}`, on ? 0xff0000 : 0x2ecc71);
+}
+
+// Automatic spam timeouts get longer when it happens again within a day.
+async function spamTimeout(m, why) {
+  const day = Date.now() - 864e5;
+  const strikes = (state.spamStrikes[m.id] ?? []).filter((t) => t > day);
+  strikes.push(Date.now());
+  state.spamStrikes[m.id] = strikes; save();
+  const ms = MOD.spamTimeoutsMs[Math.min(strikes.length, MOD.spamTimeoutsMs.length) - 1];
+  await m.timeout(ms, `Kira: ${why} (strike ${strikes.length})`).catch(console.error);
+  return { ms, strike: strikes.length };
+}
+
+async function remove(msg, note, log) {
+  await msg.delete().catch(() => {});
+  if (note) {
+    const n = await msg.channel.send({ content: `<@${msg.author.id}> ${note}`, allowedMentions: { users: [msg.author.id] } }).catch(() => null);
+    if (n) setTimeout(() => n.delete().catch(() => {}), 12_000);
+  }
+  if (log) await modlog(log, `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>:\n${clip(msg.content)}${msg.attachments.size ? `\n📎 ${msg.attachments.map((a) => a.name).join(', ')}` : ''}`, 0xffb020);
+  return true;
 }
 
 // ── Automatic filters ──────────────────────────────────────────────────────
@@ -177,23 +204,24 @@ async function moderate(msg) {
   const m = msg.member;
   if (!m || isStaff(m)) return;
 
+  traffic.set(msg.channelId, (traffic.get(msg.channelId) ?? 0) + 1);
+
+  // Executables and scripts: the classic malware drop.
+  if (msg.attachments.some((a) => MOD.dangerousFiles.test(a.name ?? ''))) {
+    return remove(msg, "executables and scripts can't be posted here (rule 4). Share code as text or a repo link.", '☣️ Dangerous file removed');
+  }
   // Brand-new accounts can't post links: that's how most scams arrive.
   if (URL_RE.test(msg.content) && Date.now() - msg.author.createdTimestamp < MOD.newAccountDays * 86_400_000) {
-    await msg.delete().catch(() => {});
-    const note = await msg.channel.send({ content: `<@${msg.author.id}> accounts younger than ${MOD.newAccountDays} days can't post links yet (rule 4).`, allowedMentions: { users: [msg.author.id] } });
-    setTimeout(() => note.delete().catch(() => {}), 15_000);
-    await modlog('🔗 Link from a new account', `<@${msg.author.id}> (${msg.author.tag}, account ${ago(msg.author.createdTimestamp)} old) in <#${msg.channel.id}>:\n${clip(msg.content)}`, 0xffb020);
-    return true;
+    return remove(msg, `accounts younger than ${MOD.newAccountDays} days can't post links yet (rule 4).`, '🔗 Link from a new account');
   }
-
   // Shouting: a long message almost all in capitals.
   const letters = msg.content.replace(/[^a-zA-Z]/g, '');
   if (letters.length >= MOD.capsMin && letters.replace(/[^A-Z]/g, '').length / letters.length >= MOD.capsRatio) {
-    await msg.delete().catch(() => {});
-    const note = await msg.channel.send({ content: `<@${msg.author.id}> no need to shout 🙂 (all-caps messages are removed).`, allowedMentions: { users: [msg.author.id] } });
-    setTimeout(() => note.delete().catch(() => {}), 10_000);
-    return true;
+    return remove(msg, 'no need to shout 🙂 (all-caps messages are removed).');
   }
+  // A wall of emojis.
+  const emojis = (msg.content.match(/<a?:\w+:\d+>|\p{Extended_Pictographic}/gu) ?? []).length;
+  if (emojis > MOD.emojiMax) return remove(msg, `too many emojis in one message (${MOD.emojiMax} at most).`);
 
   // Floods and copy-pasted messages.
   const now = Date.now();
@@ -208,9 +236,9 @@ async function moderate(msg) {
   recent.delete(msg.author.id);
   const offending = burst.length >= MOD.floodMessages ? burst : same;
   for (const x of offending) await client.channels.cache.get(x.channelId)?.messages.delete(x.id).catch(() => {});
-  await m.timeout(MOD.floodTimeoutMs, `Kira: spam (${why})`).catch(console.error);
-  await msg.channel.send({ content: `<@${msg.author.id}> timed out for ${MOD.floodTimeoutMs / 60_000} minutes: spam (${why}).`, allowedMentions: { parse: [] } });
-  await modlog('🔇 Spam timeout', `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>: ${why}, ${offending.length} messages deleted.\n> ${clip(msg.content, 300)}`, 0xff4d4d);
+  const { ms, strike } = await spamTimeout(m, `spam (${why})`);
+  await msg.channel.send({ content: `<@${msg.author.id}> timed out for ${human(ms)}: spam (${why}).`, allowedMentions: { parse: [] } });
+  await modlog('🔇 Spam timeout', `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>: ${why}, ${offending.length} messages deleted, ${human(ms)} (strike ${strike} today).\n> ${clip(msg.content, 300)}`, 0xff4d4d);
   return true;
 }
 
@@ -221,8 +249,40 @@ async function cacheInvites(guild) {
   if (all) { invites.clear(); for (const inv of all.values()) invites.set(inv.code, inv.uses); }
 }
 
+const baseSlowmode = new Map(LAYOUT.flatMap((g) => g.channels).filter((c) => c.type === 'text').map((c) => [c.key, c.slowmode ?? 0]));
+const calm = new Map(); // channelId → minutes in a row under the threshold
+
+async function everyMinute() {
+  const guild = client.guilds.cache.get(GUILD_ID);
+  if (!guild) return;
+  // Join and leave logs, grouped (with 10,000 people arriving, one message per join would bury the log).
+  while (joinQueue.length) {
+    const batch = joinQueue.splice(0, 30);
+    await modlog(`👥 ${batch.length} joins / leaves`, batch.join('\n').slice(0, 4000), 0x2ecc71);
+  }
+  // Raid mode ends by itself after an hour of calm.
+  if (state.raidmode && Date.now() > state.raidmode) await setRaidMode(guild, false, 'an hour without a raid');
+  // Automatic slowmode on channels too fast to read.
+  for (const [key, base] of baseSlowmode) {
+    const ch = guild.channels.cache.get(state.channels[key]);
+    if (!ch) continue;
+    const rate = traffic.get(ch.id) ?? 0;
+    const want = MOD.autoSlowmode.find(([perMin]) => rate >= perMin)?.[1] ?? 0;
+    if (want > Math.max(base, ch.rateLimitPerUser)) {
+      await ch.setRateLimitPerUser(want, `Kira: ${rate} messages a minute`).catch(() => {});
+      calm.set(ch.id, 0);
+      await modlog('🐢 Auto slowmode', `<#${ch.id}>: ${rate} messages a minute → ${want} s`, 0x5aa9ff);
+    } else if (ch.rateLimitPerUser > base && rate < MOD.autoSlowmode.at(-1)[0] / 2) {
+      calm.set(ch.id, (calm.get(ch.id) ?? 0) + 1);
+      if (calm.get(ch.id) >= 5) { await ch.setRateLimitPerUser(base, 'Kira: calm again').catch(() => {}); calm.delete(ch.id); }
+    }
+  }
+  traffic.clear();
+}
+
 export function setup() {
   client.once('clientReady', async () => cacheInvites(await client.guilds.fetch(GUILD_ID)));
+  setInterval(() => everyMinute().catch(console.error), MOD.joinBatchMs);
   client.on('inviteCreate', (inv) => invites.set(inv.code, inv.uses ?? 0));
   client.on('inviteDelete', (inv) => invites.delete(inv.code));
 
@@ -237,16 +297,21 @@ export function setup() {
       for (const inv of now.values()) invites.set(inv.code, inv.uses);
     }
     const young = Date.now() - m.user.createdTimestamp < 86_400_000;
-    await modlog('📥 Joined', `<@${m.id}> (${m.user.tag}), account ${ago(m.user.createdTimestamp)} old${young ? ' ⚠️' : ''}${via}`, 0x2ecc71);
-    // Raid: too many joins in a minute.
-    joins.push(Date.now());
-    while (joins.length && Date.now() - joins[0] > MOD.raidWindowMs) joins.shift();
-    if (joins.length >= MOD.raidJoins && !state.raidmode) await setRaidMode(m.guild, true, `${joins.length} joins in ${MOD.raidWindowMs / 1000} s`);
+    joinQueue.push(`📥 <@${m.id}> (${m.user.tag}), account ${ago(m.user.createdTimestamp)} old${young ? ' ⚠️' : ''}${via}`);
+    // Raid: a burst of brand-new accounts (a busy evening of real people doesn't trigger it).
+    if (Date.now() - m.user.createdTimestamp < MOD.raidYoungDays * 864e5) {
+      youngJoins.push(Date.now());
+      while (youngJoins.length && Date.now() - youngJoins[0] > MOD.raidWindowMs) youngJoins.shift();
+      if (youngJoins.length >= MOD.raidJoins) {
+        if (!state.raidmode) await setRaidMode(m.guild, true, `${youngJoins.length} accounts younger than ${MOD.raidYoungDays} days joined in ${MOD.raidWindowMs / 60_000} minutes`);
+        else state.raidmode = Date.now() + MOD.raidHoldMs; // still going: keep it on
+      }
+    }
   });
 
   client.on('guildMemberRemove', async (m) => {
     if (m.guild.id !== GUILD_ID) return;
-    await modlog('📤 Left', `<@${m.id}> (${m.user?.tag ?? 'unknown'})${m.joinedTimestamp ? `, joined <t:${Math.floor(m.joinedTimestamp / 1000)}:R>` : ''}`);
+    joinQueue.push(`📤 <@${m.id}> (${m.user?.tag ?? 'unknown'}) left${m.joinedTimestamp ? `, joined <t:${Math.floor(m.joinedTimestamp / 1000)}:R>` : ''}`);
   });
   client.on('guildBanAdd', (ban) => ban.guild.id === GUILD_ID && modlog('🔨 Banned', `<@${ban.user.id}> (${ban.user.tag})${ban.reason ? `: ${ban.reason}` : ''}`, 0xff4d4d));
   client.on('guildBanRemove', (ban) => ban.guild.id === GUILD_ID && modlog('Unbanned', `<@${ban.user.id}> (${ban.user.tag})`));

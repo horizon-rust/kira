@@ -7,8 +7,9 @@ import * as moderation from './features/moderation.js';
 import * as levels from './features/levels.js';
 import * as rooms from './features/rooms.js';
 import * as community from './features/community.js';
+import * as forums from './features/forums.js';
 
-const FEATURES = [moderation, levels, rooms, community];
+const FEATURES = [moderation, levels, rooms, community, forums];
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
 
