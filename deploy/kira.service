@@ -1,0 +1,16 @@
+[Unit]
+Description=Kira: the bot of ludovic's Discord server (moderation, welcomes, new videos and releases)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=%h/code/kira
+# The token comes from 1Password (Agents vault) at start; it is never written to disk.
+ExecStart=%h/fleet/op run --env-file %h/code/kira/.env.op -- /run/current-system/sw/bin/node src/bot.js
+Restart=always
+RestartSec=15
+Nice=5
+MemoryMax=300M
+
+[Install]
+WantedBy=default.target
