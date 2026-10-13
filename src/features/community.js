@@ -5,6 +5,7 @@ import { GUILD_ID, LINKS, COLOR, LAYOUT, HORIZON, PROJECTS, ROLES, STARBOARD } f
 import { client, state, save, channel, clip, modlog, parseDuration, human } from '../core.js';
 import { levelOf } from './levels.js';
 import { WELCOME_CHANNEL, welcomeMessage } from '../texts.js';
+import { isOwnPost } from '../adopt.js';
 
 const specs = LAYOUT.flatMap((g) => g.channels);
 const reactFor = (channelId) => specs.find((c) => state.channels[c.key] === channelId)?.react;
@@ -193,7 +194,7 @@ export function setup() {
   client.on('threadCreate', async (thread, newlyCreated) => {
     if (!newlyCreated || thread.guildId !== GUILD_ID || thread.parent?.type !== ChannelType.GuildForum) return;
     const emojis = reactFor(thread.parentId);
-    if (!emojis) return;
+    if (!emojis || isOwnPost(thread, client.user.id)) return;
     for (let tries = 0; tries < 5; tries++) {
       const starter = await thread.fetchStarterMessage().catch(() => null);
       if (starter) { for (const e of emojis) await starter.react(e).catch(() => {}); return; }

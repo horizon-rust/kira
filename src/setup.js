@@ -7,10 +7,10 @@ import {
   ForumLayoutType, SortOrderType, ChannelFlags,
   AutoModerationRuleTriggerType as T, AutoModerationRuleEventType, AutoModerationActionType as A, AutoModerationRuleKeywordPresetType as Preset,
 } from 'discord.js';
-import { GUILD_ID, OWNER_ID, LINKS, COLOR, ROLES, LAYOUT, RETIRED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, HORIZON, PROJECTS } from './config.js';
+import { GUILD_ID, OWNER_ID, LINKS, COLOR, ROLES, LAYOUT, RETIRED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, HORIZON, PROJECTS, HOWTO, DEFAULT_CHANNELS } from './config.js';
 import { load, save, claim } from './store.js';
-import { unique, isCopy } from './adopt.js';
-import { linkify, rolesMessage } from './texts.js';
+import { unique, isCopy, ensureThread } from './adopt.js';
+import { linkify, rolesMessage, howToPost } from './texts.js';
 
 const TYPES = { text: ChannelType.GuildText, voice: ChannelType.GuildVoice, forum: ChannelType.GuildForum, announcement: ChannelType.GuildAnnouncement };
 claim('setup');
@@ -114,7 +114,7 @@ async function ensureChannels(guild, community) {
       else { data.topic = spec.topic ?? null; data.rateLimitPerUser = spec.slowmode ?? 0; }
       if (spec.type === 'forum') {
         const existing = ch?.availableTags ?? [];
-        const tags = spec.tags;
+        const tags = spec.template ? [HOWTO.tag, ...spec.tags] : spec.tags; // the guide post carries the "read me" tag
         data.availableTags = tags.map(([emoji, name, staffOnly]) => ({ ...(existing.find((t) => t.name === name) ?? {}), name, emoji: { id: null, name: emoji }, moderated: !!staffOnly }));
         data.topic = linkify(`${spec.topic}\n\n${spec.guide ?? ''}${spec.template ? `\n\n**Template:**\n${spec.template}` : ''}`, state).slice(0, 4096);
         data.defaultForumLayout = spec.gallery ? ForumLayoutType.GalleryView : ForumLayoutType.ListView;
@@ -198,6 +198,39 @@ async function upsert(guild, key, channelKey, payload) {
   return msg;
 }
 
+// The guide of one forum: found by the ID in the state, else by its name among Kira's posts of that forum
+// (active and archived), else made. Found twice → setup stops. Then locked and pinned.
+async function howTo(guild, spec) {
+  const forum = guild.channels.cache.get(state.channels[spec.key]);
+  const key = 'howto:' + spec.key;
+  const payload = howToPost(spec, state);
+  const readMe = forum.availableTags.find((t) => t.name === HOWTO.tag[1])?.id;
+  const { thread, created } = await ensureThread({
+    id: state.messages[key],
+    fetchById: (id) => guild.channels.fetch(id),
+    list: async () => {
+      const active = (await forum.threads.fetchActive()).threads;
+      const archived = (await forum.threads.fetchArchived({ type: 'public', limit: 100 })).threads;
+      return [...active.values(), ...archived.values()];
+    },
+    match: (t) => t.parentId === forum.id && t.ownerId === client.user.id && t.name === HOWTO.name,
+    create: () => forum.threads.create({ name: HOWTO.name, message: payload, appliedTags: readMe ? [readMe] : [] }),
+    label: `the "${HOWTO.name}" post of #${spec.name}`,
+  });
+  state.messages[key] = thread.id;
+  save(); // right away: a crash later must not make it post the guide again
+  if (created) log('how-to posted', spec.name);
+  else {
+    if (thread.archived) await thread.setArchived(false).catch(() => {});
+    const starter = await thread.fetchStarterMessage().catch(() => null);
+    if (starter) await starter.edit(payload);
+    if (thread.name !== HOWTO.name) await thread.setName(HOWTO.name).catch(() => {});
+    log('how-to found', spec.name);
+  }
+  if (!thread.locked) await thread.setLocked(true).catch(() => {});
+  if (!thread.flags.has('Pinned')) await thread.pin().catch((e) => log('pin', spec.name, e.message));
+}
+
 async function posts(guild) {
   const L = (t) => linkify(t, state);
   await upsert(guild, 'welcome', 'welcome', {
@@ -219,6 +252,8 @@ async function posts(guild) {
       const msg = await upsert(guild, 'pin:' + spec.key, spec.key, { content: L(PINS[spec.pin]) });
       if (!msg.pinned) await msg.pin().catch(() => {});
     }
+    // Each forum with a template gets ONE locked, pinned "How to post here" post: its guide and template.
+    if (spec.type === 'forum' && spec.template) await howTo(guild, spec);
   }
   await upsert(guild, 'horizon', 'horizoninfo', {
     embeds: [
@@ -302,7 +337,7 @@ async function onboarding(guild) {
       enabled: true,
       mode: 0,
       // Everyone sees these; the answers below add the rest.
-      default_channel_ids: ['welcome', 'rules', 'faq', 'announcements', 'general', 'introductions', 'offtopic', 'memes', 'resources', 'halloffame', 'botcommands', 'horizoninfo', 'projects', 'releases'].map((k) => c[k]),
+      default_channel_ids: DEFAULT_CHANNELS.map((k) => c[k]),
       prompts: [
         {
           id: id(), type: 0, title: 'What are you here for?', single_select: false, required: false, in_onboarding: true,
@@ -356,7 +391,7 @@ async function serverGuide(guild) {
       action('rules', 0, 'Read the rules', 'Kira enforces them, day and night', '📜'),
       action('welcome', 0, 'Pick your roles', 'Buttons in #welcome: pings and what you make', '🎭'),
       action('introductions', 1, 'Introduce yourself', 'One message, with the template', '👋'),
-      action('faq', 0, 'Read the FAQ', 'Where to post what, levels, voice rooms', '❓'),
+      action('faq', 0, 'Read the FAQ', 'Where to post what, and 📌 How to post here', '❓'),
       action('general', 1, 'Say hi in #general', 'Talk about anything', '💬'),
     ],
     // Resource pages must be channels only staff post in.

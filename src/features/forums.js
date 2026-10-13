@@ -4,7 +4,8 @@
 import { SlashCommandBuilder, ChannelType, MessageFlags } from 'discord.js';
 import { GUILD_ID, LAYOUT, MOD } from '../config.js';
 import { client, state, save, isStaff, modlog } from '../core.js';
-import { missingMessage } from '../texts.js';
+import { missingMessage, howToLink } from '../texts.js';
+import { isOwnPost } from '../adopt.js';
 
 state.formatChecks ??= {}; // threadId → { forum, owner, at, notice }
 const forums = LAYOUT.flatMap((g) => g.channels).filter((c) => c.type === 'forum');
@@ -31,7 +32,7 @@ function missing(spec, msg) {
 
 async function inspect(thread) {
   const spec = forumOf(thread.parentId);
-  if (!spec?.check) return;
+  if (!spec?.check || isOwnPost(thread, client.user?.id)) return; // Kira's own "How to post here" posts are not member posts
   let starter = null;
   for (let tries = 0; tries < 5 && !starter; tries++) {
     starter = await thread.fetchStarterMessage().catch(() => null);
@@ -42,7 +43,7 @@ async function inspect(thread) {
   if (isStaff(member)) return passed(thread, starter);
   const gaps = missing(spec, starter);
   if (!gaps.length) return passed(thread, starter);
-  const notice = await thread.send(missingMessage(spec, gaps, starter.author.id));
+  const notice = await thread.send(missingMessage(spec, gaps, starter.author.id, state));
   state.formatChecks[thread.id] = { forum: spec.key, owner: starter.author.id, at: Date.now(), notice: notice.id };
   save();
 }
@@ -50,7 +51,7 @@ async function inspect(thread) {
 // Whether a post follows its template now (false while Kira is waiting for it to be fixed).
 export async function followsTemplate(thread) {
   const spec = forumOf(thread.parentId);
-  if (!spec || state.formatChecks[thread.id] || thread.locked) return false;
+  if (!spec || state.formatChecks[thread.id] || thread.locked || isOwnPost(thread, client.user?.id)) return false;
   const starter = await thread.fetchStarterMessage().catch(() => null);
   if (!starter || starter.author.bot) return false;
   const member = await thread.guild.members.fetch(starter.author.id).catch(() => null);
@@ -71,7 +72,7 @@ async function sweep() {
       delete state.formatChecks[threadId];
       passed(thread, starter);
     } else if (Date.now() - c.at > MOD.formatGraceMs) {
-      await thread.send(`🔒 Closed: the template wasn't filled in. <@${c.owner}>, you can post again following the post guidelines at the top of the forum.`).catch(() => {});
+      await thread.send(`🔒 Closed: the template wasn't filled in. <@${c.owner}>, you can post again following ${howToLink(spec, state)} at the top of the forum.`).catch(() => {});
       await thread.setLocked(true).catch(() => {});
       await thread.setArchived(true).catch(() => {});
       await modlog('📝 Post closed (no template)', `<#${threadId}> by <@${c.owner}> in <#${thread.parentId}>`);
@@ -90,6 +91,7 @@ export const handlers = {
     const thread = i.channel;
     const spec = thread?.isThread() && thread.parent?.type === ChannelType.GuildForum ? forumOf(thread.parentId) : null;
     if (!spec) return i.reply({ content: 'Use `/done` inside your own forum post.', flags: MessageFlags.Ephemeral });
+    if (isOwnPost(thread, client.user.id)) return i.reply({ content: 'That is the guide of this forum, not a post to close.', flags: MessageFlags.Ephemeral });
     if (!spec.done) return i.reply({ content: `Posts in #${spec.name} don't get closed: they stay for everyone.`, flags: MessageFlags.Ephemeral });
     if (thread.ownerId !== i.user.id && !isStaff(i.member)) return i.reply({ content: 'Only the person who posted it (or a mod) can close it.', flags: MessageFlags.Ephemeral });
     const tagName = spec.done.split(' ').slice(1).join(' ');

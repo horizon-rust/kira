@@ -8,6 +8,7 @@ import { client, state, save, isStaff, modlog } from '../core.js';
 import { makeGitHub } from '../github.js';
 import { onTemplateOk, followsTemplate } from './forums.js';
 import * as kit from '../issuekit.js';
+import { isOwnPost } from '../adopt.js';
 
 const TOKEN = process.env.GITHUB_TOKEN?.trim();
 const DRY = process.env.KIRA_GITHUB_DRY_RUN === '1';
@@ -46,6 +47,7 @@ async function ensureLabels(repo) {
 // Opens the issue for a post (once: the mapping is checked first and kept in the state).
 async function openIssue(thread, starter, { manual = false, target = null } = {}) {
   if (store.issues[thread.id] || busy.has(thread.id)) return store.issues[thread.id] ?? null;
+  if (isOwnPost(thread, client.user?.id)) return null; // the forum guides are not reports
   target ??= kit.targetFor(GITHUB.forums[forumKey(thread)], tagNames(thread));
   if (!target) return null;
   if (!manual && !kit.allow(store.created, starter.author.id, Date.now(), GITHUB.rate)) {
@@ -220,6 +222,7 @@ export const handlers = {
     const thread = i.channel;
     if (!isStaff(i.member)) return i.reply({ content: 'Only mods can do that.', flags: MessageFlags.Ephemeral });
     if (!thread?.isThread() || thread.parent?.type !== ChannelType.GuildForum) return i.reply({ content: 'Use `/issue` inside a forum post.', flags: MessageFlags.Ephemeral });
+    if (isOwnPost(thread, client.user.id)) return i.reply({ content: 'That is one of my own posts, not a report.', flags: MessageFlags.Ephemeral });
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const auto = kit.targetFor(GITHUB.forums[forumKey(thread)], tagNames(thread));
     const repo = i.options.getString('repo') ?? auto?.repo;

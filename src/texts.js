@@ -1,6 +1,6 @@
 // Texts shared by setup and the bot.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
-import { COLOR, LAYOUT, ROLES } from './config.js';
+import { COLOR, LAYOUT, ROLES, HOWTO } from './config.js';
 
 const byName = new Map(LAYOUT.flatMap((g) => g.channels).filter((c) => c.type !== 'voice').map((c) => [c.name, c.key]));
 
@@ -36,16 +36,43 @@ export function rolesMessage() {
   };
 }
 
+const ago = (s) => (s >= 3600 ? `${s / 3600} hour${s === 3600 ? '' : 's'}` : `${s / 60} minutes`);
+
+// The pinned, locked "how to post here" post of a forum.
+export function howToPost(spec, state) {
+  const rules = [
+    spec.guide,
+    '',
+    '**Copy this into your post and fill it in:**',
+    '```',
+    spec.template.replace(/\*\*/g, ''),
+    '```',
+    '**Before you post**',
+    `• Pick ${spec.tags.some(([, , staff]) => staff) ? 'the tags that fit (some are set by the mods)' : 'the tags that fit'}.`,
+    spec.every ? `• One new post every ${ago(spec.every)} at most.` : null,
+    spec.check?.media ? `• A file or a link is required.` : null,
+    spec.check?.files ? '• A screenshot or a video is required.' : null,
+    '• Kira checks each new post. If something is missing, it tells you in the post: edit your first message within an hour, or the post is closed.',
+    spec.done ? `• When you're done, type \`/done\` in your post: it gets the **${spec.done}** tag and closes.` : null,
+  ].filter((l) => l !== null).join('\n');
+  return { embeds: [new EmbedBuilder().setColor(COLOR).setTitle(`How to post in #${spec.name}`).setDescription(linkify(rules, state).slice(0, 4096))] };
+}
+
+// The "How to post here" post of a forum as a link (plain words until setup has made it).
+export const howToLink = (spec, state) => {
+  const id = state.messages?.['howto:' + spec.key];
+  return id ? `the <#${id}> post` : HOWTO.mention;
+};
 
 // What Kira says in a post that doesn't follow the template.
-export function missingMessage(spec, missing, userId) {
+export function missingMessage(spec, missing, userId, state = {}) {
   return {
     content: `<@${userId}>`,
     embeds: [new EmbedBuilder().setColor(0xffb020).setTitle('📝 Your post is missing something')
       .setDescription([
         `To keep #${spec.name} easy to read, every post follows the template. Missing: **${missing.join('**, **')}**.`,
         '',
-        'Edit your first message (⋯ → **Edit**) and add it. Here is the template:',
+        `Edit your first message (⋯ → **Edit**) and add it. It is all in ${howToLink(spec, state)} at the top of the forum; here is the template:`,
         '```',
         spec.template.replace(/\*\*/g, ''),
         '```',

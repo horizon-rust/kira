@@ -17,3 +17,18 @@ export function isCopy(message, meId, payload) {
   const head = payload.content?.slice(0, 40);
   return !!head && message.content.startsWith(head);
 }
+
+// A post Kira made itself (the "How to post here" guides, the project catalogue): never a member post, so it is
+// not checked against a template, gets no reactions, and never becomes a GitHub issue.
+export const isOwnPost = (thread, meId) => !!meId && thread?.ownerId === meId;
+
+// The one post of a kind (a forum guide): the one the state remembers, else the one already there that
+// `match` accepts (found by name), else a new one. `list` returns the forum's posts, `create` makes it.
+// Two matches stop everything: somebody must delete the extra one.
+export async function ensureThread({ id, fetchById, list, match, create, label }) {
+  let thread = id ? await fetchById(id).catch(() => null) : null;
+  let created = false;
+  if (!thread) thread = unique((await list()).filter(match), label);
+  if (!thread) { thread = await create(); created = true; }
+  return { thread, created };
+}

@@ -13,17 +13,20 @@ coding, his projects (Horizon, lsuite, DISPO, …) and rap (beatmakers and rappe
   (the community's projects, #help) · 🎬 creators (YouTubers, editors, thumbnail artists) · 🎤 music
   (beats, collabs, tracks) · 🔊 voice · 🛡️ staff. One place per purpose: no two channels do the same thing.
 - **Forums** each have post guidelines, a template, required tags (some only mods set), a minimum time
-  between posts. Kira checks every new post against the template.
+  between posts. Kira checks every new post against the template. Each forum with a template also has
+  ONE locked, pinned **📌 How to post here: read me first** post (guide, template, rules). It is Kira's own
+  post: never checked against the template, no reactions, never a GitHub issue, `/done` refuses it.
 - **Roles** (top to bottom): kira · 👑 ludovic · 🛡️ Mod · 🧪 Horizon Tester · 💎 Booster · lvl 50 → lvl 5 ·
   🎶 Singer · 🎤 Rapper · 🥁 Beatmaker · 🧩 Modder · 🌅 Horizon · 🤖 Vibe coder · 📦 Releases · 🔔 Videos.
-- **Onboarding** (3 questions when you join: what you're here for, what you make, which pings) and the
+- **Onboarding** (3 questions when you join: what you're here for, what you make, which pings; the default
+  channels, `DEFAULT_CHANNELS` in `config.js`, include #new-members) and the
   **Server Guide** (Discord's newcomer home; bots can't set it, so it was applied from Ludovic's session:
   the body is in `state.serverGuide`),
   the same roles as buttons in `#welcome`, Community mode, Discord AutoMod rules, a permanent invite.
 
 Run it again after changing `config.js`: it updates what it made (IDs in `data/state.json`), moves
 channels, and deletes the empty categories it made earlier. If the IDs are ever lost it finds its
-channels, roles, messages and posts again by name instead of making new ones, and it stops if it finds
+channels, roles, messages, guides and posts again by name instead of making new ones, and it stops if it finds
 two copies of the same thing. The bot and setup each keep to their own keys in `state.json`, so running
 setup while Kira is up is safe; restart Kira afterwards so it knows the new channels.
 
