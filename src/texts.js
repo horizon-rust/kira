@@ -75,3 +75,22 @@ export function missingMessage(spec, missing, userId) {
     allowedMentions: { users: [userId] },
   };
 }
+
+// Where Kira welcomes whoever joins (a key of LAYOUT).
+export const WELCOME_CHANNEL = 'newmembers';
+
+// The welcome for the people who just joined: up to 5 are named, beyond that a single "welcome everyone".
+export function welcomeMessage(people, memberCount, state) {
+  const c = state.channels;
+  const guide = `Start with <#${c.welcome}> (roles), <#${c.rules}> and <#${c.faq}>, then say hi in <#${c.introductions}>. Building something? <#${c.communityprojects}>. Making videos? <#${c.creatorschat}>. Beats or raps? <#${c.beats}>.`;
+  const few = people.length <= 5;
+  const count = memberCount ?? '?';
+  return {
+    content: few ? people.map((id) => `<@${id}>`).join(' ') : undefined,
+    embeds: [new EmbedBuilder().setColor(COLOR)
+      .setDescription(few
+        ? `👋 Welcome to **ludovic's server**${people.length > 1 ? ', all of you' : ''}! We're **${count}** now.\n\n${guide}`
+        : `👋 Welcome to the **${people.length}** people who just joined! We're **${count}** now.\n\n${guide}`)],
+    allowedMentions: { users: few ? people : [] },
+  };
+}

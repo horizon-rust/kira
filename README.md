@@ -8,7 +8,7 @@ coding, his projects (Horizon, lsuite, DISPO, …) and rap (beatmakers and rappe
 
 `npm run setup` makes the server match [`src/config.js`](src/config.js):
 
-- **Categories**: 👋 start here (welcome, rules, FAQ, announcements) · 💬 general (+ #resources) ·
+- **Categories**: 👋 start here (welcome, #new-members, rules, FAQ, announcements) · 💬 general (+ #resources) ·
   🛠️ ludovic's projects (Horizon first, the catalogue, #project-feedback, #releases) · 🤖 vibe coding
   (the community's projects, #help) · 🎬 creators (YouTubers, editors, thumbnail artists) · 🎤 music
   (beats, collabs, tracks) · 🔊 voice · 🛡️ staff. One place per purpose: no two channels do the same thing.
@@ -35,7 +35,7 @@ channels, and deletes the empty categories it made earlier.
 | Levels | XP for messages (once a minute) and for voice time with others; lvl 5/10/20/30/50 roles; `/rank`, `/leaderboard`, `/givexp` |
 | Voice rooms | Join **➕ create your room** → your own channel; `/room lock / unlock / private / public / invite / kick / limit / rename / claim / transfer`; deleted when empty. **🎙️ ludovic** is locked: people wait in **⏳ waiting room** and Ludovic or a mod `/pull`s them in |
 | Forums | Each new post is checked against its template; Kira lists what's missing and closes it after an hour if it's still missing. `/done` closes your post with its tag (solved, taken, found, filled, done) |
-| Community | Welcome in `#general` (grouped when many people arrive), role buttons, 👍/👎 on suggestions and feedback, 🔥 on beats and community projects, ⭐ hall of fame (5 stars), `/remind` |
+| Community | Welcome in `#new-members` (grouped when many people arrive), role buttons, 👍/👎 on suggestions and feedback, 🔥 on beats and community projects, ⭐ hall of fame (5 stars), `/remind` |
 | GitHub issues | Posts in `#horizon-bugs`, `#horizon-ideas` and `#project-feedback` (project + bug/idea tags) that pass their template become issues; answers on GitHub come back to the post, pinging the poster. `/issue` (staff). Off until its token exists: see below |
 | Feeds | New videos on youtube.com/@lu4ovic → `#announcements`; GitHub releases of the public repos → `#releases` |
 | Info | `/links`, `/horizon`, `/roadmap`, `/projects`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |

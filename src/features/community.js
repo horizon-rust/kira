@@ -4,6 +4,7 @@ import { SlashCommandBuilder, EmbedBuilder, ChannelType, MessageFlags, ThreadAut
 import { GUILD_ID, LINKS, COLOR, LAYOUT, HORIZON, PROJECTS, ROLES, STARBOARD } from '../config.js';
 import { client, state, save, channel, clip, modlog, parseDuration, human } from '../core.js';
 import { levelOf } from './levels.js';
+import { WELCOME_CHANNEL, welcomeMessage } from '../texts.js';
 
 const specs = LAYOUT.flatMap((g) => g.channels);
 const reactFor = (channelId) => specs.find((c) => state.channels[c.key] === channelId)?.react;
@@ -171,25 +172,14 @@ export async function onMessage(msg) {
 }
 
 export function setup() {
-  // Welcomes in #general, grouped: one message for up to 5 people, a single "welcome everyone" beyond that.
+  // Welcomes in #new-members, grouped: one message for up to 5 people, a single "welcome everyone" beyond that.
   const arrivals = [];
   let flushTimer = null;
   async function flush() {
     flushTimer = null;
     const people = arrivals.splice(0);
     if (!people.length) return;
-    const c = state.channels;
-    const guide = `Start with <#${c.welcome}> (roles), <#${c.rules}> and <#${c.faq}>, then say hi in <#${c.introductions}>. Building something? <#${c.communityprojects}>. Making videos? <#${c.creatorschat}>. Beats or raps? <#${c.beats}>.`;
-    const few = people.length <= 5;
-    const guild = client.guilds.cache.get(GUILD_ID);
-    await channel('general')?.send({
-      content: few ? people.map((id) => `<@${id}>`).join(' ') : undefined,
-      embeds: [new EmbedBuilder().setColor(COLOR)
-        .setDescription(few
-          ? `👋 Welcome to **ludovic's server**${people.length > 1 ? ', all of you' : ''}! We're **${guild?.memberCount ?? '?'}** now.\n\n${guide}`
-          : `👋 Welcome to the **${people.length}** people who just joined! We're **${guild?.memberCount ?? '?'}** now.\n\n${guide}`)],
-      allowedMentions: { users: few ? people : [] },
-    }).catch(console.error);
+    await channel(WELCOME_CHANNEL)?.send(welcomeMessage(people, client.guilds.cache.get(GUILD_ID)?.memberCount, state)).catch(console.error);
   }
   client.on('guildMemberAdd', (m) => {
     if (m.guild.id !== GUILD_ID || m.user.bot) return;

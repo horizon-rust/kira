@@ -63,6 +63,7 @@ export const LAYOUT = [
     key: 'start', category: '👋 start here',
     channels: [
       { key: 'welcome', name: 'welcome', type: 'text', readonly: true, topic: 'Start here: what this server is, where everything is, and your roles (buttons below).' },
+      { key: 'newmembers', name: 'new-members', type: 'text', readonly: true, topic: 'Everyone who joins, welcomed here.' },
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: roles, levels, voice rooms, posting, Horizon, reaching the mods.' },
       { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'New videos and big news. Pick the 🔔 Videos role to get pinged.' },
