@@ -192,8 +192,7 @@ async function refreshVotes() {
 
 let lastPoll = 0;
 let lastVotes = 0;
-async function tick() {
-  const now = Date.now();
+async function tick(now = Date.now()) {
   await sendFollowups(now);
   for (const [threadId, entry] of Object.entries(store.issues)) {
     const items = kit.takeAnswers(entry, now);
@@ -204,8 +203,8 @@ async function tick() {
   if (!DRY) save();
 }
 
-// For the tests: the opening logic, with a fake GitHub.
-export const _test = { openIssue, store, setGitHub: (g) => { gh = g; } };
+// For the tests and the end-to-end check: the opening logic, the tick (with a given time), a fake GitHub.
+export const _test = { openIssue, onMessage, tick, store, setGitHub: (g) => { gh = g; } };
 
 export const commands = enabled ? [
   new SlashCommandBuilder().setName('issue').setDescription('Staff: send this forum post to GitHub as an issue, or link it to an existing one')

@@ -85,9 +85,10 @@ and [`src/issuekit.js`](src/issuekit.js).
 Kira's issues and comments appear under the token owner's name (ludovic111); its own comments carry a
 hidden `<!-- kira -->` marker so they're never relayed back.
 
-### Turning it on
+### Turning it on (or renewing the token)
 
-Without `GITHUB_TOKEN` the feature is off: Kira logs `github issues: off` and runs as before. Never
+It's on: the token (fine-grained, the seven repos, Issues read/write and Contents read, expires
+2027-10-13) is `op://Agents/GitHub Kira issues/credential`, in `.env.op`. Without `GITHUB_TOKEN` the feature is off: Kira logs `github issues: off` and runs as before. Never
 give it the desktop's `gh` login: that token can do everything.
 
 1. Create a **fine-grained** token at <https://github.com/settings/personal-access-tokens/new>:
