@@ -22,7 +22,10 @@ coding, his projects (Horizon, lsuite, DISPO, …) and rap (beatmakers and rappe
   channels, `DEFAULT_CHANNELS` in `config.js`, include #new-members) and the
   **Server Guide** (Discord's newcomer home; bots can't set it, so it was applied from Ludovic's session:
   the body is in `state.serverGuide`),
-  the same roles as buttons in `#welcome`, Community mode, Discord AutoMod rules, a permanent invite.
+  the same roles as buttons in `#welcome`, Community mode, **rules screening** (new members read and agree to
+  the rules before they can talk: one TERMS field with each rule as "Title. first sentence", built from `RULES`
+  by [`src/screening.js`](src/screening.js) and sent by setup, which only ever turns it on), Discord AutoMod rules,
+  a permanent invite.
 
 Run it again after changing `config.js`: it updates what it made (IDs in `data/state.json`), moves
 channels, and deletes the empty categories it made earlier. If the IDs are ever lost it finds its

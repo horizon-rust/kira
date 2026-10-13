@@ -8,6 +8,7 @@ import {
   AutoModerationRuleTriggerType as T, AutoModerationRuleEventType, AutoModerationActionType as A, AutoModerationRuleKeywordPresetType as Preset,
 } from 'discord.js';
 import { GUILD_ID, OWNER_ID, LINKS, COLOR, ROLES, LAYOUT, RETIRED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, HORIZON, PROJECTS, HOWTO, DEFAULT_CHANNELS } from './config.js';
+import { screeningBody, screeningUpToDate } from './screening.js';
 import { load, save, claim } from './store.js';
 import { unique, isCopy, ensureThread } from './adopt.js';
 import { linkify, rolesMessage, howToPost } from './texts.js';
@@ -412,6 +413,20 @@ async function serverGuide(guild) {
   }
 }
 
+// Rules screening: new members read the rules and agree before they talk. Built from RULES, only ever turned on.
+async function screening(guild) {
+  const route = `/guilds/${guild.id}/member-verification`;
+  const body = screeningBody(RULES);
+  try {
+    const current = await client.rest.get(route).catch(() => null);
+    if (screeningUpToDate(current, body, guild.features.includes('MEMBER_VERIFICATION_GATE_ENABLED'))) return log('rules screening up to date');
+    await client.rest.patch(route, { body });
+    log('rules screening on,', body.form_fields[0].values.length, 'rules');
+  } catch (e) {
+    log('rules screening:', e.message); // setup goes on; screening is left as it is (never switched off)
+  }
+}
+
 async function invite(guild) {
   const welcome = guild.channels.cache.get(state.channels.welcome);
   const invites = await guild.invites.fetch();
@@ -440,6 +455,7 @@ client.once('clientReady', async () => {
     await automod(guild);
     await onboarding(guild);
     await serverGuide(guild);
+    await screening(guild);
     console.log('invite', await invite(guild));
     console.log('done');
   } catch (e) {
