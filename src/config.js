@@ -14,6 +14,7 @@ export const LINKS = {
   lsuite: 'https://lsuite.xyz',
   horizon: 'https://github.com/ludovic111/horizon',
   horizonSite: 'https://playhorizon.dev',
+  horizonLauncher: 'https://github.com/ludovic111/horizon/releases?q=launcher-v&expanded=true',
 };
 
 export const COLOR = 0xf2a33a; // sunrise orange, for Horizon
@@ -247,6 +248,47 @@ export const PINS = {
 export const RELEASE_REPOS = ['horizon', 'lsuite', 'ryolune', 'kimchi', 'nori', 'folio', 'PokemonSunNative', 'obsidian-360'];
 export const YOUTUBE_CHANNEL_ID = 'UCNpwCgIK6O6oct9ra9ohZ7w'; // @lu4ovic
 export const FEED_EVERY_MS = 10 * 60 * 1000;
+export const RELEASE_EVERY_MS = 3 * 60 * 1000; // one GitHub API request per repo each time
+
+// One-off announcements Kira posts once (the key is remembered in state.oneOffs), for big releases.
+// `role`: the only role pinged. Posted when Kira starts; written by hand, matching the release notes.
+const V2026_10_13_1 = 'https://github.com/ludovic111/horizon/releases/tag/v2026.10.13.1';
+export const ONE_OFFS = [
+  {
+    key: 'horizon-v2026.10.13.1', channel: 'announcements', role: 'horizon',
+    content: 'Horizon 2026.10.13.1 is out.',
+    embed: {
+      title: 'Horizon 2026.10.13.1: its own menus, graphics settings, much faster', url: V2026_10_13_1,
+      description: [
+        "A big update. Horizon now has menus of its own, real graphics settings, and it renders much faster.",
+        '',
+        "**Horizon's own menus.** A new title screen, world list, options and pause menu in the launcher's style, over a live landscape. Prefer the vanilla look? Options → Interface → Menu style → Classic.",
+        '',
+        '**Graphics settings, Simple or Advanced.** Pick a preset (Performance, Balanced, Quality, Ultra), or set every rendering, quality, display and performance option yourself, each with a short description and what it costs. There is a performance overlay too.',
+        '',
+        '**Much faster rendering.** Over a village at render distance 8, an RTX 4080 went from 363 to 2,409 FPS. Render distance 32 still stutters in places.',
+      ].join('\n'),
+      fields: [
+        {
+          name: 'Fixed',
+          value: [
+            '• No sound on Linux',
+            '• Linux builds now run on ordinary distros (Arch, Ubuntu, …)',
+            '• Windows no longer asks for a missing DLL: the launcher no longer needs the Visual C++ runtime',
+            '• Memory growing near villages, and the frame rate dropping and staying low there',
+            '• Preparing resources failing on Linux ("Missing … java-objc-bridge")',
+            '• The hand and held item at high FOV, and the missing swing animations',
+          ].join('\n'),
+        },
+        { name: 'New website', value: `${LINKS.horizonSite}: what Horizon is, and the download.` },
+        {
+          name: 'Get it with the launcher',
+          value: `Already have the Horizon launcher? It installs this version by itself. New here? [Download the launcher](${LINKS.horizonLauncher}). You need your own copy of Minecraft: Java Edition 26.3.\n[Full release notes](${V2026_10_13_1}), known issues included.`,
+        },
+      ],
+    },
+  },
+];
 
 // Forum posts → GitHub issues (src/features/github.js). Off until GITHUB_TOKEN is set (see the README).
 // Per forum: the repo and kind, or (#project-feedback) a repo per project tag and a kind per tag.

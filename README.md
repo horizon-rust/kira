@@ -46,7 +46,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | Forums | Each new post is checked against its template; Kira lists what's missing and closes it after an hour if it's still missing. `/done` closes your post with its tag (solved, taken, found, filled, done) |
 | Community | Welcome in `#new-members` (grouped when many people arrive), role buttons, 👍/👎 on suggestions and feedback, 🔥 on beats and community projects, ⭐ hall of fame (5 stars), `/remind` |
 | GitHub issues | Posts in `#horizon-bugs`, `#horizon-ideas` and `#project-feedback` (project + bug/idea tags) that pass their template become issues; answers on GitHub come back to the post, pinging the poster. `/issue` (staff). Off until its token exists: see below |
-| Feeds | New videos on youtube.com/@lu4ovic → `#announcements`; GitHub releases of the public repos → `#releases` |
+| Feeds | New videos on youtube.com/@lu4ovic → `#announcements`. Published GitHub releases of the public repos → `#releases` (REST API every 3 minutes, each release once by id; drafts and prereleases never). Horizon game releases get a summary of New and Fixed, launcher releases a smaller embed of their own ([`src/releases.js`](src/releases.js)). Hand-written posts for big releases: `ONE_OFFS` in `config.js`, each posted once |
 | Info | `/links`, `/horizon`, `/roadmap`, `/projects`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
 ## Running it

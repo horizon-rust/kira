@@ -1,6 +1,7 @@
-// Atom feeds: Ludovic's YouTube uploads and the GitHub releases of his public repos.
-// The first time a feed is read, everything in it is marked as seen, so nothing old is posted.
-import { RELEASE_REPOS, YOUTUBE_CHANNEL_ID } from './config.js';
+// Ludovic's YouTube uploads (Atom feed) and the GitHub releases of his public repos (REST API).
+// The first time the YouTube feed is read, everything in it is marked as seen, so nothing old is posted.
+import { GITHUB, YOUTUBE_CHANNEL_ID } from './config.js';
+import { fresh } from './releases.js';
 
 const decode = (s) => s
   .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
@@ -23,7 +24,6 @@ async function fetchFeed(url) {
 
 export const FEEDS = [
   { key: 'youtube', kind: 'video', url: `https://www.youtube.com/feeds/videos.xml?channel_id=${YOUTUBE_CHANNEL_ID}` },
-  ...RELEASE_REPOS.map((repo) => ({ key: `gh:${repo}`, kind: 'release', repo, url: `https://github.com/ludovic111/${repo}/releases.atom` })),
 ];
 
 // Returns the new items of one feed, oldest first, and records them as seen in `seen`.
@@ -34,4 +34,10 @@ export async function poll(feed, seen) {
   const fresh = first ? [] : items.filter((i) => !known.has(i.id)).reverse();
   seen[feed.key] = items.map((i) => i.id).slice(0, 50);
   return fresh;
+}
+
+// The releases of one repo to announce now, oldest first (published, not prereleases, not posted yet).
+// `gh` is a client from github.js; `announced` the ids already posted for this repo.
+export async function newReleases(gh, repo, announced) {
+  return fresh(await gh.get(`/repos/${GITHUB.owner}/${repo}/releases?per_page=20`), announced);
 }
