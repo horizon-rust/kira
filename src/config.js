@@ -238,6 +238,27 @@ export const RELEASE_REPOS = ['horizon', 'lsuite', 'ryolune', 'kimchi', 'nori', 
 export const YOUTUBE_CHANNEL_ID = 'UCNpwCgIK6O6oct9ra9ohZ7w'; // @lu4ovic
 export const FEED_EVERY_MS = 10 * 60 * 1000;
 
+// Forum posts → GitHub issues (src/features/github.js). Off until GITHUB_TOKEN is set (see the README).
+// Per forum: the repo and kind, or (#project-feedback) a repo per project tag and a kind per tag.
+// `fixed` / `notPlanned` / `duplicate`: the forum tags Kira applies when the issue is closed that way.
+export const GITHUB = {
+  owner: 'ludovic111',
+  forums: {
+    horizonbugs: { repo: 'horizon', kind: 'bug', fixed: 'fixed', duplicate: 'duplicate' },
+    horizonideas: { repo: 'horizon', kind: 'idea', fixed: 'done', notPlanned: "won't do" },
+    feedback: {
+      projects: { lsuite: 'lsuite', ryolune: 'ryolune', kimchi: 'kimchi', nori: 'nori', folio: 'folio', DISPO: 'DISPO' },
+      kinds: { bug: 'bug', idea: 'idea' },
+      fixed: 'done',
+    },
+  },
+  private: ['DISPO'], // issues there get no link in Discord: players can't open them
+  labels: { bug: 'bug', idea: 'enhancement', from: 'from-discord' },
+  pollEveryMs: 5 * 60 * 1000,
+  rate: { perUser: 3, global: 20, windowMs: 60 * 60 * 1000 }, // issues opened per hour
+  notifyByDm: false, // also DM the poster when their post gets an answer (the thread mention is the main channel)
+};
+
 // Moderation knobs.
 export const MOD = {
   floodMessages: 6, floodWindowMs: 8_000,        // 6 messages in 8 s

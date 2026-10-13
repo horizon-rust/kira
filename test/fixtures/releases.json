@@ -1,0 +1,72 @@
+[
+  {
+    "tag_name": "v2.102.0",
+    "html_url": "https://github.com/cli/cli/releases/tag/v2.102.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-09-30T02:40:02Z"
+  },
+  {
+    "tag_name": "v2.101.0",
+    "html_url": "https://github.com/cli/cli/releases/tag/v2.101.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-09-15T14:24:34Z"
+  },
+  {
+    "tag_name": "v2.100.0",
+    "html_url": "https://github.com/cli/cli/releases/tag/v2.100.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-09-03T15:43:20Z"
+  },
+  {
+    "tag_name": "v2.99.0",
+    "html_url": "https://github.com/cli/cli/releases/tag/v2.99.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-09-01T20:25:04Z"
+  },
+  {
+    "tag_name": "v2.98.0",
+    "html_url": "https://github.com/cli/cli/releases/tag/v2.98.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-08-20T22:15:58Z"
+  },
+  {
+    "tag_name": "v2.97.0",
+    "html_url": "https://github.com/cli/cli/releases/tag/v2.97.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-07-31T02:04:00Z"
+  },
+  {
+    "tag_name": "v2.96.0",
+    "html_url": "https://github.com/cli/cli/releases/tag/v2.96.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-07-02T21:31:04Z"
+  },
+  {
+    "tag_name": "v2.95.0",
+    "html_url": "https://github.com/cli/cli/releases/tag/v2.95.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-06-17T19:55:07Z"
+  },
+  {
+    "tag_name": "v2.94.0",
+    "html_url": "https://github.com/cli/cli/releases/tag/v2.94.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-06-10T21:47:49Z"
+  },
+  {
+    "tag_name": "v2.93.0",
+    "html_url": "https://github.com/cli/cli/releases/tag/v2.93.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-05-27T17:47:48Z"
+  }
+]

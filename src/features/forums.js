@@ -11,6 +11,11 @@ const forums = LAYOUT.flatMap((g) => g.channels).filter((c) => c.type === 'forum
 const forumOf = (parentId) => forums.find((f) => state.channels[f.key] === parentId);
 const LINK = /https?:\/\/\S+/i;
 
+// Called with (thread, starter) when a post passes its template: right away, or once edited to pass.
+const okHooks = [];
+export const onTemplateOk = (fn) => okHooks.push(fn);
+const passed = (thread, starter) => { for (const fn of okHooks) Promise.resolve().then(() => fn(thread, starter)).catch(console.error); };
+
 // What a post is missing, as the template's labels.
 function missing(spec, msg) {
   const check = spec.check;
@@ -34,12 +39,22 @@ async function inspect(thread) {
   }
   if (!starter || starter.author.bot) return;
   const member = await thread.guild.members.fetch(starter.author.id).catch(() => null);
-  if (isStaff(member)) return;
+  if (isStaff(member)) return passed(thread, starter);
   const gaps = missing(spec, starter);
-  if (!gaps.length) return;
+  if (!gaps.length) return passed(thread, starter);
   const notice = await thread.send(missingMessage(spec, gaps, starter.author.id));
   state.formatChecks[thread.id] = { forum: spec.key, owner: starter.author.id, at: Date.now(), notice: notice.id };
   save();
+}
+
+// Whether a post follows its template now (false while Kira is waiting for it to be fixed).
+export async function followsTemplate(thread) {
+  const spec = forumOf(thread.parentId);
+  if (!spec || state.formatChecks[thread.id] || thread.locked) return false;
+  const starter = await thread.fetchStarterMessage().catch(() => null);
+  if (!starter || starter.author.bot) return false;
+  const member = await thread.guild.members.fetch(starter.author.id).catch(() => null);
+  return isStaff(member) || !missing(spec, starter).length ? starter : false;
 }
 
 // Re-checks the posts that were missing something: fixed → the notice goes; too late → closed.
@@ -54,6 +69,7 @@ async function sweep() {
       await thread.messages.delete(c.notice).catch(() => {});
       await thread.send('✅ Thanks, your post follows the template now.').then((m) => setTimeout(() => m.delete().catch(() => {}), 30_000)).catch(() => {});
       delete state.formatChecks[threadId];
+      passed(thread, starter);
     } else if (Date.now() - c.at > MOD.formatGraceMs) {
       await thread.send(`🔒 Closed: the template wasn't filled in. <@${c.owner}>, you can post again following the pinned post.`).catch(() => {});
       await thread.setLocked(true).catch(() => {});

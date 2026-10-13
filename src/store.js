@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const FILE = join(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'state.json');
+const FILE = process.env.KIRA_STATE || join(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'state.json');
 
 let state;
 export function load() {

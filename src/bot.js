@@ -8,8 +8,9 @@ import * as levels from './features/levels.js';
 import * as rooms from './features/rooms.js';
 import * as community from './features/community.js';
 import * as forums from './features/forums.js';
+import * as github from './features/github.js';
 
-const FEATURES = [moderation, levels, rooms, community, forums];
+const FEATURES = [moderation, levels, rooms, community, forums, github];
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
 
@@ -65,6 +66,7 @@ client.on('messageCreate', async (msg) => {
     if (await moderation.moderate(msg)) return; // removed: no XP, no thread
     await levels.onMessage(msg);
     await community.onMessage(msg);
+    await github.onMessage(msg);
   } catch (e) {
     console.error('message', e);
   }
