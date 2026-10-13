@@ -13,6 +13,7 @@ export const LINKS = {
   sponsor: 'https://github.com/sponsors/ludovic111',
   lsuite: 'https://lsuite.xyz',
   horizon: 'https://github.com/ludovic111/horizon',
+  horizonSite: 'https://playhorizon.dev',
 };
 
 export const COLOR = 0xf2a33a; // sunrise orange, for Horizon
@@ -347,7 +348,7 @@ export const FAQ = [
   ['How do I mark my post as solved?', 'Type `/done` in your post (help, collabs, beats, hire, project feedback). It gets the right tag and closes.'],
   ['How do I get my own voice channel?', 'Join **➕ create your room**: Kira makes you one and moves you in. `/room lock` (only people you invite), `/room invite @someone`, `/room private` (hidden), `/room limit 4`, `/room rename`. It disappears when it\'s empty.'],
   ['What is 🎙️ ludovic?', "Ludovic's voice channel. Nobody joins it by themselves: wait in **⏳ waiting room** and he moves people in."],
-  ['Where do I download Horizon?', `${LINKS.horizon}. You need your own copy of Minecraft Java Edition: Horizon uses its textures and sounds. Read #horizon-info.`],
+  ['Where do I download Horizon?', `${LINKS.horizonSite} has the launcher, and the code is on ${LINKS.horizon}. You need your own copy of Minecraft Java Edition: Horizon uses its textures and sounds. Read #horizon-info.`],
   ['How do I reach the mods?', 'Send a DM to **Kira**: only the mods read it, and they answer through Kira. To report a message: right-click it → Apps → **Report to mods**, or `/report`.'],
   ['Why can\'t I post links?', 'Accounts younger than 3 days can\'t post links: that\'s how most scams arrive. It goes away by itself.'],
   ['Why is a channel in slowmode?', 'When a channel moves too fast to read, Kira turns on a slowmode by itself, and turns it off when it calms down.'],
@@ -360,7 +361,7 @@ export const HORIZON = {
     '',
     'Zero lines of Mojang\'s code: it uses the textures and sounds from **your own copy** of Minecraft Java Edition.',
   ].join('\n'),
-  get: `Download: ${LINKS.horizon}`,
+  get: `Website: ${LINKS.horizonSite}\nDownload: ${LINKS.horizon}`,
   roadmap: [
     '**0.** 100% parity with vanilla Java Edition',
     '**1.** Full optimization of the client and the server: as many FPS as possible, same gameplay',
@@ -377,7 +378,7 @@ export const PROJECTS = [
   {
     name: 'Horizon', tag: 'game', sub: 'Minecraft in Rust · in development',
     text: `Minecraft: Java Edition rewritten from scratch in Rust with AI agents, checked against the original game with differential tests. It uses the textures and sounds from your own copy of the game. Everything else about it: #horizon-info.`,
-    links: [['Download (GitHub)', 'https://github.com/ludovic111/horizon']],
+    links: [['Website', LINKS.horizonSite], ['Download (GitHub)', LINKS.horizon]],
   },
   {
     name: 'lsuite', tag: 'lsuite',

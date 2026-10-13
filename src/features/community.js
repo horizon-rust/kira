@@ -30,7 +30,7 @@ export const commands = [
 
 const linksEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle('ludovic').setDescription([
   `▶️ YouTube: ${LINKS.youtube}`, `🌐 Portfolio: ${LINKS.portfolio}`, `💻 GitHub: ${LINKS.github}`,
-  `🎨 lsuite: ${LINKS.lsuite}`, `🌅 Horizon: ${LINKS.horizon}`, `𝕏 ${LINKS.x} · 📷 ${LINKS.instagram}`,
+  `🎨 lsuite: ${LINKS.lsuite}`, `🌅 Horizon: ${LINKS.horizonSite} · ${LINKS.horizon}`, `𝕏 ${LINKS.x} · 📷 ${LINKS.instagram}`,
   `❤️ Sponsor: ${LINKS.sponsor}`,
 ].join('\n'));
 

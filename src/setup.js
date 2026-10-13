@@ -266,7 +266,7 @@ async function posts(guild) {
         ),
       new EmbedBuilder().setColor(0x555555).setTitle('⚠️ Disclaimer').setDescription(HORIZON.disclaimer),
     ],
-    components: linkRows([['Download (GitHub)', LINKS.horizon], ['YouTube', LINKS.youtube]]),
+    components: linkRows([['Website', LINKS.horizonSite], ['Download (GitHub)', LINKS.horizon], ['YouTube', LINKS.youtube]]),
   });
 
   // One post per project in the #projects forum.
