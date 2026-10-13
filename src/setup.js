@@ -8,10 +8,12 @@ import {
   AutoModerationRuleTriggerType as T, AutoModerationRuleEventType, AutoModerationActionType as A, AutoModerationRuleKeywordPresetType as Preset,
 } from 'discord.js';
 import { GUILD_ID, OWNER_ID, LINKS, COLOR, ROLES, LAYOUT, RETIRED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, HORIZON, PROJECTS } from './config.js';
-import { load, save } from './store.js';
-import { linkify, rolesMessage, howToPost } from './texts.js';
+import { load, save, claim } from './store.js';
+import { unique, isCopy } from './adopt.js';
+import { linkify, rolesMessage } from './texts.js';
 
 const TYPES = { text: ChannelType.GuildText, voice: ChannelType.GuildVoice, forum: ChannelType.GuildForum, announcement: ChannelType.GuildAnnouncement };
+claim('setup');
 const state = load();
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 const log = (...a) => console.log('·', ...a);
@@ -89,7 +91,9 @@ async function ensureChannels(guild, community) {
     const ckey = 'cat:' + group.key;
     state.channels[ckey] ??= state.channels['cat:' + group.was];
     if (group.was) delete state.channels['cat:' + group.was];
-    let cat = guild.channels.cache.get(state.channels[ckey]);
+    let cat = guild.channels.cache.get(state.channels[ckey])
+      ?? unique([...guild.channels.cache.filter((c) => c.type === ChannelType.GuildCategory && c.name === group.category).values()], `category ${group.category}`);
+    if (cat && !state.channels[ckey]) log('category found', group.category);
     const catData = { name: group.category, type: ChannelType.GuildCategory, permissionOverwrites: group.staff ? overwrites(guild, { staff: true }) : [] };
     if (cat) await cat.edit(catData);
     else { cat = await guild.channels.create(catData); log('category created', group.category); }
@@ -101,13 +105,16 @@ async function ensureChannels(guild, community) {
       // Forums and announcement channels need Community: until it's on, announcements is a text channel and forums wait.
       if (!community && spec.type === 'forum') continue;
       const type = !community && spec.type === 'announcement' ? ChannelType.GuildText : wanted;
-      let ch = guild.channels.cache.get(state.channels[spec.key]);
+      const sameKind = (c) => c.type === type || (c.isTextBased() && !c.isVoiceBased() && [ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(type) && c.type !== ChannelType.GuildForum);
+      let ch = guild.channels.cache.get(state.channels[spec.key])
+        ?? unique([...guild.channels.cache.filter((c) => c.name === spec.name && sameKind(c) && !state.rooms?.[c.id]).values()], `channel #${spec.name}`);
+      if (ch && !state.channels[spec.key]) log('channel found', spec.name);
       const data = { name: spec.name, parent: cat.id, permissionOverwrites: overwrites(guild, spec, group.staff) };
       if (spec.type === 'voice') data.bitrate = bitrate;
       else { data.topic = spec.topic ?? null; data.rateLimitPerUser = spec.slowmode ?? 0; }
       if (spec.type === 'forum') {
         const existing = ch?.availableTags ?? [];
-        const tags = spec.template ? [['📌', 'read me', true], ...spec.tags] : spec.tags; // "read me": the pinned how-to post
+        const tags = spec.tags;
         data.availableTags = tags.map(([emoji, name, staffOnly]) => ({ ...(existing.find((t) => t.name === name) ?? {}), name, emoji: { id: null, name: emoji }, moderated: !!staffOnly }));
         data.topic = linkify(`${spec.topic}\n\n${spec.guide ?? ''}${spec.template ? `\n\n**Template:**\n${spec.template}` : ''}`, state).slice(0, 4096);
         data.defaultForumLayout = spec.gallery ? ForumLayoutType.GalleryView : ForumLayoutType.ListView;
@@ -179,6 +186,11 @@ async function enableCommunity(guild) {
 async function upsert(guild, key, channelKey, payload) {
   const ch = guild.channels.cache.get(state.channels[channelKey]);
   let msg = state.messages[key] && await ch.messages.fetch(state.messages[key]).catch(() => null);
+  if (!msg) {
+    const copies = [...(await ch.messages.fetch({ limit: 50 })).filter((m) => isCopy(m, client.user.id, payload)).values()];
+    msg = unique(copies, `the message ${key}`);
+    if (msg) log('message found', key);
+  }
   if (msg) await msg.edit(payload);
   else { msg = await ch.send(payload); log('posted', key); }
   state.messages[key] = msg.id;
@@ -207,25 +219,6 @@ async function posts(guild) {
       const msg = await upsert(guild, 'pin:' + spec.key, spec.key, { content: L(PINS[spec.pin]) });
       if (!msg.pinned) await msg.pin().catch(() => {});
     }
-    // Each forum (except the catalogue) gets a locked, pinned "how to post" post with its rules and template.
-    if (spec.type === 'forum' && spec.template) {
-      const forum = guild.channels.cache.get(state.channels[spec.key]);
-      const key = 'howto:' + spec.key;
-      const payload = howToPost(spec, state);
-      let thread = state.messages[key] && await guild.channels.fetch(state.messages[key]).catch(() => null);
-      if (thread) {
-        const starter = await thread.fetchStarterMessage().catch(() => null);
-        if (starter) await starter.edit(payload);
-      } else {
-        const readMe = forum.availableTags.find((t) => t.name === 'read me')?.id;
-        thread = await forum.threads.create({ name: '📌 How to post here: read me first', message: payload, appliedTags: readMe ? [readMe] : [] });
-        log('how-to posted', spec.name);
-      }
-      if (!thread.locked) await thread.setLocked(true).catch(() => {});
-      if (!thread.flags.has('Pinned')) await thread.pin().catch((e) => log('pin', spec.name, e.message));
-      state.messages[key] = thread.id;
-      save();
-    }
   }
   await upsert(guild, 'horizon', 'horizoninfo', {
     embeds: [
@@ -242,6 +235,7 @@ async function posts(guild) {
 
   // One post per project in the #projects forum.
   const forum = guild.channels.cache.get(state.channels.projects);
+  const active = [...(await forum.threads.fetchActive()).threads.values()].filter((t) => t.ownerId === client.user.id);
   for (const p of [...PROJECTS].reverse()) { // the newest post shows first: create the first project last
     const key = 'project:' + p.name;
     const embed = new EmbedBuilder().setColor(COLOR).setTitle(p.name).setDescription(L(p.text));
@@ -249,6 +243,7 @@ async function posts(guild) {
     const payload = { embeds: [embed], components: linkRows(p.links) };
     const tag = forum.availableTags.find((t) => t.name === p.tag)?.id;
     let thread = state.messages[key] && await guild.channels.fetch(state.messages[key]).catch(() => null);
+    thread ??= unique(active.filter((t) => t.name === p.name), `the project post ${p.name}`);
     if (thread) {
       await thread.edit({ name: p.name, appliedTags: tag ? [tag] : [] });
       const starter = await thread.fetchStarterMessage().catch(() => null);
@@ -386,6 +381,7 @@ async function invite(guild) {
   const welcome = guild.channels.cache.get(state.channels.welcome);
   const invites = await guild.invites.fetch();
   let inv = state.invite && invites.get(state.invite);
+  inv ??= invites.find((i) => i.inviterId === client.user.id && i.maxAge === 0 && i.maxUses === 0 && i.channelId === state.channels.welcome);
   if (!inv) {
     inv = await welcome.createInvite({ maxAge: 0, maxUses: 0, unique: true, reason: 'Permanent invite (video description, portfolio)' });
     state.invite = inv.code;

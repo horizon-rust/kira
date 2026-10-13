@@ -48,7 +48,7 @@ export const ROLES = [
 // Channel types: text, voice, forum, announcement.
 // readonly: everyone reads, only staff and Kira post. staff: only mods see it. posts: 'staff' → only staff open forum posts.
 // locked: a voice channel nobody joins by themselves (Ludovic or a mod moves people in). lobby: join it to get your own room.
-// Forums: `guide` is the post guidelines Discord shows above the forum, and the pinned "how to post" post;
+// Forums: `guide` is the post guidelines Discord shows above the forum (with the template);
 // `template` is what a post must look like; `check` is what Kira verifies on each new post (missing → it asks,
 // still missing after an hour → the post is closed); `tags` are [emoji, name, staffOnly]; `done` is the tag
 // /done puts on a post (solved, taken, found…); `react` the reactions Kira adds; `every` the minimum time
@@ -305,7 +305,7 @@ export const WELCOME = {
     '🔊 **voice**: join **➕ create your room** for your own voice channel',
     '',
     '**How it works**',
-    '• Channels with posts (forums) each have a template: read the pinned post before posting. Kira checks it.',
+    '• Channels with posts (forums) each have a template: read the post guidelines at the top of the forum before posting. Kira checks it.',
     '• Questions? Everything is in #faq. Need a mod? Send Kira a DM.',
     '• Talk and hang out in voice to level up (`/rank`).',
     '',
@@ -323,7 +323,7 @@ export const RULES = [
   ['No piracy, no leaks', "Don't share or ask for game files, ROMs, leaked code, cracked software, plugins or keys. Horizon needs your own copy of Minecraft."],
   ['No scams or malware', 'No phishing, fake "free Nitro", or executables. Accounts younger than 3 days can\'t post links. Never pay someone outside a clear agreement.'],
   ['Keep it SFW', 'No NSFW, gore or shock content, anywhere: names, avatars and statuses included.'],
-  ['Right channel, right format', 'Every channel says what it\'s for in its description. Forums have a template in their pinned post: posts without it are closed after an hour.'],
+  ['Right channel, right format', 'Every channel says what it\'s for in its description. Forums have a template in their post guidelines, shown above the posts: posts without it are closed after an hour.'],
   ['Respect people\'s work', "Don't steal or resell someone else's beat, edit or code. Credit the beatmaker when you use a prod. Free beats are for non-profit use unless the post says otherwise."],
   ['English in the main channels', 'So everyone can follow. Any language is fine in #off-topic.'],
   ['No drama with the mods in public', 'Disagree with a decision? DM Kira: it reaches the mods privately.'],
@@ -335,7 +335,7 @@ export const FAQ = [
   ['How do I get roles?', 'With the buttons in #welcome (click again to remove), or in **Channels & Roles** at the top of the channel list. Level roles come by themselves.'],
   ['What are levels?', 'You earn XP by talking (once a minute) and by hanging out in voice with other people. lvl 5, 10, 20, 30 and 50 give a role. `/rank` shows yours, `/leaderboard` the top 10. #memes and #bot-commands give no XP.'],
   ['Where do I post…?', '• a bug in Horizon → #horizon-bugs · an idea for Horizon → #horizon-ideas\n• a question or bug about lsuite, DISPO… → #project-feedback\n• your own project → #community-projects · a coding problem → #help\n• a beat → #beats · a song → #tracks · looking for a rapper or beatmaker → #collabs\n• a video to review → #video-feedback · a paid job → #hire\n• a tool, guide or kit → #resources'],
-  ['Why was my post closed?', 'Forum posts must follow the template in the forum\'s pinned post. Kira tells you in your post what\'s missing. Edit your first message (⋯ → Edit) within an hour and the post stays; otherwise it\'s closed, and you can post again with the template.'],
+  ['Why was my post closed?', 'Forum posts must follow the template in the forum\'s post guidelines (at the top of the forum). Kira tells you in your post what\'s missing. Edit your first message (⋯ → Edit) within an hour and the post stays; otherwise it\'s closed, and you can post again with the template.'],
   ['How do I mark my post as solved?', 'Type `/done` in your post (help, collabs, beats, hire, project feedback). It gets the right tag and closes.'],
   ['How do I get my own voice channel?', 'Join **➕ create your room**: Kira makes you one and moves you in. `/room lock` (only people you invite), `/room invite @someone`, `/room private` (hidden), `/room limit 4`, `/room rename`. It disappears when it\'s empty.'],
   ['What is 🎙️ ludovic?', "Ludovic's voice channel. Nobody joins it by themselves: wait in **⏳ waiting room** and he moves people in."],

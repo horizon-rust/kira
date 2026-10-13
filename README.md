@@ -13,7 +13,7 @@ coding, his projects (Horizon, lsuite, DISPO, …) and rap (beatmakers and rappe
   (the community's projects, #help) · 🎬 creators (YouTubers, editors, thumbnail artists) · 🎤 music
   (beats, collabs, tracks) · 🔊 voice · 🛡️ staff. One place per purpose: no two channels do the same thing.
 - **Forums** each have post guidelines, a template, required tags (some only mods set), a minimum time
-  between posts, and a locked "📌 How to post here" post. Kira checks every new post against the template.
+  between posts. Kira checks every new post against the template.
 - **Roles** (top to bottom): kira · 👑 ludovic · 🛡️ Mod · 🧪 Horizon Tester · 💎 Booster · lvl 50 → lvl 5 ·
   🎶 Singer · 🎤 Rapper · 🥁 Beatmaker · 🧩 Modder · 🌅 Horizon · 🤖 Vibe coder · 📦 Releases · 🔔 Videos.
 - **Onboarding** (3 questions when you join: what you're here for, what you make, which pings) and the
@@ -22,7 +22,10 @@ coding, his projects (Horizon, lsuite, DISPO, …) and rap (beatmakers and rappe
   the same roles as buttons in `#welcome`, Community mode, Discord AutoMod rules, a permanent invite.
 
 Run it again after changing `config.js`: it updates what it made (IDs in `data/state.json`), moves
-channels, and deletes the empty categories it made earlier.
+channels, and deletes the empty categories it made earlier. If the IDs are ever lost it finds its
+channels, roles, messages and posts again by name instead of making new ones, and it stops if it finds
+two copies of the same thing. The bot and setup each keep to their own keys in `state.json`, so running
+setup while Kira is up is safe; restart Kira afterwards so it knows the new channels.
 
 ## What kira does
 

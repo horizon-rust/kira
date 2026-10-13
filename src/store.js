@@ -5,6 +5,13 @@ import { fileURLToPath } from 'node:url';
 
 const FILE = process.env.KIRA_STATE || join(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'state.json');
 
+// `npm run setup` owns the IDs of what it made; the bot owns everything else (XP, warnings, feeds…).
+// Both write the same file, so each save first takes the other side's keys from disk: a bot that was
+// running during a setup must not put its old copy of the IDs back (that is how copies got made twice).
+const SETUP_KEYS = ['channels', 'roles', 'messages', 'invite', 'serverGuide'];
+let owner = 'bot';
+export const claim = (who) => { owner = who; };
+
 let state;
 export function load() {
   if (state) return state;
@@ -23,6 +30,12 @@ export function load() {
 
 export function save() {
   mkdirSync(dirname(FILE), { recursive: true });
+  try {
+    const disk = JSON.parse(readFileSync(FILE, 'utf8'));
+    for (const key of Object.keys(disk)) {
+      if (SETUP_KEYS.includes(key) === (owner === 'bot')) state[key] = disk[key];
+    }
+  } catch { /* no file yet */ }
   writeFileSync(FILE + '.tmp', JSON.stringify(state, null, 2));
   renameSync(FILE + '.tmp', FILE);
 }

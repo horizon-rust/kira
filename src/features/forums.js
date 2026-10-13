@@ -71,7 +71,7 @@ async function sweep() {
       delete state.formatChecks[threadId];
       passed(thread, starter);
     } else if (Date.now() - c.at > MOD.formatGraceMs) {
-      await thread.send(`🔒 Closed: the template wasn't filled in. <@${c.owner}>, you can post again following the pinned post.`).catch(() => {});
+      await thread.send(`🔒 Closed: the template wasn't filled in. <@${c.owner}>, you can post again following the post guidelines at the top of the forum.`).catch(() => {});
       await thread.setLocked(true).catch(() => {});
       await thread.setArchived(true).catch(() => {});
       await modlog('📝 Post closed (no template)', `<#${threadId}> by <@${c.owner}> in <#${thread.parentId}>`);
