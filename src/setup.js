@@ -289,7 +289,6 @@ async function posts(guild) {
       new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horizon').setURL(LINKS.horizon).setDescription(HORIZON.description)
         .addFields(
           { name: 'Get it', value: HORIZON.get },
-          { name: 'Roadmap', value: HORIZON.roadmap },
           { name: 'Talk about it', value: L('#horizon-chat · ideas in #horizon-ideas · bugs in #horizon-bugs') },
         ),
       new EmbedBuilder().setColor(0x555555).setTitle('⚠️ Disclaimer').setDescription(HORIZON.disclaimer),
@@ -397,14 +396,14 @@ async function serverGuide(guild) {
     },
     new_member_actions: [
       action('rules', 0, 'Read the rules', 'Kira enforces them, day and night', '📜'),
-      action('horizoninfo', 0, 'Get Horizon', 'Download the launcher, see the roadmap', '🌅'),
+      action('horizoninfo', 0, 'Get Horizon', 'Download the launcher, see what it is', '🌅'),
       action('welcome', 0, 'Pick your roles', 'Pings for news and releases, contributor', '🎭'),
       action('introductions', 1, 'Introduce yourself', 'One message, with the template', '👋'),
       action('horizonchat', 1, 'Say hi in #horizon-chat', 'Talk about Horizon', '💬'),
     ],
     // Resource pages must be channels only staff post in.
     resource_channels: [
-      res('horizoninfo', 'Horizon', 'Download, roadmap, disclaimer', '🌅'),
+      res('horizoninfo', 'Horizon', 'What it is, the download, the disclaimer', '🌅'),
       res('faq', 'FAQ', 'Downloading, bug reports, contributing, the mods', '❓'),
       res('releases', 'Releases', 'Every new version and launcher', '📦'),
       res('workboard', 'Work board', "Who's working on what, and how to /claim", '🛠️'),

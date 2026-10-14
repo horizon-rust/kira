@@ -77,7 +77,7 @@ export const LAYOUT = [
   {
     key: 'horizon', was: 'mine', category: '🌅 horizon',
     channels: [
-      { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the roadmap, the disclaimer.' },
+      { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the disclaimer.' },
       { key: 'horizonchat', name: 'horizon-chat', type: 'text', slowmode: 3, topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' },
       {
         key: 'horizonbugs', name: 'horizon-bugs', type: 'forum', every: 600,
@@ -89,7 +89,7 @@ export const LAYOUT = [
       },
       {
         key: 'horizonideas', name: 'horizon-ideas', type: 'forum', every: 1800, react: ['👍', '👎'],
-        topic: 'One idea per post, with the template. Vote with 👍 and 👎: the most wanted ones go on the roadmap.',
+        topic: 'One idea per post, with the template. Vote with 👍 and 👎: the most wanted ones get built.',
         tags: [['⚡', 'performance'], ['🧩', 'modding'], ['🌐', 'multiplayer'], ['🤖', 'mcp / agents'], ['🎬', 'video studio'], ['🎮', 'gameplay'], ['🚀', 'launcher'], ['💡', 'other'], ['📌', 'planned', true], ['✅', 'done', true], ['❌', "won't do", true]],
         guide: 'One idea per post. **Search first** and vote 👍 on the existing post rather than making a new one. Title: the idea in a few words. Horizon aims at 100% vanilla behaviour first: ideas that change gameplay come after that. Kira closes posts without the template after an hour. Each post becomes a GitHub issue.',
         template: '**The idea:**\n**Why:** what it makes better\n**How it could work:** (optional)',
@@ -284,7 +284,7 @@ export const WELCOME = {
     '**Horizon** is Minecraft: Java Edition rewritten from scratch in Rust, checked against the real game so it plays exactly like vanilla, and faster. This is its server: players, testers and the people building it.',
     '',
     '**Where things are**',
-    '🌅 **horizon**: #horizon-info (download, roadmap), #horizon-chat, #horizon-bugs, #horizon-ideas, #showcase (your videos, screenshots, builds), #releases, #work-board and #dev-log',
+    '🌅 **horizon**: #horizon-info (what it is, the download), #horizon-chat, #horizon-bugs, #horizon-ideas, #showcase (your videos, screenshots, builds), #releases, #work-board and #dev-log',
     '💬 **general**: chat, introductions, memes, the #hall-of-fame. Anything that isn\'t Horizon (other games, music, AI coding, Ludovic\'s other projects) goes in #off-topic.',
     '🔊 **voice**: join **➕ create your room** for your own voice channel',
     '',
@@ -337,13 +337,5 @@ export const HORIZON = {
     'Zero lines of Mojang\'s code: it uses the textures and sounds from **your own copy** of Minecraft Java Edition.',
   ].join('\n'),
   get: `Website: ${LINKS.horizonSite}\nLauncher: [download](${LINKS.horizonLauncher})\nCode: ${LINKS.horizon}`,
-  roadmap: [
-    '**0.** 100% parity with vanilla Java Edition',
-    '**1.** Full optimization of the client and the server: as many FPS as possible, same gameplay',
-    '**2.** Modding support, and porting mods to Horizon',
-    '**3.** MCP and CLI support, so AI agents can control the game',
-    '**4.** A built-in video studio: you or your AI direct every aspect of the game for Minecraft videos',
-    '**5.** A pipeline that ports any past or future Minecraft version to Rust',
-  ].join('\n'),
   disclaimer: 'Horizon is an unofficial fan project. It is not affiliated with, endorsed by, or connected to Mojang Studios or Microsoft. Minecraft is a trademark of Mojang and Microsoft; the game, its name, textures and sounds belong to them. Horizon contains none of Minecraft\'s code or files, and none are distributed. To play Horizon you must own a legal copy of Minecraft Java Edition. Horizon is a free, personal, educational project, not for sale, and used at your own risk.',
 };

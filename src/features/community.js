@@ -18,7 +18,6 @@ export const commands = [
   new SlashCommandBuilder().setName('help').setDescription('What Kira does here, and its commands'),
   new SlashCommandBuilder().setName('links').setDescription("Horizon's links: website, launcher, GitHub"),
   new SlashCommandBuilder().setName('horizon').setDescription('What Horizon is, where to download it, and the disclaimer'),
-  new SlashCommandBuilder().setName('roadmap').setDescription("Horizon's roadmap"),
   new SlashCommandBuilder().setName('userinfo').setDescription('About a member').addUserOption((o) => o.setName('member').setDescription('Who')),
   new SlashCommandBuilder().setName('serverinfo').setDescription('About this server'),
   new SlashCommandBuilder().setName('avatar').setDescription("Someone's avatar, full size").addUserOption((o) => o.setName('member').setDescription('Who')),
@@ -36,7 +35,7 @@ const linksEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horiz
 
 // /help: what Kira does, by topic (only the asker sees it).
 const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Kira, Horizon's helper").setDescription([
-  `**Horizon**: \`/horizon\` what it is and where to get it · \`/roadmap\` · \`/links\``,
+  `**Horizon**: \`/horizon\` what it is and where to get it · \`/links\``,
   `**Bugs and ideas**: post in <#${state.channels.horizonbugs}> or <#${state.channels.horizonideas}> with the template; I send each post to GitHub and tell you here when it's answered or fixed.`,
   `**Contributing**: <#${state.channels.workboard}> is the board. \`/claim <issue>\` before you start, \`/unclaim\`, \`/working\`, \`/board\`, \`/link-github\`. Maintainers: \`/move\`.`,
   `**Releases**: every new Horizon version and launcher in <#${state.channels.releases}>.`,
@@ -51,7 +50,6 @@ export const handlers = {
     new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horizon').setURL(LINKS.horizon).setDescription(`${HORIZON.description}\n\n${HORIZON.get}`),
     new EmbedBuilder().setColor(0x555555).setTitle('⚠️ Disclaimer').setDescription(HORIZON.disclaimer),
   ] }),
-  roadmap: (i) => i.reply({ embeds: [new EmbedBuilder().setColor(COLOR).setTitle("Horizon's roadmap").setDescription(HORIZON.roadmap)] }),
   async userinfo(i) {
     const user = i.options.getUser('member') ?? i.user;
     const m = await i.guild.members.fetch(user.id).catch(() => null);
