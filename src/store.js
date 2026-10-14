@@ -30,7 +30,12 @@ export function load() {
   return state;
 }
 
+// After a restore (src/admin.js) the process exits without writing its old state over the new files.
+let frozen = false;
+export const freeze = () => { frozen = true; };
+
 export function save() {
+  if (frozen) return;
   mkdirSync(dirname(FILE), { recursive: true });
   try {
     const disk = JSON.parse(readFileSync(FILE, 'utf8'));

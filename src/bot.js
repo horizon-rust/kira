@@ -17,6 +17,9 @@ import * as github from './features/github.js';
 import * as workboard from './features/workboard.js';
 import * as agents from './features/agents.js';
 import { startServer } from './mcp.js';
+import { adminRoutes } from './admin.js';
+import { rateLimiter } from './agents.js';
+import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 
 const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, agents];
@@ -75,8 +78,12 @@ else { // the board alone, from GitHub
 
 const port = process.env.PORT || process.env.KIRA_HTTP_PORT;
 if (port) {
-  const routes = publicKey ? { '/seal-key': (req, res) => { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(publicKey); } } : {};
-  startServer(Number(port), { store: agents.store, api: agents.api, routes }).then(() => console.log(`mcp server on :${port}`));
+  const limiter = rateLimiter();
+  const routes = {
+    ...(publicKey ? { '/seal-key': (req, res) => { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(publicKey); } } : {}),
+    ...adminRoutes({ hash: process.env.KIRA_ADMIN_TOKEN_SHA256, limiter, save, freeze, files: { state: dataFile('state.json'), agents: process.env.KIRA_AGENTS || dataFile('agents.json') } }),
+  };
+  startServer(Number(port), { store: agents.store, api: agents.api, routes, limiter }).then(() => console.log(`mcp server on :${port}${routes['GET /admin/backup'] ? ', admin routes on' : ''}`));
 }
 
 client.once('clientReady', async () => {

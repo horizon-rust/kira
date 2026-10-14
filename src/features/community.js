@@ -38,6 +38,7 @@ const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Ki
   `**Horizon**: \`/horizon\` what it is and where to get it · \`/links\``,
   `**Bugs and ideas**: post in <#${state.channels.horizonbugs}> or <#${state.channels.horizonideas}> with the template; I send each post to GitHub and tell you here when it's answered or fixed.`,
   `**Contributing**: <#${state.channels.workboard}> is the board. \`/claim <issue>\` before you start, \`/unclaim\`, \`/working\`, \`/board\`, \`/link-github\`. Maintainers: \`/move\`.`,
+  '**Your work**: `/mytasks` your cards · `/status` say what you are on · `/agent connect` lets your AI coding agent read the board and work on your cards (personal token, `/agent tokens`, `/agent revoke`).',
   `**Releases**: every new Horizon version and launcher in <#${state.channels.releases}>.`,
   '**You**: `/rank`, `/leaderboard`, `/remind`, `/userinfo`, `/avatar`, `/room` (your own voice channel: join ➕ create your room).',
   '**The mods**: DM me to reach them privately, `/report` or right-click a message → Apps → Report to mods. `/modmail`.',

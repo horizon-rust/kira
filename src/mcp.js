@@ -198,7 +198,8 @@ export function makeHandler({ store, api, limiter = rateLimiter(), routes = {}, 
     const path = new URL(req.url, 'http://x').pathname;
     try {
       if (req.method === 'GET' && path === '/health') return send(res, 200, { ok: true, board: !!api.snapshot() });
-      if (req.method === 'GET' && routes[path]) return routes[path](req, res);
+      const route = routes[`${req.method} ${path}`] ?? (req.method === 'GET' ? routes[path] : null);
+      if (route) return route(req, res);
       if (path !== '/mcp' && path !== '/') return send(res, 404, { error: 'not found' });
       if (req.method !== 'POST') return rpcError(res, 405, -32000, 'Method not allowed: this server is stateless, POST only.', { Allow: 'POST' });
 

@@ -49,7 +49,8 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | Community | Welcome in `#new-members` (grouped when many people arrive), role buttons, 👍/👎 on ideas, 🔥 in #showcase, ⭐ hall of fame (5 stars), `/remind` |
 | GitHub issues | Posts in `#horizon-bugs` and `#horizon-ideas` that pass their template become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `/issue` (staff). Off until its token exists: see below |
 | Releases | Published releases of ludovic111/horizon → `#releases`: the game (`v…` tags, a summary of New and Fixed) and the launcher (`launcher-v…`), nothing else (REST API every 3 minutes, each release once by id; drafts and prereleases never; [`src/releases.js`](src/releases.js)). Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
-| Work board | The kanban in `#work-board`, `#dev-log`, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`: see below |
+| Work board | The kanban in `#work-board`, `#dev-log`, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/status`: see below |
+| Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
 | Info | `/help` (what Kira does, its commands), `/links`, `/horizon`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
 ## Running it
@@ -94,6 +95,75 @@ their status (draft, CI, review), and when.
 The token needs **Issues: Read and write** on horizon (labels and comments). Pull requests, checks and
 branches are read without a permission because the repo is public; if it ever goes private, add **Pull
 requests: Read-only**, **Commit statuses: Read-only** and **Checks: Read-only**.
+
+## Agents (MCP server)
+
+Contributors connect their AI coding agent (Claude Code, Codex, Cursor…) to Kira's MCP server at
+`https://mcp.playhorizon.dev/mcp` (until the DNS record exists: `https://kira-production-500e.up.railway.app/mcp`)
+with a personal token from `/agent connect`. Streamable HTTP, stateless, the official SDK
+([`src/mcp.js`](src/mcp.js)); tokens and limits in [`src/agents.js`](src/agents.js); the Discord side and the
+actions in [`src/features/agents.js`](src/features/agents.js).
+
+| Tool | Scope | What |
+| --- | --- | --- |
+| `whoami` | read | the token's owner, scope, whether they are a maintainer |
+| `board_list` | read | the board's cards, filtered by column, label (area), person, kind |
+| `task_get` | read | one card, its issue or pull request text and latest comments |
+| `ludovic_now` | read | what Ludovic works on: his `/status`, his open pull requests, the repo's branches, his cards. Public data only |
+| `task_claim`, `task_unclaim` | write | `/claim` and `/unclaim`, in the token owner's name |
+| `card_move`, `card_note` | write | move or note **their own** cards (claimed, theirs, their pull requests) |
+| `card_add` | write | a card of Kira's own (`card#N`) for work that is not a GitHub issue or pull request |
+| `ask` | write | a question in #horizon-chat, as "<name>'s agent", 5 an hour |
+| `task_assign`, `card_close` | maintain | claim for someone else; close Kira's cards; move any card |
+
+**Tokens.** `/agent connect scope: days: label:` answers with the token once, ephemerally, with the config
+snippets; Kira keeps only its SHA-256 (`data/agents.json`, mode 600). `kira_<id>_<secret>`: the 8-character
+id names it in `/agent tokens` and the logs. Scopes `read` < `write` < `maintain` (maintain: only for
+maintainers, and checked again at every call). 90 days by default, 365 at most, 5 live tokens per member.
+`/agent revoke id:` works at once (mods can revoke anyone's; `/agent tokens member:` lists them).
+**`/agent connect` is closed until `KIRA_AGENT_ISSUANCE=on`** (a Railway variable). From the host's shell:
+`node scripts/agent-token.mjs issue|list|revoke` (test tokens, maintainers' own agents).
+
+**Every agent's work goes on the board.** Agents without MCP support use the same tools from a shell:
+`KIRA_TOKEN=… node scripts/board.mjs list | get #40 | add "Release 2026.10.15" progress | move card#3 done | note card#3 "tagged" | claim 40 | ludovic`.
+
+**Rate limits** per token: 120 reads and 20 writes a minute, 5 questions an hour; 30 failed logins a minute per
+address, then 429. **Audit**: every call (who, token id, tool, arguments, outcome, refusals included) goes to
+the staff channel `#agent-log` (grouped every 30 s) and the service log.
+
+### Threat model
+
+| Threat | Answer |
+| --- | --- |
+| A token leaks (pasted in a repo, a log) | Only a hash is stored; revocation is immediate; tokens expire (90 days); scope `read` by default; every action is logged with the token id and owner |
+| Someone guesses or forges tokens | 256-bit secrets, constant-time hash comparison, 30 failures a minute per address then 429 |
+| A contributor's agent does what the contributor may not | Scopes, then ownership: write tokens only move or note cards that are theirs; maintainer actions check the scope **and** the Discord role at each call; actions run in the owner's name |
+| Prompt injection through issues, comments, notes, names | All text people wrote comes wrapped in `<untrusted source=…>` (the wrapper can't be closed from inside), and every answer says to treat it as data. No tool can do anything an injected agent could abuse beyond its owner's own cards |
+| An agent reads what it shouldn't | No tool reads files, runs code, sees tokens (others' or its own), DMs, mod-mail, private channels or the server's members. `ludovic_now` uses only public GitHub data and the `/status` Ludovic sets |
+| Spam through agents in Discord | `ask` and notes are rate-limited, never ping (no mentions parsed, `@everyone` broken), and say they come from an agent |
+| Malformed or oversized input | zod schemas on every argument (numbers, refs, columns, lengths, https links only), 64 KB bodies, POST only, 15/30 s timeouts |
+| The host is compromised | Kira runs on Railway, not on Ludovic's machines; it holds only the Discord bot token and the fine-grained GitHub token (Issues: write on horizon). Nothing on the internet talks to the ThinkPad |
+| The admin routes (`/admin/backup`, `/admin/restore`: Kira's files, for moving hosts) | Absent unless `KIRA_ADMIN_TOKEN_SHA256` is set; a separate random token whose secret is only in 1Password; constant-time check; failures rate-limited like logins. A backup holds token hashes, never tokens |
+| Secrets in transit to the host | Sealed: `op read … \| node scripts/seal.mjs <host>/seal-key` encrypts with a key generated on the host's volume; only ciphertext (`FOO_SEALED`) is in Railway's variables and anyone's terminal |
+
+## Hosting (Railway)
+
+Kira runs on Railway (project **kira**, service **kira**, volume `kira-data` at `/data`: `state.json`,
+`board.json`, `agents.json`, `seal-key.pem`), built from this repo's `Dockerfile` on every push to `main`.
+Variables: `KIRA_STATE=/data/state.json`, `DISCORD_TOKEN_SEALED`, `GITHUB_TOKEN_SEALED`,
+`KIRA_AGENT_ISSUANCE` (`on` opens `/agent connect`), and for tests `KIRA_DISCORD=off` (no Discord: board and
+MCP server only) and `KIRA_GITHUB_DRY_RUN=1`. Health: `GET /health`.
+
+- **A secret changes**: `~/fleet/op read "op://Agents/<item>/credential" | node scripts/seal.mjs https://mcp.playhorizon.dev/seal-key`,
+  then set the printed blob as `<NAME>_SEALED`. A new volume means a new key: seal again.
+- **Moving Kira's files** (state.json, agents.json): `node scripts/admin.mjs backup|restore <host>` with the
+  admin token (`op://Agents/Kira admin token/credential`; Railway only has its SHA-256 in
+  `KIRA_ADMIN_TOKEN_SHA256`). A restore replaces the files and restarts the service on them.
+- **Setup** (`npm run setup`): back up, run setup on the ThinkPad against the backup's state
+  (`KIRA_STATE=… npm run setup`), restore it. Setup only touches Discord and its own keys of the state.
+- **Rollback to the ThinkPad**: back up from Railway, set `KIRA_DISCORD=off` on Railway (or remove the
+  service), put the backup's `state` and `agents` in `~/code/kira/data/state.json` and `data/agents.json`,
+  `systemctl --user enable --now kira`. The unit stays installed there, disabled.
 
 ## GitHub issues
 
