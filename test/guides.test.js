@@ -59,7 +59,7 @@ test("guide: Kira's own posts are not member posts", () => {
 
 test('guide: every forum with a template has its text, and the template check points to the post', () => {
   const forums = LAYOUT.flatMap((g) => g.channels).filter((c) => c.type === 'forum' && c.template);
-  assert.ok(forums.length >= 8);
+  assert.deepEqual(forums.map((f) => f.key), ['horizonbugs', 'horizonideas', 'showcase']);
   for (const spec of forums) {
     const embed = howToPost(spec, { channels: {} }).embeds[0].data;
     assert.match(embed.title, new RegExp(`#${spec.name}`));

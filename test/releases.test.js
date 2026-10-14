@@ -131,14 +131,14 @@ test('mentions: only the 📦 Releases role, never users or @everyone', () => {
   assert.doesNotMatch(silent.content, /<@&/);
 });
 
-test('one-off announcements: unique keys, within Discord limits, the Horizon role only', async () => {
+test('one-off announcements: unique keys, within Discord limits, no ping or the Big news role only', async () => {
   const { ONE_OFFS } = await import('../src/config.js');
   assert.equal(new Set(ONE_OFFS.map((p) => p.key)).size, ONE_OFFS.length);
   for (const p of ONE_OFFS) {
-    assert.equal(p.role, 'horizon');
+    assert.ok(p.role === undefined || p.role === 'horizon');
     assert.ok(p.embed.title.length <= 256 && p.embed.description.length <= 4096);
-    for (const f of p.embed.fields) assert.ok(f.value.length <= 1024 && f.name.length <= 256);
-    const total = p.embed.title.length + p.embed.description.length + p.embed.fields.reduce((n, f) => n + f.name.length + f.value.length, 0);
+    for (const f of p.embed.fields ?? []) assert.ok(f.value.length <= 1024 && f.name.length <= 256);
+    const total = p.embed.title.length + p.embed.description.length + (p.embed.fields ?? []).reduce((n, f) => n + f.name.length + f.value.length, 0);
     assert.ok(total <= 6000);
   }
 });

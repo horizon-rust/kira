@@ -29,6 +29,9 @@ export function kind(repo, tag) {
   return 'generic';
 }
 
+// Whether #releases announces it: Horizon's game and launcher releases only.
+export const announced = (repo, release) => kind(repo, release.tag_name) !== 'generic';
+
 // Cut to `n` characters with an ellipsis, at a word boundary when one is close.
 const clipTo = (s, n) => {
   if (s.length <= n) return s;

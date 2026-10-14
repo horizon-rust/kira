@@ -8,7 +8,7 @@ const FILE = process.env.KIRA_STATE || join(dirname(fileURLToPath(import.meta.ur
 // `npm run setup` owns the IDs of what it made; the bot owns everything else (XP, warnings, feeds…).
 // Both write the same file, so each save first takes the other side's keys from disk: a bot that was
 // running during a setup must not put its old copy of the IDs back (that is how copies got made twice).
-const SETUP_KEYS = ['channels', 'roles', 'messages', 'invite', 'serverGuide'];
+const SETUP_KEYS = ['channels', 'roles', 'messages', 'invite', 'serverGuide', 'icon'];
 let owner = 'bot';
 export const claim = (who) => { owner = who; };
 

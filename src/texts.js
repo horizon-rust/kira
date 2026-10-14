@@ -12,22 +12,20 @@ export function linkify(text, state) {
   });
 }
 
-const ROWS = [['videos', 'releases'], ['horizon', 'ai', 'modder'], ['youtuber', 'editor', 'designer'], ['beatmaker', 'rapper', 'singer']];
+const ROWS = [['horizon', 'releases'], ['contributor', 'modder']];
 
 // The "pick your roles" message in #welcome: one toggle button per self role.
-export function rolesMessage() {
+export function rolesMessage(state = { channels: {} }) {
   const spec = (key) => ROLES.find((r) => r.key === key);
   return {
-    embeds: [new EmbedBuilder().setColor(COLOR).setTitle('🎭 Pick your roles').setDescription([
+    embeds: [new EmbedBuilder().setColor(COLOR).setTitle('🎭 Pick your roles').setDescription(linkify([
       'Click a button to add the role, click it again to remove it. Only you see the answer.',
       '',
-      '**Pings**: 🔔 a new video · 📦 a new release',
-      "**What you're into**: 🌅 Horizon · 🤖 vibe coding · 🧩 mods and rewrites",
-      '**Videos**: 🎬 YouTuber · ✂️ Editor · 🖼️ Thumbnail artist',
-      '**Music**: 🥁 Beatmaker · 🎤 Rapper · 🎶 Singer',
+      '**Pings**: 📣 big Horizon news · 📦 every new version and launcher',
+      '**What you do**: 🛠️ you contribute code (see #work-board) · 🧩 you mod, or want to once modding lands',
       '',
       'Level roles (lvl 5, 10, 20, 30, 50) come by themselves: talk, and hang out in voice. `/rank` shows yours.',
-    ].join('\n'))],
+    ].join('\n'), state))],
     components: ROWS.map((row) => new ActionRowBuilder().addComponents(row.map((key) => {
       const r = spec(key);
       const [emoji, ...rest] = r.name.split(' ');
@@ -88,14 +86,14 @@ export const WELCOME_CHANNEL = 'newmembers';
 // The welcome for the people who just joined: up to 5 are named, beyond that a single "welcome everyone".
 export function welcomeMessage(people, memberCount, state) {
   const c = state.channels;
-  const guide = `Start with <#${c.welcome}> (roles), <#${c.rules}> and <#${c.faq}>, then say hi in <#${c.introductions}>. Building something? <#${c.communityprojects}>. Making videos? <#${c.creatorschat}>. Beats or raps? <#${c.beats}>.`;
+  const guide = `Start with <#${c.welcome}> (roles), <#${c.rules}> and <#${c.faq}>. Get Horizon in <#${c.horizoninfo}>, then say hi in <#${c.introductions}>. Found a bug? <#${c.horizonbugs}>. Want to help build it? <#${c.workboard}>.`;
   const few = people.length <= 5;
   const count = memberCount ?? '?';
   return {
     content: few ? people.map((id) => `<@${id}>`).join(' ') : undefined,
     embeds: [new EmbedBuilder().setColor(COLOR)
       .setDescription(few
-        ? `👋 Welcome to **ludovic's server**${people.length > 1 ? ', all of you' : ''}! We're **${count}** now.\n\n${guide}`
+        ? `👋 Welcome to **Horizon**${people.length > 1 ? ', all of you' : ''}! We're **${count}** now.\n\n${guide}`
         : `👋 Welcome to the **${people.length}** people who just joined! We're **${count}** now.\n\n${guide}`)],
     allowedMentions: { users: few ? people : [] },
   };

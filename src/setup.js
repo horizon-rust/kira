@@ -7,11 +7,13 @@ import {
   ForumLayoutType, SortOrderType, ChannelFlags,
   AutoModerationRuleTriggerType as T, AutoModerationRuleEventType, AutoModerationActionType as A, AutoModerationRuleKeywordPresetType as Preset,
 } from 'discord.js';
-import { GUILD_ID, OWNER_ID, LINKS, COLOR, ROLES, LAYOUT, RETIRED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, HORIZON, PROJECTS, HOWTO, DEFAULT_CHANNELS } from './config.js';
+import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, HORIZON, HOWTO, DEFAULT_CHANNELS, WORK } from './config.js';
 import { screeningBody, screeningUpToDate } from './screening.js';
 import { load, save, claim } from './store.js';
 import { unique, isCopy, ensureThread } from './adopt.js';
 import { linkify, rolesMessage, howToPost } from './texts.js';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 const TYPES = { text: ChannelType.GuildText, voice: ChannelType.GuildVoice, forum: ChannelType.GuildForum, announcement: ChannelType.GuildAnnouncement };
 claim('setup');
@@ -31,6 +33,15 @@ function linkRows(links) {
 
 async function ensureRoles(guild) {
   const me = guild.members.me;
+  await guild.members.fetch();
+  // Roles of the old scope: deleted when nobody holds them, else kept as they are (never lossy).
+  for (const key of RETIRED_ROLES) {
+    const role = guild.roles.cache.get(state.roles[key]);
+    if (role?.members.size) { log('kept retired role', role.name, `(${role.members.size} members hold it)`); continue; }
+    if (role) { await role.delete('No longer used: the server is Horizon\'s only'); log('role removed', role.name); }
+    delete state.roles[key];
+  }
+  save();
   for (const spec of ROLES) {
     let role = guild.roles.cache.get(state.roles[spec.key] ?? state.roles[spec.was]);
     if (spec.managed) role ??= guild.roles.cache.find((r) => r.tags?.premiumSubscriberRole);
@@ -107,6 +118,7 @@ async function ensureChannels(guild, community) {
       if (!community && spec.type === 'forum') continue;
       const type = !community && spec.type === 'announcement' ? ChannelType.GuildText : wanted;
       const sameKind = (c) => c.type === type || (c.isTextBased() && !c.isVoiceBased() && [ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(type) && c.type !== ChannelType.GuildForum);
+      if (spec.was && !state.channels[spec.key] && state.channels[spec.was]) { state.channels[spec.key] = state.channels[spec.was]; delete state.channels[spec.was]; delete state.messages['howto:' + spec.was]; }
       let ch = guild.channels.cache.get(state.channels[spec.key])
         ?? unique([...guild.channels.cache.filter((c) => c.name === spec.name && sameKind(c) && !state.rooms?.[c.id]).values()], `channel #${spec.name}`);
       if (ch && !state.channels[spec.key]) log('channel found', spec.name);
@@ -175,12 +187,22 @@ async function enableCommunity(guild) {
     rulesChannel: state.channels.rules,
     publicUpdatesChannel: state.channels.discordupdates,
     afkChannel: null,
-    description: 'The community of Ludovic: vibe coding, Horizon (Minecraft in Rust), lsuite, and rap: beatmakers and rappers.',
+    name: SERVER.name,
+    description: SERVER.description,
     preferredLocale: 'en-US',
   };
   if (!guild.features.includes('COMMUNITY')) settings.features = [...guild.features, 'COMMUNITY'];
   await guild.edit(settings);
   log('community', settings.features ? 'enabled' : 'on');
+  // The server icon: uploaded again only when the file changes (state.icon is its hash).
+  const icon = readFileSync(new URL(`../${SERVER.icon}`, import.meta.url));
+  const hash = createHash('sha256').update(icon).digest('hex');
+  if (state.icon !== hash || !guild.icon) {
+    await guild.setIcon(icon);
+    state.icon = hash;
+    save();
+    log('server icon set');
+  }
 }
 
 // Sends a message once and keeps editing that same message on later runs.
@@ -266,34 +288,26 @@ async function posts(guild) {
         ),
       new EmbedBuilder().setColor(0x555555).setTitle('⚠️ Disclaimer').setDescription(HORIZON.disclaimer),
     ],
-    components: linkRows([['Website', LINKS.horizonSite], ['Download (GitHub)', LINKS.horizon], ['YouTube', LINKS.youtube]]),
+    components: linkRows([['playhorizon.dev', LINKS.horizonSite], ['Download the launcher', LINKS.horizonLauncher], ['GitHub', LINKS.horizon]]),
+  });
+  await upsert(guild, 'workguide', 'workboard', {
+    embeds: [new EmbedBuilder().setColor(COLOR).setTitle('🧭 How the work board works').setDescription(L([
+      'Horizon is built by Ludovic (with his AI agents) and contributors. To avoid two people doing the same work:',
+      '',
+      `1. Pick an open issue on [GitHub](${LINKS.horizonIssues}).`,
+      '2. **`/claim <number>` before you start.** Kira puts the **in progress** label on it with a comment, and it shows below.',
+      '3. Open your pull request with **"Fixes #<number>"** in its description: it shows next to your claim.',
+      '4. Stopping? `/unclaim <number>`. A claim lapses after ' + WORK.expireDays + ' days without activity (a comment, a pull request or a commit mentioning the issue); Kira DMs you a few days before.',
+      '',
+      '`/link-github <username>` shows your Discord name next to your pull requests. `/working` lists who is on what. Every pull request opened or merged, and every claim, gets a line in #dev-log.',
+      '',
+      'The board below is refreshed from GitHub every 10 minutes.',
+    ].join('\n')))],
   });
 
-  // One post per project in the #projects forum.
-  const forum = guild.channels.cache.get(state.channels.projects);
-  const active = [...(await forum.threads.fetchActive()).threads.values()].filter((t) => t.ownerId === client.user.id);
-  for (const p of [...PROJECTS].reverse()) { // the newest post shows first: create the first project last
-    const key = 'project:' + p.name;
-    const embed = new EmbedBuilder().setColor(COLOR).setTitle(p.name).setDescription(L(p.text));
-    if (p.sub) embed.setFooter({ text: p.sub });
-    const payload = { embeds: [embed], components: linkRows(p.links) };
-    const tag = forum.availableTags.find((t) => t.name === p.tag)?.id;
-    let thread = state.messages[key] && await guild.channels.fetch(state.messages[key]).catch(() => null);
-    thread ??= unique(active.filter((t) => t.name === p.name), `the project post ${p.name}`);
-    if (thread) {
-      await thread.edit({ name: p.name, appliedTags: tag ? [tag] : [] });
-      const starter = await thread.fetchStarterMessage().catch(() => null);
-      if (starter) await starter.edit(payload);
-    } else {
-      thread = await forum.threads.create({ name: p.name, message: payload, appliedTags: tag ? [tag] : [] });
-      log('project posted', p.name);
-    }
-    state.messages[key] = thread.id;
-    save();
-  }
-  // Pin Horizon on top of the forum.
-  const horizon = await guild.channels.fetch(state.messages['project:Horizon']).catch(() => null);
-  if (horizon && !horizon.flags.has('Pinned')) await horizon.pin().catch((e) => log('pin', e.message));
+  // The old catalogue of Ludovic's projects (#projects) was deleted with the server's old scope.
+  for (const key of Object.keys(state.messages)) if (key.startsWith('project:')) delete state.messages[key];
+  save();
 }
 
 async function automod(guild) {
@@ -341,40 +355,27 @@ async function onboarding(guild) {
       default_channel_ids: DEFAULT_CHANNELS.map((k) => c[k]),
       prompts: [
         {
-          id: id(), type: 0, title: 'What are you here for?', single_select: false, required: false, in_onboarding: true,
+          id: id(), type: 0, title: 'What brings you to Horizon?', single_select: false, required: false, in_onboarding: true,
           options: [
-            option('🌅', 'Horizon', 'Minecraft rewritten in Rust: news, bugs, ideas', [r.horizon], [c.horizonchat, c.horizonbugs, c.horizonideas]),
-            option('🤖', 'Vibe coding', 'Building with Claude Code, Codex and agents', [r.ai], [c.aicoding, c.rewrites, c.communityprojects, c.help]),
-            option('🧩', 'Mods and rewrites', 'Decompiles, ports, reverse engineering', [r.modder], [c.rewrites, c.communityprojects]),
-            option('🎬', 'Making videos', 'YouTube, editing, thumbnails', [], [c.creatorschat, c.videofeedback, c.hire]),
-            option('🎤', 'Music', 'Rap, beats, collabs', [], [c.musicchat, c.beats, c.collabs, c.trackposts]),
-            option('🛠️', "Ludovic's apps", 'lsuite, DISPO and the rest', [], [c.feedback]),
-          ],
-        },
-        {
-          id: id(), type: 0, title: 'What do you make?', single_select: false, required: false, in_onboarding: true,
-          options: [
-            option('💻', 'Code', 'Apps, games, tools, with or without AI', [r.ai], [c.communityprojects, c.help]),
-            option('🎬', 'YouTube videos', 'I run a channel', [r.youtuber], [c.creatorschat, c.videofeedback, c.hire]),
-            option('✂️', 'Edits', "I'm a video editor", [r.editor], [c.creatorschat, c.videofeedback, c.hire]),
-            option('🖼️', 'Thumbnails', 'I design thumbnails', [r.designer], [c.creatorschat, c.videofeedback, c.hire]),
-            option('🥁', 'Beats', "I'm a beatmaker", [r.beatmaker], [c.musicchat, c.beats, c.collabs]),
-            option('🎤', 'Raps', "I'm a rapper", [r.rapper], [c.musicchat, c.beats, c.collabs, c.trackposts]),
-            option('🎶', 'Singing', 'Hooks, R&B, toplines', [r.singer], [c.musicchat, c.collabs, c.trackposts]),
-            option('👀', 'Nothing yet', "I'm here to watch and hang out", [], [c.general, c.memes]),
+            option('🎮', 'Playing it', 'Download, help, chat, share your creations', [], [c.horizoninfo, c.horizonchat, c.showcase]),
+            option('🐛', 'Testing and bug reports', 'Find bugs and report them', [], [c.horizonbugs, c.releases]),
+            option('💡', 'Ideas', 'Suggest and vote on what comes next', [], [c.horizonideas]),
+            option('🛠️', 'Contributing code', 'Pull requests: claim an issue, see who is on what', [r.contributor], [c.workboard, c.devlog]),
+            option('🧩', 'Modding', 'Mods for Horizon, when modding support lands', [r.modder], [c.horizonideas]),
+            option('👀', 'Just following', 'News and hanging out', [], [c.general, c.announcements]),
           ],
         },
         {
           id: id(), type: 0, title: 'Want to be pinged?', single_select: false, required: false, in_onboarding: true,
           options: [
-            option('🔔', 'New videos', 'When a video comes out', [r.videos], []),
-            option('📦', 'New releases', 'When Horizon, lsuite or another project ships', [r.releases], []),
+            option('📣', 'Big news', 'Major Horizon announcements', [r.horizon], []),
+            option('📦', 'Every release', 'Each new Horizon version and launcher', [r.releases], []),
           ],
         },
       ],
     },
   });
-  log('onboarding: 3 questions');
+  log('onboarding: 2 questions');
 }
 
 // The Server Guide (Discord's "home" for newcomers): a welcome from Ludovic, first steps, useful channels.
@@ -386,28 +387,28 @@ async function serverGuide(guild) {
     enabled: true,
     welcome_message: {
       author_ids: [OWNER_ID],
-      message: "Welcome to my community! I'm Ludovic: I direct AI agents to build software (like Horizon, Minecraft rewritten in Rust) and I make videos about it. Here you'll find people who build with AI, make videos and make music. Do the steps below, and have fun.",
+      message: "Welcome to Horizon! I'm Ludovic: Horizon is Minecraft Java Edition rewritten in Rust, built with AI agents and contributors. Grab it at playhorizon.dev, report what breaks, share ideas, and if you code, claim an issue and send a pull request. Not affiliated with Mojang or Microsoft.",
     },
     new_member_actions: [
       action('rules', 0, 'Read the rules', 'Kira enforces them, day and night', '📜'),
-      action('welcome', 0, 'Pick your roles', 'Buttons in #welcome: pings and what you make', '🎭'),
+      action('horizoninfo', 0, 'Get Horizon', 'Download the launcher, see the roadmap', '🌅'),
+      action('welcome', 0, 'Pick your roles', 'Pings for news and releases, contributor', '🎭'),
       action('introductions', 1, 'Introduce yourself', 'One message, with the template', '👋'),
-      action('faq', 0, 'Read the FAQ', 'Where to post what, and 📌 How to post here', '❓'),
-      action('general', 1, 'Say hi in #general', 'Talk about anything', '💬'),
+      action('horizonchat', 1, 'Say hi in #horizon-chat', 'Talk about Horizon', '💬'),
     ],
     // Resource pages must be channels only staff post in.
     resource_channels: [
-      res('horizoninfo', 'Horizon', 'Minecraft in Rust: download, roadmap, disclaimer', '🌅'),
-      res('projects', "Ludovic's projects", 'Every project, with its links', '🛠️'),
-      res('faq', 'FAQ', 'Where to post what, levels, voice rooms, the mods', '❓'),
-      res('releases', 'Releases', 'Every new version of the projects', '📦'),
+      res('horizoninfo', 'Horizon', 'Download, roadmap, disclaimer', '🌅'),
+      res('faq', 'FAQ', 'Downloading, bug reports, contributing, the mods', '❓'),
+      res('releases', 'Releases', 'Every new version and launcher', '📦'),
+      res('workboard', 'Work board', "Who's working on what, and how to /claim", '🛠️'),
     ],
   };
   try {
     await client.rest.put(`/guilds/${guild.id}/new-member-welcome`, { body });
     log('server guide on');
   } catch (e) {
-    log('server guide: bots cannot set it; applied from Ludovic\'s session instead (body saved in state.serverGuide)');
+    log('server guide: bots cannot set it ("Bots cannot use this endpoint"): Ludovic applies state.serverGuide by hand in Server Settings → Onboarding');
     state.serverGuide = body; // so it can be applied another way
     save();
   }
@@ -433,7 +434,7 @@ async function invite(guild) {
   let inv = state.invite && invites.get(state.invite);
   inv ??= invites.find((i) => i.inviterId === client.user.id && i.maxAge === 0 && i.maxUses === 0 && i.channelId === state.channels.welcome);
   if (!inv) {
-    inv = await welcome.createInvite({ maxAge: 0, maxUses: 0, unique: true, reason: 'Permanent invite (video description, portfolio)' });
+    inv = await welcome.createInvite({ maxAge: 0, maxUses: 0, unique: true, reason: 'Permanent invite (playhorizon.dev, README)' });
     state.invite = inv.code;
     save();
   }
@@ -450,11 +451,11 @@ client.once('clientReady', async () => {
     await enableCommunity(guild);
     await guild.fetch();
     await ensureChannels(guild, true); // forums and the announcement channel, now that Community is on
+    await onboarding(guild);
+    await serverGuide(guild);
     await order(guild);
     await posts(guild);
     await automod(guild);
-    await onboarding(guild);
-    await serverGuide(guild);
     await screening(guild);
     console.log('invite', await invite(guild));
     console.log('done');

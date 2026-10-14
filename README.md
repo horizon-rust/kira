@@ -1,27 +1,29 @@
 # kira
 
-The bot of Ludovic's Discord server, **ludovic's server**: the community around his videos, vibe
-coding, his projects (Horizon, lsuite, DISPO, …) and rap (beatmakers and rappers). Free: it runs on
-`ludothinkpad`, no paid bot.
+The bot of **Horizon**'s Discord server (Minecraft Java Edition rewritten in Rust, <https://playhorizon.dev>).
+Since 2026-10-14 the server is about Horizon only: everything else (music, AI coding, Ludovic's other
+projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no paid bot.
 
 ## The server
 
 `npm run setup` makes the server match [`src/config.js`](src/config.js):
 
-- **Categories**: 👋 start here (welcome, #new-members, rules, FAQ, announcements) · 💬 general (+ #resources) ·
-  🛠️ ludovic's projects (Horizon first, the catalogue, #project-feedback, #releases) · 🤖 vibe coding
-  (the community's projects, #help) · 🎬 creators (YouTubers, editors, thumbnail artists) · 🎤 music
-  (beats, collabs, tracks) · 🔊 voice · 🛡️ staff. One place per purpose: no two channels do the same thing.
+- **Categories**: 👋 start here (welcome, #new-members, rules, FAQ, announcements) · 🌅 horizon (#horizon-info,
+  #horizon-chat, #horizon-bugs, #horizon-ideas, #showcase for videos/clips/screenshots/builds made in Horizon,
+  #releases, #work-board, #dev-log) · 💬 general (#general, #introductions, #off-topic, #memes, #hall-of-fame,
+  #bot-commands) · 🔊 voice · 🛡️ staff. The old channels (#projects, #resources, #help, #beats, …) were deleted
+  on 2026-10-14 after their messages were exported (`scratch/deleted-channels-2026-10-14/`, not committed).
 - **Forums** each have post guidelines, a template, required tags (some only mods set), a minimum time
   between posts. Kira checks every new post against the template. Each forum with a template also has
   ONE locked, pinned **📌 How to post here: read me first** post (guide, template, rules). It is Kira's own
   post: never checked against the template, no reactions, never a GitHub issue, `/done` refuses it.
 - **Roles** (top to bottom): kira · 👑 ludovic · 🛡️ Mod · 🧪 Horizon Tester · 💎 Booster · lvl 50 → lvl 5 ·
-  🎶 Singer · 🎤 Rapper · 🥁 Beatmaker · 🧩 Modder · 🌅 Horizon · 🤖 Vibe coder · 📦 Releases · 🔔 Videos.
-- **Onboarding** (3 questions when you join: what you're here for, what you make, which pings; the default
+  🛠️ Contributor · 🧩 Modder · 📣 Big news · 📦 Releases.
+- **Onboarding** (2 questions when you join: what brings you to Horizon, which pings; the default
   channels, `DEFAULT_CHANNELS` in `config.js`, include #new-members) and the
-  **Server Guide** (Discord's newcomer home; bots can't set it, so it was applied from Ludovic's session:
-  the body is in `state.serverGuide`),
+  **Server Guide** (Discord's newcomer home; bots get "Bots cannot use this endpoint", so Ludovic applies it
+  by hand in Server Settings → Onboarding: setup writes the wanted body to `state.serverGuide`), the server icon
+  (`assets/horizon-icon.png`, the website's favicon.svg at 512 px; uploaded again only when it changes),
   the same roles as buttons in `#welcome`, Community mode, **rules screening** (new members read and agree to
   the rules before they can talk: one TERMS field with each rule as "Title. first sentence", built from `RULES`
   by [`src/screening.js`](src/screening.js) and sent by setup, which only ever turns it on), Discord AutoMod rules,
@@ -44,10 +46,11 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | Levels | XP for messages (once a minute) and for voice time with others; lvl 5/10/20/30/50 roles; `/rank`, `/leaderboard`, `/givexp` |
 | Voice rooms | Join **➕ create your room** → your own channel; `/room lock / unlock / private / public / invite / kick / limit / rename / claim / transfer`; deleted when empty. **🎙️ ludovic** is locked: people wait in **⏳ waiting room** and Ludovic or a mod `/pull`s them in |
 | Forums | Each new post is checked against its template; Kira lists what's missing and closes it after an hour if it's still missing. `/done` closes your post with its tag (solved, taken, found, filled, done) |
-| Community | Welcome in `#new-members` (grouped when many people arrive), role buttons, 👍/👎 on suggestions and feedback, 🔥 on beats and community projects, ⭐ hall of fame (5 stars), `/remind` |
-| GitHub issues | Posts in `#horizon-bugs`, `#horizon-ideas` and `#project-feedback` (project + bug/idea tags) that pass their template become issues; answers on GitHub come back to the post, pinging the poster. `/issue` (staff). Off until its token exists: see below |
-| Feeds | New videos on youtube.com/@lu4ovic → `#announcements`. Published GitHub releases of the public repos → `#releases` (REST API every 3 minutes, each release once by id; drafts and prereleases never). Horizon game releases get a summary of New and Fixed, launcher releases a smaller embed of their own ([`src/releases.js`](src/releases.js)). Hand-written posts for big releases: `ONE_OFFS` in `config.js`, each posted once |
-| Info | `/links`, `/horizon`, `/roadmap`, `/projects`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
+| Community | Welcome in `#new-members` (grouped when many people arrive), role buttons, 👍/👎 on ideas, 🔥 in #showcase, ⭐ hall of fame (5 stars), `/remind` |
+| GitHub issues | Posts in `#horizon-bugs` and `#horizon-ideas` that pass their template become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `/issue` (staff). Off until its token exists: see below |
+| Releases | Published releases of ludovic111/horizon → `#releases`: the game (`v…` tags, a summary of New and Fixed) and the launcher (`launcher-v…`), nothing else (REST API every 3 minutes, each release once by id; drafts and prereleases never; [`src/releases.js`](src/releases.js)). Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
+| Work board | `#work-board` (one pinned message: claimed issues, open pull requests and their status, merged this week, refreshed every 10 minutes), `#dev-log` (one quiet line per PR opened or merged and per claim), `/claim`, `/unclaim`, `/working`, `/link-github` ([`src/features/workboard.js`](src/features/workboard.js)) |
+| Info | `/links`, `/horizon`, `/roadmap`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
 ## Running it
 
@@ -64,11 +67,8 @@ Install the unit with `ln -s ~/code/kira/deploy/kira.service ~/.config/systemd/u
 ## GitHub issues
 
 When a post in `#horizon-bugs` or `#horizon-ideas` passes its template (at once, or after an edit),
-Kira opens an issue in `ludovic111/horizon`. In `#project-feedback`, a post with a project tag and
-the `bug` or `idea` tag goes to that project's repo (lsuite, ryolune, kimchi, nori, folio, DISPO;
-DISPO is private, so Discord only sees `DISPO#N`, no link). The mapping is in `GITHUB` in
-[`src/config.js`](src/config.js); the code is [`src/features/github.js`](src/features/github.js)
-and [`src/issuekit.js`](src/issuekit.js).
+Kira opens an issue in `ludovic111/horizon`. The mapping is in `GITHUB` in [`src/config.js`](src/config.js);
+the code is [`src/features/github.js`](src/features/github.js) and [`src/issuekit.js`](src/issuekit.js).
 
 - **The issue**: the post's title; the post quoted (no HTML, `@mentions`, `#refs`, issue links or
   closing keywords survive), the poster's display name, the thread link, attachments as links

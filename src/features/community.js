@@ -1,7 +1,7 @@
 // Community: welcomes, role buttons, reactions on forum posts, comment threads, the hall of fame,
 // mod-mail (DM Kira to reach the mods), reminders, and the info commands.
 import { SlashCommandBuilder, EmbedBuilder, ChannelType, MessageFlags, ThreadAutoArchiveDuration } from 'discord.js';
-import { GUILD_ID, LINKS, COLOR, LAYOUT, HORIZON, PROJECTS, ROLES, STARBOARD } from '../config.js';
+import { GUILD_ID, LINKS, COLOR, LAYOUT, HORIZON, ROLES, STARBOARD } from '../config.js';
 import { client, state, save, channel, clip, modlog, parseDuration, human } from '../core.js';
 import { levelOf } from './levels.js';
 import { WELCOME_CHANNEL, welcomeMessage } from '../texts.js';
@@ -15,10 +15,9 @@ const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowe
 // ── Commands ────────────────────────────────────────────────────────────────
 
 export const commands = [
-  new SlashCommandBuilder().setName('links').setDescription("Ludovic's links: YouTube, portfolio, GitHub, lsuite, Horizon"),
+  new SlashCommandBuilder().setName('links').setDescription("Horizon's links: website, launcher, GitHub"),
   new SlashCommandBuilder().setName('horizon').setDescription('What Horizon is, where to download it, and the disclaimer'),
   new SlashCommandBuilder().setName('roadmap').setDescription("Horizon's roadmap"),
-  new SlashCommandBuilder().setName('projects').setDescription("Ludovic's projects"),
   new SlashCommandBuilder().setName('userinfo').setDescription('About a member').addUserOption((o) => o.setName('member').setDescription('Who')),
   new SlashCommandBuilder().setName('serverinfo').setDescription('About this server'),
   new SlashCommandBuilder().setName('avatar').setDescription("Someone's avatar, full size").addUserOption((o) => o.setName('member').setDescription('Who')),
@@ -28,11 +27,11 @@ export const commands = [
   new SlashCommandBuilder().setName('modmail').setDescription('How to reach the mods privately'),
 ];
 
-const linksEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle('ludovic').setDescription([
-  `▶️ YouTube: ${LINKS.youtube}`, `🌐 Portfolio: ${LINKS.portfolio}`, `💻 GitHub: ${LINKS.github}`,
-  `🎨 lsuite: ${LINKS.lsuite}`, `🌅 Horizon: ${LINKS.horizonSite} · ${LINKS.horizon}`, `𝕏 ${LINKS.x} · 📷 ${LINKS.instagram}`,
-  `❤️ Sponsor: ${LINKS.sponsor}`,
-].join('\n'));
+const linksEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horizon').setDescription([
+  `🌐 Website: ${LINKS.horizonSite}`, `⬇️ Launcher: ${LINKS.horizonLauncher}`, `💻 Code: ${LINKS.horizon}`,
+  `🐛 Issues: ${LINKS.horizonIssues}`, `🔀 Pull requests: ${LINKS.horizonPulls}`,
+  state.invite ? `💬 This server: https://discord.gg/${state.invite}` : null,
+].filter(Boolean).join('\n'));
 
 export const handlers = {
   links: (i) => i.reply({ embeds: [linksEmbed()] }),
@@ -41,10 +40,6 @@ export const handlers = {
     new EmbedBuilder().setColor(0x555555).setTitle('⚠️ Disclaimer').setDescription(HORIZON.disclaimer),
   ] }),
   roadmap: (i) => i.reply({ embeds: [new EmbedBuilder().setColor(COLOR).setTitle("Horizon's roadmap").setDescription(HORIZON.roadmap)] }),
-  projects: (i) => i.reply({ embeds: [new EmbedBuilder().setColor(COLOR).setTitle("ludovic's projects").setDescription(
-    PROJECTS.map((p) => `**${p.name}**${p.sub ? ` · ${p.sub}` : ''}\n${p.links.map(([l, u]) => `[${l}](${u})`).join(' · ')}`).join('\n\n')
-    + `\n\nAsk about any of them in <#${state.channels.projects}>.`,
-  )] }),
   async userinfo(i) {
     const user = i.options.getUser('member') ?? i.user;
     const m = await i.guild.members.fetch(user.id).catch(() => null);
@@ -100,7 +95,7 @@ export async function onButton(i) {
 async function fromMember(msg) {
   const guild = client.guilds.cache.get(GUILD_ID);
   const member = await guild?.members.fetch(msg.author.id).catch(() => null);
-  if (!member) return msg.reply("I only take messages from members of ludovic's server.");
+  if (!member) return msg.reply('I only take messages from members of the Horizon server.');
   const box = channel('modmail');
   let thread = state.modmail[msg.author.id] && await guild.channels.fetch(state.modmail[msg.author.id]).catch(() => null);
   const first = !thread;
@@ -114,7 +109,7 @@ async function fromMember(msg) {
   const files = msg.attachments.map((a) => a.url);
   await thread.send({ embeds: [new EmbedBuilder().setColor(0x5aa9ff).setAuthor({ name: msg.author.tag, iconURL: msg.author.displayAvatarURL() }).setDescription(clip(msg.content, 3900)).setTimestamp()], files: files.slice(0, 10) });
   await msg.react('📨').catch(() => {});
-  if (first) await msg.reply('📨 Sent to the mods of ludovic\'s server. They answer here, through me.').catch(() => {});
+  if (first) await msg.reply('📨 Sent to the mods of the Horizon server. They answer here, through me.').catch(() => {});
 }
 
 async function fromMods(msg) {
@@ -127,7 +122,7 @@ async function fromMods(msg) {
     await msg.channel.send('Closed.');
     return msg.channel.setArchived(true).catch(() => {});
   }
-  const ok = await user.send({ content: `**🛡️ Mods of ludovic's server:** ${msg.content}`.slice(0, 2000), files: msg.attachments.map((a) => a.url).slice(0, 10) }).then(() => true).catch(() => false);
+  const ok = await user.send({ content: `**🛡️ Horizon mods:** ${msg.content}`.slice(0, 2000), files: msg.attachments.map((a) => a.url).slice(0, 10) }).then(() => true).catch(() => false);
   await msg.react(ok ? '✅' : '❌').catch(() => {});
 }
 
@@ -190,7 +185,7 @@ export function setup() {
 
   client.on('interactionCreate', async (i) => { if (i.isButton() && i.guildId === GUILD_ID) await onButton(i).catch(console.error); });
 
-  // Reactions on every new post in the forums that have them (votes, 🔥 on beats and projects).
+  // Reactions on every new post in the forums that have them (👍/👎 on ideas, 🔥 in #showcase).
   client.on('threadCreate', async (thread, newlyCreated) => {
     if (!newlyCreated || thread.guildId !== GUILD_ID || thread.parent?.type !== ChannelType.GuildForum) return;
     const emojis = reactFor(thread.parentId);

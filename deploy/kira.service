@@ -1,5 +1,5 @@
 [Unit]
-Description=kira: the bot of ludovic's Discord server (moderation, levels, voice rooms, mod-mail, feeds)
+Description=kira: the bot of the Horizon Discord server (moderation, levels, voice rooms, mod-mail, releases, work board)
 After=network-online.target
 Wants=network-online.target
 
