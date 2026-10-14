@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 const MAX = 2 * 1024 * 1024;
 
 // `save` writes what is in memory first; `freeze` stops all later writes; `exit` restarts.
-export function adminRoutes({ hash, files, limiter, save, freeze, exit = () => process.exit(0) }) {
+export function adminRoutes({ hash, files, limiter, save, freeze, exit = () => process.exit(75) }) { // non-zero: every restart policy starts it again
   if (!/^[0-9a-f]{64}$/.test(hash ?? '')) return {};
   const want = Buffer.from(hash, 'hex');
   const ok = (req) => {
