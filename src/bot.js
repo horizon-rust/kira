@@ -1,7 +1,7 @@
 // Kira at runtime: wires the feature modules, the commands, the releases, the one-off posts and the MCP server.
 // KIRA_DISCORD=off: no Discord connection at all, only the board (from GitHub) and the MCP server, to test a
 // new host. PORT (Railway) or KIRA_HTTP_PORT: where the MCP server listens; none, no server.
-import { MessageFlags } from 'discord.js';
+import { MessageFlags, MessageType } from 'discord.js';
 import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS } from './config.js';
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
@@ -71,7 +71,12 @@ async function postOneOffs() {
       state.oneOffs[post.key] = msg.id;
       save();
       console.log(`one-off posted: ${post.key} → message ${msg.id}`);
-      if (post.pin) await msg.pin().catch((e) => console.error('pin', post.key, e.message));
+      if (post.pin) {
+        await msg.pin().catch((e) => console.error('pin', post.key, e.message));
+        // Discord's "Kira pinned a message" line: not wanted in a read-only channel.
+        const notices = await msg.channel.messages.fetch({ limit: 5 }).catch(() => null);
+        for (const m of notices?.values() ?? []) if (m.type === MessageType.ChannelPinnedMessage && m.author.id === client.user.id) await m.delete().catch(() => {});
+      }
       await msg.crosspost().catch(() => {});
     } catch (e) {
       console.error('one-off', post.key, e.message);

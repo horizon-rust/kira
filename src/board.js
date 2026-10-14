@@ -296,3 +296,11 @@ export function safeCardUrl(u) {
 // Whether a Discord member counts as working on a card: they claimed it, own it (Kira's cards), or are one of
 // its people (assignee or pull request author, through /link-github).
 export const isMine = (card, discordId) => card.people.some((p) => p.discordId && p.discordId === discordId);
+
+// "Good first task" picks for newcomers: open issues labelled `good first issue` (or `help wanted`) that
+// nobody claimed, in To do, oldest first.
+export const GOOD_FIRST = ['good first issue', 'help wanted'];
+export const goodFirst = (snapshot, max = 5) => list(snapshot, { column: 'todo', kind: 'issue' })
+  .filter((c) => !c.claim && c.labels.some((l) => GOOD_FIRST.includes(l.toLowerCase())))
+  .sort((a, b) => a.number - b.number)
+  .slice(0, max);

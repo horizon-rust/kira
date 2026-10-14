@@ -137,3 +137,69 @@ export const cooldownLeft = (lastAt, now, ms) => (lastAt ? Math.max(0, lastAt + 
 
 // Remembers numbers already announced, newest first, at most `keep`.
 export const remember = (list = [], n, keep = 300) => [n, ...list.filter((x) => x !== n)].slice(0, keep);
+
+// ── Notices: CI failures, reviews waiting, the weekly digest ────────────────────
+
+// Open pull requests whose CI now fails on a head commit not reported yet. `seen`: number → the failing
+// sha last reported. Returns { report, seen } (a new `seen`: passing or closed pull requests are forgotten,
+// so a later failure is reported again). The first time (`seen` undefined) nothing is reported.
+export function ciChanges(open, seen) {
+  const next = {};
+  const report = [];
+  for (const p of open) {
+    if (p.ci !== 'failing') continue;
+    next[p.number] = p.sha;
+    if (seen && seen[p.number] !== p.sha) report.push(p);
+  }
+  return { report, seen: next };
+}
+
+// Ready (not draft) pull requests with no review at all, open for `waitMs`, not reminded in `waitMs`.
+// `pinged`: number → last reminder (ms). The first time, every open one counts as just reminded.
+export function reviewsDue(open, pinged, now, waitMs) {
+  const next = {};
+  const due = [];
+  for (const p of open) {
+    if (p.draft || p.reviews > 0) continue;
+    const last = pinged ? pinged[p.number] ?? 0 : now;
+    next[p.number] = last;
+    if (now - p.createdAt >= waitMs && now - last >= waitMs) { due.push(p); next[p.number] = now; }
+  }
+  return { due, pinged: next };
+}
+
+// The start of the week's digest slot at or before `now` (UTC): `weekday` 0 = Sunday, at `hour`.
+export function digestSlot(now, { weekday, hour }) {
+  const d = new Date(now);
+  const slot = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() - weekday + 7) % 7), hour);
+  return slot > now ? slot - 7 * DAY : slot;
+}
+
+// Parity from Horizon's README: the "vanilla parity" badge and the number of harnesses.
+export function parityFrom(readme) {
+  const pct = String(readme ?? '').match(/vanilla(?:%20|\s|-|_)parity-(\d+(?:\.\d+)?)%25/i);
+  const harnesses = String(readme ?? '').match(/(\d+)\s+(?:differential\s+)?parity harnesses/i);
+  return { percent: pct ? Number(pct[1]) : null, harnesses: harnesses ? Number(harnesses[1]) : null };
+}
+
+// The weekly digest: { title, description } for an embed. Lists cut to fit.
+export function digestText({ merged, opened, releases, parity, goodFirst, days = 7 }) {
+  const list = (items, line, empty, max = 8) => (items.length
+    ? [...items.slice(0, max).map(line), ...(items.length > max ? [`…and ${items.length - max} more`] : [])].join('\n')
+    : empty);
+  const parityLine = parity?.percent != null ? `**Vanilla parity: ${parity.percent}%**${parity.harnesses ? ` of ${parity.harnesses} harnesses` : ''}` : null;
+  const description = [
+    parityLine,
+    `**✅ Merged (${merged.length})**\n${list(merged, (p) => `• ${link(`#${p.number} ${esc(short(p.title))}`, p.url)} by **${esc(p.who)}**`, 'Nothing merged this week.')}`,
+    `**🆕 New issues (${opened.length})**\n${list(opened, (i) => `• ${link(`#${i.number} ${esc(short(i.title))}`, i.url)}`, 'None.')}`,
+    `**📦 Releases (${releases.length})**\n${list(releases, (r) => `• ${link(esc(r.name || r.tag), r.url)}`, 'None this week.', 5)}`,
+    `**🌱 Good first tasks**\n${list(goodFirst, (c) => `• ${link(`#${c.number} ${esc(short(c.title))}`, c.url)}`, 'None labelled right now.', 5)}${goodFirst.length ? '\nNew here? `/claim` one, or `/goodfirst` any time.' : ''}`,
+  ].filter(Boolean).join('\n\n');
+  return { title: `🗓️ Horizon this week (last ${days} days)`, description: description.slice(0, 4000) };
+}
+
+// The #dev-log lines for those notices (no pings).
+export const noticeLine = {
+  ciFailing: (p) => `❌ CI is failing on ${link(`#${p.number} ${esc(short(p.title, 90))}`, p.url)} by **${esc(p.who)}**`,
+  reviewWaiting: (p, days) => `👀 ${link(`#${p.number} ${esc(short(p.title, 90))}`, p.url)} by **${esc(p.who)}** has waited ${days} days for a review`,
+};

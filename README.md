@@ -49,7 +49,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | Community | Welcome in `#new-members` (grouped when many people arrive), role buttons, 👍/👎 on ideas, 🔥 in #showcase, ⭐ hall of fame (5 stars), `/remind` |
 | GitHub issues | Posts in `#horizon-bugs` and `#horizon-ideas` that pass their template become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `/issue` (staff). Off until its token exists: see below |
 | Releases | Published releases of ludovic111/horizon → `#releases`: the game (`v…` tags, a summary of New and Fixed) and the launcher (`launcher-v…`), nothing else (REST API every 3 minutes, each release once by id; drafts and prereleases never; [`src/releases.js`](src/releases.js)). Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
-| Work board | The kanban in `#work-board`, `#dev-log`, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/status`: see below |
+| Work board | The kanban in `#work-board`, `#dev-log`, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/status`, `/goodfirst`, `/notify`: see below |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
 | Info | `/help` (what Kira does, its commands), `/links`, `/horizon`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
@@ -84,7 +84,15 @@ their status (draft, CI, review), and when.
   the claim; `/unclaim`. A claim lapses after 14 days without activity (a comment, a commit or a pull request
   mentioning the issue), with a DM 3 days before. `/link-github <username>` shows Discord names on pull requests
   (Ludovic and Cosmic are in `WORK.github`).
-- **`#dev-log`**: one line, no pings, per pull request opened or merged, per claim, unclaim, lapse and move.
+- **`#dev-log`**: one line, no pings, per pull request opened or merged, per claim, unclaim, lapse and move;
+  a line when CI starts failing on a pull request's commit, and when a ready pull request has waited 2 days with
+  no review (then every 2 days). The author also gets a DM about CI if they linked GitHub and turned on
+  `/notify dm:on` (5 DMs an hour at most). Nothing is reported for what was already there at Kira's first look.
+- **Weekly digest** in `#dev-log`, Mondays 09:00 UTC (`WORK.digest`): vanilla parity from the README badge,
+  pull requests merged, issues opened and releases published in the week, and good first tasks. Marked as sent
+  before it's posted, so never twice.
+- **Good first tasks**: open, unclaimed issues in To do labelled `good first issue` or `help wanted`
+  (`board.goodFirst`); `/goodfirst` lists them, the digest shows five.
 - **For other programs** (the coming agent/MCP feature): [`src/board.js`](src/board.js) has no Discord and no
   network: `build(github, work)` → `{ snapshot, stale }`, `list(snapshot, { column, person, kind })`,
   `find(snapshot, ref)`, `move(work, snapshot, ref, column, by)`, `assign` / `unassign` (claims). Each refresh

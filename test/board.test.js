@@ -151,3 +151,12 @@ test('Kira card titles are one line, when added and when stored before (F1)', ()
   assert.equal(old.cards[1].title, 'a ## b c');
   assert.throws(() => board.addCard({}, { title: '\n\n', owner: { discordId: 'u' } }), /needs a title/);
 });
+
+test('good first tasks: labelled, open, unclaimed, in To do (step 4)', () => {
+  const work = { claims: { 3: { user: 'u', who: 'U', since: NOW } } };
+  const { snapshot } = board.build(gh({ issues: [
+    issue(1, { labels: [{ name: 'good first issue' }] }), issue(2), issue(3, { labels: [{ name: 'good first issue' }] }),
+    issue(4, { labels: [{ name: 'help wanted' }] }), issue(5, { labels: [{ name: 'good first issue' }, { name: 'backlog' }] }),
+  ] }), work, { now: NOW });
+  assert.deepEqual(board.goodFirst(snapshot).map((c) => c.number), [1, 4]);
+});

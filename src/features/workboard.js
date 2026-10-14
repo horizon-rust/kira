@@ -6,7 +6,8 @@
 // move, with no pings. /claim marks an issue as taken (the "in progress" label and a comment on GitHub); a
 // claim lapses after 14 days without activity, with a DM a few days before. /move: maintainers place a card.
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags, MessageType } from 'discord.js';
-import { WORK, GITHUB } from '../config.js';
+import { rateLimiter } from '../agents.js';
+import { WORK, GITHUB, COLOR } from '../config.js';
 import { client, state, save, channel, isStaff } from '../core.js';
 import { dataFile } from '../store.js';
 import { makeGitHub } from '../github.js';
@@ -165,7 +166,8 @@ async function openPulls() {
       gh.get(`${REPO}/commits/${p.head.sha}/status`).catch(() => null),
       p.draft ? [] : gh.get(`${REPO}/pulls/${p.number}/reviews?per_page=100`).catch(() => []),
     ]);
-    return { ...p, status: wk.prStatus({ draft: p.draft, ci: wk.ciState(runs?.check_runs, status?.statuses), review: wk.reviewState(reviews ?? []) }) };
+    const ci = wk.ciState(runs?.check_runs, status?.statuses);
+    return { ...p, ci, reviews: (reviews ?? []).length, status: wk.prStatus({ draft: p.draft, ci, review: wk.reviewState(reviews ?? []) }) };
   }));
 }
 
@@ -324,6 +326,60 @@ async function render() {
   console.log('work board columns posted');
 }
 
+// ── Notices: CI failures, reviews waiting, the weekly digest ──────────────────
+// Lines in #dev-log (no pings). A pull request's author also gets a DM about a failing CI if their GitHub
+// login is linked and they turned it on with /notify (at most 5 DMs an hour each). Nothing is reported for
+// what was already there when Kira first looked (ciChanges/reviewsDue seed themselves).
+const dms = rateLimiter({ dm: [5, 3_600_000] });
+async function dmAuthor(login, text) {
+  const id = userOf(login);
+  if (!id || !work.notify?.[id] || !dms.take(id, 'dm')) return;
+  const u = await client.users.fetch(id).catch(() => null);
+  await u?.send({ content: text, allowedMentions: { parse: [] } }).catch(() => {});
+}
+
+async function notices(now = Date.now()) {
+  const open = raw.pulls.filter((p) => p.state === 'open').map((p) => ({
+    number: p.number, title: p.title, url: p.html_url, login: p.user?.login, who: whoIs(p.user?.login),
+    sha: p.head?.sha, ci: p.ci, reviews: p.reviews ?? 0, draft: !!p.draft, createdAt: Date.parse(p.created_at ?? p.updated_at),
+  }));
+  const ci = wk.ciChanges(open, work.ciSeen);
+  work.ciSeen = ci.seen;
+  const rv = wk.reviewsDue(open, work.reviewPinged, now, WORK.reviewWaitMs);
+  work.reviewPinged = rv.pinged;
+  save();
+  for (const p of ci.report) {
+    await log(wk.noticeLine.ciFailing(p));
+    await dmAuthor(p.login, `❌ CI is failing on your Horizon pull request #${p.number} (${p.title}): ${p.url}
+-# You get these because you turned them on with /notify. /notify off stops them.`);
+  }
+  for (const p of rv.due) await log(wk.noticeLine.reviewWaiting(p, Math.floor((now - p.createdAt) / wk.DAY)));
+  await digest(now);
+}
+
+// The weekly digest in #dev-log (WORK.digest: the day and hour, UTC). Marked as sent before it's posted,
+// so a crash can never post it twice; the first time, only the current week is marked.
+async function digest(now) {
+  const slot = wk.digestSlot(now, WORK.digest);
+  if (work.digestAt === undefined) { work.digestAt = slot; return save(); }
+  if (work.digestAt >= slot) return;
+  work.digestAt = slot;
+  save();
+  const since = slot - 7 * wk.DAY;
+  const ch = channel('devlog');
+  if (!ch) return;
+  const [releases, readme] = await Promise.all([gh.get(`${REPO}/releases?per_page=20`).catch(() => []), gh.get(`${REPO}/readme`).catch(() => null)]);
+  const text = wk.digestText({
+    merged: raw.pulls.filter((p) => p.merged_at && Date.parse(p.merged_at) >= since).map((p) => ({ number: p.number, title: p.title, url: p.html_url, who: whoIs(p.user?.login) })),
+    opened: raw.issues.filter((i) => Date.parse(i.created_at) >= since).map((i) => ({ number: i.number, title: i.title, url: i.html_url })),
+    releases: (releases ?? []).filter((r) => !r.draft && Date.parse(r.published_at) >= since).map((r) => ({ name: r.name, tag: r.tag_name, url: r.html_url })),
+    parity: wk.parityFrom(readme?.content ? Buffer.from(readme.content, 'base64').toString('utf8') : ''),
+    goodFirst: snapshot ? board.goodFirst(snapshot) : [],
+  });
+  await ch.send({ embeds: [new EmbedBuilder().setColor(COLOR).setTitle(text.title).setDescription(text.description)], allowedMentions: { parse: [] } });
+  console.log('weekly digest posted');
+}
+
 let running = null;
 export function refresh() {
   running ??= (async () => {
@@ -335,6 +391,7 @@ export function refresh() {
       await logPulls(open, merged);
       rebuild();
       await render();
+      await notices().catch((e) => console.error('notices', e.message));
     } catch (e) {
       console.error('work board', e.message);
       refreshSoon(60_000); // GitHub failed (a 5xx, a timeout): try again in a minute, not in 10
@@ -392,12 +449,28 @@ export const commands = enabled ? [
     .addIntegerOption((o) => o.setName('number').setDescription('The issue or pull request number').setRequired(true).setMinValue(1))
     .addStringOption((o) => o.setName('column').setDescription('Where to').setRequired(true).addChoices(...COLUMN_CHOICES))
     .addStringOption((o) => o.setName('kind').setDescription('If an issue and a pull request share the number').addChoices({ name: 'issue', value: 'issue' }, { name: 'pull request', value: 'pr' })),
+  new SlashCommandBuilder().setName('goodfirst').setDescription('Good first tasks for newcomers: open issues nobody claimed yet'),
+  new SlashCommandBuilder().setName('notify').setDescription('DMs from Kira when CI fails on your pull requests (needs /link-github)')
+    .addStringOption((o) => o.setName('dm').setDescription('On or off').setRequired(true).addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })),
   new SlashCommandBuilder().setName('link-github').setDescription('Link your GitHub account, so your pull requests show your Discord name')
     .addStringOption((o) => o.setName('username').setDescription('Your GitHub username').setRequired(true).setMaxLength(39))
     .addUserOption((o) => o.setName('member').setDescription('Mods: link someone else')),
 ] : [];
 
 export const handlers = {
+  goodfirst(i) {
+    const picks = snapshot ? board.goodFirst(snapshot, 10) : [];
+    if (!picks.length) return i.reply(ephemeral(`No good first tasks labelled right now. Look at **To do** in <#${state.channels.workboard}>, or ask in #horizon-chat.`));
+    return i.reply(ephemeral(`🌱 **Good first tasks** (open, nobody on them):\n${picks.map((c) => `• [#${c.number} ${c.title.replace(/[[\]]/g, '')}](<${c.url}>)`).join('\n')}\n\n\`/claim <number>\` before you start.`));
+  },
+  notify(i) {
+    const on = i.options.getString('dm') === 'on';
+    work.notify ??= {};
+    if (on) work.notify[i.user.id] = true; else delete work.notify[i.user.id];
+    save();
+    const linked = loginOf(i.user.id);
+    return i.reply(ephemeral(on ? `🔔 You'll get a DM when CI fails on your pull requests${linked ? ` (GitHub **${linked}**)` : '. Link your GitHub account first: `/link-github <username>`'}. \`/notify dm:off\` stops it.` : '🔕 No more CI DMs.'));
+  },
   async claim(i) {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     return i.editReply(ephemeral(await claim(i.user, i.member, i.options.getInteger('issue'))));
@@ -449,7 +522,7 @@ export const handlers = {
 };
 
 // For end-to-end checks (scratch scripts): the GitHub client can be swapped.
-export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render, setRaw: (r) => { raw = r; } };
+export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render, notices, setRaw: (r) => { raw = r; } };
 
 export function setup() {
   if (!enabled) return console.log('work board: off (GITHUB_TOKEN is not set)');

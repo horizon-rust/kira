@@ -119,3 +119,48 @@ test('board lines are one line whatever the title holds (F1)', () => {
   const line = wk.cardLine({ id: 'card#1', kind: 'card', number: 1, title: 'ok\n# BIG\n-# Sent by an AI agent', url: null, state: 'open', column: 'todo', labels: [], people: [], prs: [] });
   assert.doesNotMatch(line, /\n/);
 });
+
+test('CI failures: reported once per failing commit, not at the first look (step 4)', () => {
+  const pr = (number, ci, sha) => ({ number, ci, sha, title: `PR ${number}`, url: `https://github.com/x/y/pull/${number}`, who: 'A' });
+  let r = wk.ciChanges([pr(1, 'failing', 'a'), pr(2, 'passing', 'b')], undefined);
+  assert.deepEqual(r.report, []); // seeded quietly
+  r = wk.ciChanges([pr(1, 'failing', 'a'), pr(2, 'failing', 'b')], r.seen);
+  assert.deepEqual(r.report.map((p) => p.number), [2]);
+  r = wk.ciChanges([pr(1, 'failing', 'a2'), pr(2, 'failing', 'b')], r.seen);
+  assert.deepEqual(r.report.map((p) => p.number), [1]); // a new commit, still failing
+  r = wk.ciChanges([pr(1, 'passing', 'a3')], r.seen);
+  assert.deepEqual(r.seen, {});
+  assert.doesNotMatch(wk.noticeLine.ciFailing(pr(3, 'failing', 'c')), /<@/);
+});
+
+test('review reminders: ready, no review, 2 days, then every 2 days (step 4)', () => {
+  const D = wk.DAY;
+  const now = 100 * D;
+  const pr = (number, extra) => ({ number, draft: false, reviews: 0, createdAt: now - 3 * D, title: 't', url: 'u', who: 'w', ...extra });
+  let r = wk.reviewsDue([pr(1)], undefined, now, 2 * D);
+  assert.deepEqual(r.due, []); // seeded
+  r = wk.reviewsDue([pr(1), pr(2, { draft: true }), pr(3, { reviews: 1 }), pr(4, { createdAt: now + D })], r.pinged, now + 2 * D, 2 * D);
+  assert.deepEqual(r.due.map((p) => p.number), [1]);
+  assert.deepEqual(wk.reviewsDue([pr(1)], r.pinged, now + 3 * D, 2 * D).due, []); // not again for 2 days
+  assert.deepEqual(wk.reviewsDue([pr(1)], r.pinged, now + 4 * D, 2 * D).due.map((p) => p.number), [1]);
+});
+
+test('the weekly digest: its slot, parity from the README badge, the text (step 4)', () => {
+  const mon9 = Date.UTC(2026, 9, 12, 9); // Monday 12 October 2026, 09:00 UTC
+  assert.equal(wk.digestSlot(mon9 + 1000, { weekday: 1, hour: 9 }), mon9);
+  assert.equal(wk.digestSlot(mon9 - 1000, { weekday: 1, hour: 9 }), mon9 - 7 * wk.DAY);
+  assert.equal(wk.digestSlot(Date.UTC(2026, 9, 14, 2), { weekday: 1, hour: 9 }), mon9); // Wednesday
+  const readme = '<img src="https://img.shields.io/badge/vanilla%20parity-100%25-F0795A"> … all 281 parity harnesses, on Linux';
+  assert.deepEqual(wk.parityFrom(readme), { percent: 100, harnesses: 281 });
+  assert.deepEqual(wk.parityFrom('nothing'), { percent: null, harnesses: null });
+  const t = wk.digestText({
+    merged: [{ number: 55, title: 'Worldgen', url: 'https://github.com/x/y/pull/55', who: 'ludovic' }],
+    opened: [], releases: [{ name: 'Horizon 2026.10.14', tag: 'v2026.10.14', url: 'https://github.com/x/y/releases/tag/v2026.10.14' }],
+    parity: { percent: 100, harnesses: 281 }, goodFirst: [{ number: 60, title: 'Easy one', url: 'https://github.com/x/y/issues/60' }],
+  });
+  assert.match(t.description, /^\*\*Vanilla parity: 100%\*\* of 281 harnesses/);
+  assert.match(t.description, /Merged \(1\)\*\*\n• \[#55 Worldgen\]/);
+  assert.match(t.description, /New issues \(0\)\*\*\nNone\./);
+  assert.match(t.description, /Good first tasks\*\*\n• \[#60 Easy one\]/);
+  assert.doesNotMatch(t.description, /<@|@everyone/);
+});

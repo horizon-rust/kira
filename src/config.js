@@ -289,6 +289,8 @@ export const WORK = {
   maxClaims: 3, // issues a member may hold at once (maintainers: no limit)
   memberCooldownMs: 2 * 60 * 1000, // between two claims or unclaims by the same member, any issues
   expireDays: 14, remindDays: 3,  // a claim lapses after 14 days without activity; a DM 3 days before
+  reviewWaitMs: 2 * 86_400_000, // a ready pull request with no review: a line in #dev-log after 2 days, then every 2 days
+  digest: { weekday: 1, hour: 9 }, // the weekly digest in #dev-log: Mondays at 09:00 UTC
   mergedDays: 7,                  // "merged in the last 7 days"
   github: {
     '622720516779802630': 'ludovic111', // Ludovic
