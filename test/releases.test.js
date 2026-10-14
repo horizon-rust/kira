@@ -123,7 +123,7 @@ test('notes trimming: Discord limits, "…and N more", first lines without headi
 test('mentions: only the 📦 Releases role, never users or @everyone', () => {
   for (const r of horizon) {
     const m = rel.releaseMessage('horizon', r, ROLE);
-    assert.deepEqual(m.allowedMentions, { parse: [], roles: [ROLE] });
+    assert.ok([JSON.stringify({ parse: [], roles: [ROLE] }), JSON.stringify({ parse: [], roles: [] })].includes(JSON.stringify(m.allowedMentions)));
   }
   assert.deepEqual(rel.releaseMessage('kimchi', fixture('kimchi-releases')[0], ROLE).allowedMentions, { parse: [], roles: [ROLE] });
   const silent = rel.releaseMessage('kimchi', fixture('kimchi-releases')[0], undefined);
@@ -161,4 +161,17 @@ test('the agents announcement: one endpoint value, the three setups, only once /
     assert.equal(p.role, undefined);
   }
   assert.ok(agentSnippets('https://x/mcp', 'kira_t').includes('Bearer kira_t'));
+});
+
+test('pings: a game release with New pings the role; fix-only game releases and launcher releases are quiet', () => {
+  const ping = (tag, body) => rel.releaseMessage('horizon', { tag_name: tag, name: tag, html_url: 'u', body }, ROLE);
+  const feature = ping('v2026.10.15', '### New\n- **Controllers:** play with a pad.\n### Fixed\n- A crash.');
+  assert.match(feature.content, new RegExp(`^<@&${ROLE}> `));
+  assert.deepEqual(feature.allowedMentions, { parse: [], roles: [ROLE] });
+  const fixes = ping('v2026.10.15.1', '### Fixed\n- Composters take items.');
+  assert.doesNotMatch(fixes.content, /<@&/);
+  assert.deepEqual(fixes.allowedMentions, { parse: [], roles: [] });
+  const launcher = ping('launcher-v0.1.9', '### New\n- A logs button.');
+  assert.doesNotMatch(launcher.content, /<@&/);
+  assert.deepEqual(launcher.allowedMentions, { parse: [], roles: [] });
 });

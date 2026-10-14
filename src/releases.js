@@ -82,7 +82,11 @@ export function firstLines(body, max = 600, lines = 6) {
 const launcherVersion = (tag) => tag.replace(/^launcher-v/, '');
 
 // The message announcing one release: { content, embeds, allowedMentions }. `role` is the 📦 Releases role id.
+// Horizon releases ship automatically and often (Ludovic, 2026-10-14): the role is pinged only for a game
+// release with a "New" section (a new feature), never for fix-only game releases or launcher releases.
 export function releaseMessage(repo, release, role) {
+  if (role && (kind(repo, release.tag_name) === 'launcher'
+    || (kind(repo, release.tag_name) === 'game' && !bullets(release.body, 'New').length))) role = null;
   const ping = role ? `<@&${role}> ` : '';
   const allowedMentions = { parse: [], roles: role ? [role] : [] };
   const tag = release.tag_name;
