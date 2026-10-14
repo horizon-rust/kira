@@ -1,23 +1,36 @@
-// The work board: who's working on what in Horizon. #work-board has ONE pinned message Kira keeps
-// editing (claimed issues, open pull requests with their status, merged in the last days), refreshed
-// from GitHub every 10 minutes and after each command. #dev-log gets one line per pull request opened
-// or merged and per claim, with no pings. /claim marks an issue as taken (the "in progress" label and a
-// comment on GitHub); a claim lapses after 14 days without activity, with a DM a few days before.
+// The work board: Horizon's kanban in #work-board. One pinned message per column (Backlog, To do, In
+// progress, Review, Done), each card an issue or pull request with who, labels and status; Kira edits
+// them after each refresh from GitHub (every 10 minutes, after each command, and when a GitHub link is
+// posted). The board itself is data, in src/board.js; its JSON snapshot is also written to data/board.json
+// for whatever reads it next. #dev-log gets one line per pull request opened or merged, per claim and per
+// move, with no pings. /claim marks an issue as taken (the "in progress" label and a comment on GitHub); a
+// claim lapses after 14 days without activity, with a DM a few days before. /move: maintainers place a card.
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags, MessageType } from 'discord.js';
-import { WORK, GITHUB, COLOR } from '../config.js';
+import { WORK, GITHUB } from '../config.js';
 import { client, state, save, channel, isStaff } from '../core.js';
+import { dataFile } from '../store.js';
 import { makeGitHub } from '../github.js';
+import * as board from '../board.js';
 import * as wk from '../workkit.js';
+import { writeFileSync, renameSync } from 'node:fs';
 
 const TOKEN = process.env.GITHUB_TOKEN?.trim();
 export const enabled = !!TOKEN; // claims write labels and comments: no token, no board
 let gh = makeGitHub({ token: TOKEN });
 const REPO = `/repos/${GITHUB.owner}/${WORK.repo}`;
 const LABEL = encodeURIComponent(WORK.label);
+export const BOARD_FILE = dataFile('board.json');
 
-// claims: number → { user, who, title, url, since, activity, reminded }; links: Discord id → GitHub login;
-// board: the pinned message; logged: PR numbers already in #dev-log; seeded: false until the first look.
-const work = (state.work ??= { claims: {}, links: {}, board: null, logged: { opened: [], merged: [] }, seeded: false });
+// claims: issue number → { user, who, title, url, since, activity, reminded }; links: Discord id → GitHub login;
+// moves: card id → { column, by, at, auto } (src/board.js); columns: column key → its message in #work-board;
+// logged: PR numbers already in #dev-log; seeded: false until the first look.
+const work = (state.work ??= {});
+work.claims ??= {};
+work.links ??= {};
+work.moves ??= {};
+work.columns ??= {};
+work.logged ??= { opened: [], merged: [] };
+work.seeded ??= false;
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
 
 // Discord ↔ GitHub: links set with /link-github, then the known ones from config.js.
@@ -28,8 +41,12 @@ function displayName(userId) {
   const m = client.guilds.cache.first()?.members.cache.get(userId);
   return m?.displayName ?? client.users.cache.get(userId)?.globalName ?? null;
 }
-// The name the board shows for a GitHub login: the Discord name when it is linked.
-const whoIs = (login) => (userOf(login) && displayName(userOf(login))) || login;
+// A GitHub login as the board shows it: the Discord name when it is linked.
+const person = (login) => {
+  const id = userOf(login);
+  return { login, discordId: id, name: (id && displayName(id)) || login };
+};
+const whoIs = (login) => person(login).name;
 const nameOf = (member, user) => member?.displayName ?? user.globalName ?? user.username;
 
 async function log(line) {
@@ -57,7 +74,7 @@ export async function claim(user, member, n) {
   const mine = work.claims[n];
   if (mine && mine.user !== user.id) return `#${n} is already claimed by **${mine.who}** since <t:${Math.floor(mine.since / 1000)}:R>. Ask them in #horizon-chat before working on it.`;
   if (mine) {
-    mine.activity = Date.now();
+    board.assign(work, n, { user: user.id, who: mine.who });
     save();
     refreshSoon();
     return `#${n} is still yours: the ${WORK.expireDays} days start again.`;
@@ -67,11 +84,11 @@ export async function claim(user, member, n) {
   await ensureLabel();
   await gh.write('POST', `${REPO}/issues/${n}/labels`, { labels: [WORK.label] });
   await gh.write('POST', `${REPO}/issues/${n}/comments`, { body: wk.claimComment(who, loginOf(user.id), n, WORK.expireDays) });
-  const entry = work.claims[n] = { user: user.id, who, title: issue.title, url: issue.html_url, since: Date.now(), activity: 0, reminded: 0 };
+  Object.assign(board.assign(work, n, { user: user.id, who }), { title: issue.title, url: issue.html_url });
   save();
-  await log(wk.logLine.claimed({ ...entry, number: n }));
+  await log(wk.logLine.claimed({ ...work.claims[n], number: n }));
   refreshSoon();
-  return `🔨 #${n} **${issue.title}** is yours. The **${WORK.label}** label is on it, with a comment on GitHub. Open your pull request with "Fixes #${n}" in its description so it shows next to your claim. \`/unclaim ${n}\` if you stop; it lapses after ${WORK.expireDays} days without activity.`;
+  return `🔨 #${n} **${issue.title}** is yours: it's in **In progress** on <#${state.channels.workboard}>, with the **${WORK.label}** label and a comment on GitHub. Open your pull request with "Fixes #${n}" in its description so it shows on your card. \`/unclaim ${n}\` if you stop; it lapses after ${WORK.expireDays} days without activity.`;
 }
 
 // Releases a claim (`why`: 'unclaimed', 'expired' or 'closed'). Removes the label; comments unless the issue closed.
@@ -80,7 +97,7 @@ async function release(n, why) {
   if (!entry) return;
   await gh.write('DELETE', `${REPO}/issues/${n}/labels/${LABEL}`).catch((e) => console.error('unlabel', n, e.message));
   if (why !== 'closed') await gh.write('POST', `${REPO}/issues/${n}/comments`, { body: wk.unclaimComment(entry.who, why) }).catch((e) => console.error('unclaim comment', n, e.message));
-  delete work.claims[n];
+  board.unassign(work, n);
   save();
   if (why === 'unclaimed') await log(wk.logLine.unclaimed({ ...entry, number: n }));
   if (why === 'expired') await log(wk.logLine.expired({ ...entry, number: n }, WORK.expireDays));
@@ -107,6 +124,7 @@ async function pages(path, max = 3) {
   return out;
 }
 
+// Open pull requests, each with a short status (draft, CI, review).
 async function openPulls() {
   const pulls = await pages(`${REPO}/pulls?state=open`);
   return Promise.all(pulls.map(async (p) => {
@@ -115,25 +133,35 @@ async function openPulls() {
       gh.get(`${REPO}/commits/${p.head.sha}/status`).catch(() => null),
       p.draft ? [] : gh.get(`${REPO}/pulls/${p.number}/reviews?per_page=100`).catch(() => []),
     ]);
-    const ci = wk.ciState(runs?.check_runs, status?.statuses);
-    return {
-      number: p.number, title: p.title, url: p.html_url, login: p.user.login, updated: Date.parse(p.updated_at),
-      status: wk.prStatus({ draft: p.draft, ci, review: wk.reviewState(reviews ?? []) }), fixes: wk.fixesIn(`${p.title}\n${p.body ?? ''}`),
-    };
+    return { ...p, status: wk.prStatus({ draft: p.draft, ci: wk.ciState(runs?.check_runs, status?.statuses), review: wk.reviewState(reviews ?? []) }) };
   }));
 }
 
-async function mergedPulls() {
-  const since = Date.now() - WORK.mergedDays * wk.DAY;
-  const closed = (await gh.get(`${REPO}/pulls?state=closed&sort=updated&direction=desc&per_page=100`)) ?? [];
-  return closed.filter((p) => p.merged_at && Date.parse(p.merged_at) >= since)
-    .sort((a, b) => Date.parse(b.merged_at) - Date.parse(a.merged_at))
-    .map((p) => ({ number: p.number, title: p.title, url: p.html_url, login: p.user.login, at: Date.parse(p.merged_at), updated: Date.parse(p.updated_at), fixes: wk.fixesIn(`${p.title}\n${p.body ?? ''}`) }));
+// Everything the board needs, in one go.
+async function fetchAll() {
+  const since = new Date(Date.now() - WORK.mergedDays * wk.DAY).toISOString();
+  const [open, closed, pulls, closedPulls, branches] = await Promise.all([
+    pages(`${REPO}/issues?state=open`),
+    pages(`${REPO}/issues?state=closed&since=${since}`),
+    openPulls(),
+    gh.get(`${REPO}/pulls?state=closed&sort=updated&direction=desc&per_page=100`).then((x) => x ?? []),
+    pages(`${REPO}/branches`).then((bs) => bs.map((b) => b.name)),
+  ]);
+  const merged = closedPulls.filter((p) => p.merged_at && Date.parse(p.merged_at) >= Date.parse(since));
+  return {
+    repo: `${GITHUB.owner}/${WORK.repo}`,
+    issues: [...open, ...closed].filter((i) => !i.pull_request),
+    pulls: [...pulls, ...merged],
+    branches,
+  };
 }
+
+// The pull requests as #dev-log and the claims see them.
+const brief = (p) => ({ number: p.number, title: p.title, url: p.html_url, login: p.user?.login, fixes: board.fixesIn(`${p.title}\n${p.body ?? ''}`), updated: Date.parse(p.updated_at) });
 
 // Each claim: closed issues release it; activity (comments, commits, linked PRs) pushes the deadline;
 // a reminder DM a few days before it lapses, then it lapses.
-async function checkClaims(prs, merged) {
+async function checkClaims(prs) {
   const now = Date.now();
   for (const [key, entry] of Object.entries(work.claims)) {
     const n = Number(key);
@@ -141,8 +169,9 @@ async function checkClaims(prs, merged) {
       const issue = await gh.get(`${REPO}/issues/${n}`);
       if (!issue || issue.state !== 'open') { await release(n, 'closed'); continue; }
       entry.title = issue.title;
+      entry.url = issue.html_url;
       const timeline = await pages(`${REPO}/issues/${n}/timeline`);
-      const linked = [...prs, ...merged].filter((p) => p.fixes.includes(n)).map((p) => p.updated);
+      const linked = prs.filter((p) => p.fixes.includes(n)).map((p) => p.updated);
       entry.activity = Math.max(entry.activity ?? 0, wk.lastActivity(timeline), ...linked.filter((t) => t > entry.since));
       const due = wk.claimDue(entry, now, WORK);
       if (due === 'expire') {
@@ -163,21 +192,21 @@ async function checkClaims(prs, merged) {
 }
 
 // Opened and merged pull requests → #dev-log, each once. The first look only records what's there.
-async function logPulls(prs, merged) {
-  const L = (work.logged ??= { opened: [], merged: [] });
+async function logPulls(open, merged) {
+  const L = work.logged;
   if (!work.seeded) {
-    for (const p of [...prs, ...merged]) L.opened = wk.remember(L.opened, p.number);
+    for (const p of [...open, ...merged]) L.opened = wk.remember(L.opened, p.number);
     for (const p of merged) L.merged = wk.remember(L.merged, p.number);
     work.seeded = true;
     return save();
   }
-  for (const p of [...prs].sort((a, b) => a.number - b.number)) {
+  for (const p of [...open].sort((a, b) => a.number - b.number)) {
     if (L.opened.includes(p.number)) continue;
     L.opened = wk.remember(L.opened, p.number);
     save();
     await log(wk.logLine.opened({ ...p, who: whoIs(p.login) }));
   }
-  for (const p of [...merged].reverse()) {
+  for (const p of [...merged].sort((a, b) => a.number - b.number)) {
     if (L.merged.includes(p.number)) continue;
     L.merged = wk.remember(L.merged, p.number);
     L.opened = wk.remember(L.opened, p.number);
@@ -188,69 +217,70 @@ async function logPulls(prs, merged) {
 
 // ── The board ────────────────────────────────────────────────────────────────
 
-let snapshot = { prs: [], merged: [], labelled: [], at: 0 };
+let raw = null; // the last fetch, so commands can rebuild without asking GitHub again
+let snapshot = null;
 
-function boardPayload() {
-  const { prs, merged, labelled } = snapshot;
-  const claims = Object.entries(work.claims).map(([n, c]) => ({
-    number: Number(n), title: c.title, url: c.url, who: displayName(c.user) ?? c.who, since: c.since,
-    prs: prs.filter((p) => p.fixes.includes(Number(n))).map((p) => p.number), lapses: wk.lapsesAt(c, WORK.expireDays),
-  }));
-  // "in progress" on GitHub without a Discord claim: shown, so the board tells the whole story.
-  for (const i of labelled) {
-    if (work.claims[i.number]) continue;
-    claims.push({ number: i.number, title: i.title, url: i.html_url, who: i.assignees?.map((a) => whoIs(a.login)).join(', ') || 'someone', githubOnly: true });
-  }
-  claims.sort((a, b) => a.number - b.number);
-  const text = wk.boardText({
-    claims,
-    prs: prs.map((p) => ({ ...p, who: whoIs(p.login) })).sort((a, b) => b.number - a.number),
-    merged: merged.map((p) => ({ ...p, who: whoIs(p.login) })),
-    mergedDays: WORK.mergedDays, now: Date.now(),
-  });
-  return {
-    embeds: [new EmbedBuilder().setColor(COLOR).setTitle(text.title).setURL(`https://github.com/${GITHUB.owner}/${WORK.repo}/pulls`)
-      .setDescription(text.description).setFooter({ text: text.footer }).setTimestamp(snapshot.at || Date.now())],
-    allowedMentions: { parse: [] },
-  };
+// The current board (null before the first refresh). For other features and the later agent API.
+export const current = () => snapshot;
+
+function rebuild() {
+  if (!raw) return null;
+  const { snapshot: s, stale } = board.build(raw, work, { doneDays: WORK.mergedDays, expireDays: WORK.expireDays, person });
+  for (const id of stale) delete work.moves[id];
+  if (stale.length) save();
+  snapshot = s;
+  writeFileSync(BOARD_FILE + '.tmp', JSON.stringify(s, null, 2));
+  renameSync(BOARD_FILE + '.tmp', BOARD_FILE);
+  return s;
 }
 
-// The one board message: the one the state remembers, else Kira's message with the board's title, else a new one. Pinned.
-async function board() {
+function columnPayload(column) {
+  const t = wk.columnText(column);
+  const embed = new EmbedBuilder().setColor(t.color).setTitle(t.title).setDescription(t.description).setTimestamp(Date.parse(snapshot.generatedAt));
+  if (t.footer) embed.setFooter({ text: t.footer });
+  return { embeds: [embed], allowedMentions: { parse: [] } };
+}
+
+// One pinned message per column, in order. Edited in place; if one is gone, all five are posted again
+// (so the order stays right) and the old ones are deleted.
+async function render() {
   const ch = channel('workboard');
-  if (!ch) return null;
-  let msg = work.board && await ch.messages.fetch(work.board).catch(() => null);
-  if (!msg) {
-    const pinned = await ch.messages.fetchPins().then((p) => p.items.map((x) => x.message)).catch(() => []);
-    const recent = [...(await ch.messages.fetch({ limit: 50 })).values()];
-    msg = [...pinned, ...recent].find((m) => m.author.id === client.user.id && m.embeds[0]?.title === wk.boardText({ claims: [], prs: [], merged: [], mergedDays: 0, now: 0 }).title) ?? null;
+  if (!ch || !snapshot) return;
+  if (work.board) { // the single message of the first version of the board
+    await ch.messages.fetch(work.board).then((m) => m.delete()).catch(() => {});
+    delete work.board;
+    save();
   }
-  const payload = boardPayload();
-  if (msg) await msg.edit(payload);
-  else {
-    msg = await ch.send(payload);
-    console.log('work board posted', msg.id);
+  const found = {};
+  for (const col of board.COLUMNS) found[col.key] = work.columns[col.key] && await ch.messages.fetch(work.columns[col.key]).catch(() => null);
+  if (board.COLUMNS.every((c) => found[c.key])) {
+    for (const column of snapshot.columns) await found[column.key].edit(columnPayload(column));
+    return;
   }
-  work.board = msg.id;
-  save();
-  if (!msg.pinned) {
-    await msg.pin().catch((e) => console.error('pin board', e.message));
-    // Discord's "Kira pinned a message" line: not needed in a read-only channel.
-    const notice = (await ch.messages.fetch({ limit: 5 })).find((m) => m.type === MessageType.ChannelPinnedMessage && m.author.id === client.user.id);
-    await notice?.delete().catch(() => {});
+  for (const msg of Object.values(found)) await msg?.delete().catch(() => {});
+  for (const column of snapshot.columns) {
+    const msg = await ch.send(columnPayload(column));
+    work.columns[column.key] = msg.id;
+    save();
+    await msg.pin().catch((e) => console.error('pin column', e.message));
   }
-  return msg;
+  // Discord's "Kira pinned a message" lines: not needed in a read-only channel.
+  const notices = (await ch.messages.fetch({ limit: 20 })).filter((m) => m.type === MessageType.ChannelPinnedMessage && m.author.id === client.user.id);
+  for (const m of notices.values()) await m.delete().catch(() => {});
+  console.log('work board columns posted');
 }
 
 let running = null;
 export function refresh() {
   running ??= (async () => {
     try {
-      const [prs, merged, labelled] = await Promise.all([openPulls(), mergedPulls(), pages(`${REPO}/issues?state=open&labels=${LABEL}`)]);
-      await checkClaims(prs, merged);
-      await logPulls(prs, merged);
-      snapshot = { prs, merged, labelled: labelled.filter((i) => !i.pull_request), at: Date.now() };
-      await board();
+      raw = await fetchAll();
+      const open = raw.pulls.filter((p) => p.state === 'open').map(brief);
+      const merged = raw.pulls.filter((p) => p.merged_at).map(brief);
+      await checkClaims([...open, ...merged]);
+      await logPulls(open, merged);
+      rebuild();
+      await render();
     } catch (e) {
       console.error('work board', e.message);
     } finally {
@@ -273,14 +303,25 @@ export function onMessage(msg) {
 // ── Commands ─────────────────────────────────────────────────────────────────
 
 function workingText() {
+  if (!snapshot) return 'The board is loading: try again in a minute.';
   const people = new Map(); // name → lines
-  const add = (who, line) => people.set(who, [...(people.get(who) ?? []), line]);
-  for (const [n, c] of Object.entries(work.claims)) add(displayName(c.user) ?? c.who, `🔨 #${n} ${c.title} (since <t:${Math.floor(c.since / 1000)}:R>)`);
-  for (const p of snapshot.prs) add(whoIs(p.login), `🔀 PR #${p.number} ${p.title} · ${p.status}`);
-  if (!people.size) return 'Nobody has claimed an issue or has a pull request open right now. Pick one on GitHub and `/claim` it.';
+  for (const c of board.cards(snapshot).filter((c) => ['progress', 'review'].includes(c.column))) {
+    for (const p of c.people) people.set(p.name, [...(people.get(p.name) ?? []), `${c.kind === 'pr' ? '🔀 PR' : '🔨'} #${c.number} ${c.title} · ${board.COLUMNS.find((x) => x.key === c.column).name}`]);
+  }
+  if (!people.size) return 'Nobody is working on an issue or has a pull request open right now. Pick one on GitHub and `/claim` it.';
   const lines = [...people].map(([who, items]) => `**${who}**\n${items.map((l) => `• ${l}`).join('\n')}`);
-  return `${lines.join('\n\n')}\n\nThe live view is in <#${state.channels.workboard}>.`.slice(0, 1990);
+  return `${lines.join('\n\n')}\n\nThe live board is in <#${state.channels.workboard}>.`.slice(0, 1990);
 }
+
+function boardText(column, member) {
+  if (!snapshot) return 'The board is loading: try again in a minute.';
+  const who = member && (loginOf(member.id) ?? member.id);
+  const cols = snapshot.columns.filter((c) => !column || c.key === column).map((c) => ({ ...c, cards: c.cards.filter((card) => !member || card.people.some((p) => p.discordId === member.id || (who && p.login === who))) }));
+  const text = cols.map((c) => wk.columnText(c, Date.now(), 1800)).map((t) => `**${t.title}**\n${t.description}`).join('\n\n');
+  return text.slice(0, 1990);
+}
+
+const COLUMN_CHOICES = board.COLUMNS.map((c) => ({ name: `${c.emoji} ${c.name}`, value: c.key }));
 
 export const commands = enabled ? [
   new SlashCommandBuilder().setName('claim').setDescription('Tell everyone you are working on a Horizon issue (GitHub label + comment)')
@@ -288,6 +329,13 @@ export const commands = enabled ? [
   new SlashCommandBuilder().setName('unclaim').setDescription('Stop working on an issue you claimed: it becomes free again')
     .addIntegerOption((o) => o.setName('issue').setDescription('The issue number').setRequired(true).setMinValue(1)),
   new SlashCommandBuilder().setName('working').setDescription("Who's working on what: claimed issues and open pull requests"),
+  new SlashCommandBuilder().setName('board').setDescription('The work board, or one column of it, or one person\'s cards (only you see it)')
+    .addStringOption((o) => o.setName('column').setDescription('One column').addChoices(...COLUMN_CHOICES))
+    .addUserOption((o) => o.setName('member').setDescription('Only their cards')),
+  new SlashCommandBuilder().setName('move').setDescription('Maintainers: move a card of the work board to another column')
+    .addIntegerOption((o) => o.setName('number').setDescription('The issue or pull request number').setRequired(true).setMinValue(1))
+    .addStringOption((o) => o.setName('column').setDescription('Where to').setRequired(true).addChoices(...COLUMN_CHOICES))
+    .addStringOption((o) => o.setName('kind').setDescription('If an issue and a pull request share the number').addChoices({ name: 'issue', value: 'issue' }, { name: 'pull request', value: 'pr' })),
   new SlashCommandBuilder().setName('link-github').setDescription('Link your GitHub account, so your pull requests show your Discord name')
     .addStringOption((o) => o.setName('username').setDescription('Your GitHub username').setRequired(true).setMaxLength(39))
     .addUserOption((o) => o.setName('member').setDescription('Mods: link someone else')),
@@ -303,6 +351,29 @@ export const handlers = {
     return i.editReply(ephemeral(await unclaim(i.user, i.member, i.options.getInteger('issue'))));
   },
   working: (i) => i.reply(ephemeral(workingText())),
+  board: (i) => i.reply(ephemeral(boardText(i.options.getString('column'), i.options.getUser('member')))),
+  async move(i) {
+    if (!snapshot) return i.reply(ephemeral('The board is loading: try again in a minute.'));
+    const n = i.options.getInteger('number');
+    const ref = { kind: i.options.getString('kind'), number: n };
+    const card = board.find(snapshot, ref);
+    if (!card) return i.reply(ephemeral(`#${n} isn't on the board (open issues and pull requests, and what closed in the last ${WORK.mergedDays} days).`));
+    const mine = card.claim?.discordId === i.user.id;
+    if (!isStaff(i.member) && !mine) return i.reply(ephemeral('Only maintainers move cards (and you, on a card you claimed).'));
+    let result;
+    try {
+      result = board.move(work, snapshot, ref, i.options.getString('column'), nameOf(i.member, i.user));
+    } catch (e) {
+      return i.reply(ephemeral(e.message));
+    }
+    save();
+    rebuild();
+    await render().catch((e) => console.error('work board', e.message));
+    const name = (key) => board.COLUMNS.find((c) => c.key === key).name;
+    if (result.from !== result.to) await log(wk.logLine.moved({ who: nameOf(i.member, i.user), number: card.number, title: card.title, url: card.url, to: name(result.to) }));
+    const back = result.to === card.auto ? ' (where GitHub puts it, so no manual move is kept)' : `. It stays there until its state on GitHub changes (GitHub would put it in ${name(card.auto)}).`;
+    return i.reply(ephemeral(`📌 #${card.number} → **${name(result.to)}**${back}`));
+  },
   async 'link-github'(i) {
     const target = i.options.getUser('member') ?? i.user;
     if (target.id !== i.user.id && !isStaff(i.member)) return i.reply(ephemeral('Only mods can link someone else.'));
@@ -321,12 +392,11 @@ export const handlers = {
   },
 };
 
-// For the end-to-end check (scratch scripts): the GitHub client can be swapped.
-export const _test = { work, setGitHub: (g) => { gh = g; }, boardPayload, release };
+// For end-to-end checks (scratch scripts): the GitHub client can be swapped.
+export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render };
 
 export function setup() {
   if (!enabled) return console.log('work board: off (GITHUB_TOKEN is not set)');
   console.log(`work board: on, ${Object.keys(work.claims).length} claims`);
   client.once('clientReady', () => { refreshSoon(10_000); setInterval(() => refresh(), WORK.refreshMs); });
 }
-

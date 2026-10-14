@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const FILE = process.env.KIRA_STATE || join(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'state.json');
+// Other files Kira writes, next to the state (data/board.json…).
+export const dataFile = (name) => join(dirname(FILE), name);
 
 // `npm run setup` owns the IDs of what it made; the bot owns everything else (XP, warnings, feeds…).
 // Both write the same file, so each save first takes the other side's keys from disk: a bot that was

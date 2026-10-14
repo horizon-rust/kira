@@ -49,7 +49,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | Community | Welcome in `#new-members` (grouped when many people arrive), role buttons, 👍/👎 on ideas, 🔥 in #showcase, ⭐ hall of fame (5 stars), `/remind` |
 | GitHub issues | Posts in `#horizon-bugs` and `#horizon-ideas` that pass their template become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `/issue` (staff). Off until its token exists: see below |
 | Releases | Published releases of ludovic111/horizon → `#releases`: the game (`v…` tags, a summary of New and Fixed) and the launcher (`launcher-v…`), nothing else (REST API every 3 minutes, each release once by id; drafts and prereleases never; [`src/releases.js`](src/releases.js)). Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
-| Work board | `#work-board` (one pinned message: claimed issues, open pull requests and their status, merged this week, refreshed every 10 minutes), `#dev-log` (one quiet line per PR opened or merged and per claim), `/claim`, `/unclaim`, `/working`, `/link-github` ([`src/features/workboard.js`](src/features/workboard.js)) |
+| Work board | The kanban in `#work-board`, `#dev-log`, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`: see below |
 | Info | `/links`, `/horizon`, `/roadmap`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
 ## Running it
@@ -63,6 +63,37 @@ Content intents), owned by Ludovic's account. Token: `op://Agents/Discord bot Ki
     journalctl --user -u kira -f
 
 Install the unit with `ln -s ~/code/kira/deploy/kira.service ~/.config/systemd/user/`.
+
+## Work board
+
+`#work-board` is Horizon's kanban: Kira's guide (posted by setup), then **one pinned message per column**,
+Backlog · To do · In progress · Review · Done, edited in place after every refresh (every 10 minutes, after
+each command, and 30 s after someone posts a link to a Horizon issue or pull request). Each card is one line:
+the issue or pull request (link), who is on it (🔨 = claimed on Discord), its labels, its pull requests and
+their status (draft, CI, review), and when.
+
+- **Where GitHub puts a card** (`autoColumn` in [`src/board.js`](src/board.js)): an open issue → To do; claimed,
+  assigned, a branch named for it (`40-…`, `issue-40`) or a draft pull request that fixes it → In progress; a
+  pull request ready for review that fixes it → Review; the `backlog` label → Backlog; closed in the last 7 days →
+  Done. A pull request that fixes no issue on the board is a card of its own (draft → In progress, ready →
+  Review, merged → Done). Issues labelled `test` stay off the board.
+- **By hand**: `/move <number> <column>` (maintainers, and a member on a card they claimed). A manual move
+  holds until the card's state on GitHub changes; moving a card back where GitHub puts it clears it.
+- **Claims**: `/claim <issue>` adds the `in progress` label and a "Claimed by … on Discord" comment and records
+  the claim; `/unclaim`. A claim lapses after 14 days without activity (a comment, a commit or a pull request
+  mentioning the issue), with a DM 3 days before. `/link-github <username>` shows Discord names on pull requests
+  (Ludovic and Cosmic are in `WORK.github`).
+- **`#dev-log`**: one line, no pings, per pull request opened or merged, per claim, unclaim, lapse and move.
+- **For other programs** (the coming agent/MCP feature): [`src/board.js`](src/board.js) has no Discord and no
+  network: `build(github, work)` → `{ snapshot, stale }`, `list(snapshot, { column, person, kind })`,
+  `find(snapshot, ref)`, `move(work, snapshot, ref, column, by)`, `assign` / `unassign` (claims). Each refresh
+  writes the snapshot to `data/board.json` (`version`, `repo`, `generatedAt`, `columns[].cards[]` with `id`,
+  `kind`, `number`, `title`, `url`, `state`, `column`, `auto`, `moved`, `people`, `claim`, `labels`, `prs`,
+  `branches`). The claims and moves live in `state.work`.
+
+The token needs **Issues: Read and write** on horizon (labels and comments). Pull requests, checks and
+branches are read without a permission because the repo is public; if it ever goes private, add **Pull
+requests: Read-only**, **Commit statuses: Read-only** and **Checks: Read-only**.
 
 ## GitHub issues
 

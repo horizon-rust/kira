@@ -102,7 +102,7 @@ export const LAYOUT = [
         check: { media: true, needs: [['What it is', /what it is|\bwhat\b|\bthis\b/i]] },
       },
       { key: 'releases', name: 'releases', type: 'text', readonly: true, topic: 'Every new Horizon version and launcher, posted by Kira. Pick the 📦 Releases role to get pinged.' },
-      { key: 'workboard', name: 'work-board', type: 'text', readonly: true, topic: 'Who\'s working on what: claimed issues, open pull requests, merged this week. Kira keeps the pinned message up to date. Contributing? /claim <issue> before you start.' },
+      { key: 'workboard', name: 'work-board', type: 'text', readonly: true, topic: 'Horizon\'s kanban: Backlog, To do, In progress, Review, Done. Kira keeps it in sync with GitHub every 10 minutes. Contributing? /claim <issue> before you start. /board, /working.' },
       { key: 'devlog', name: 'dev-log', type: 'text', readonly: true, topic: 'One line per pull request opened or merged and per issue claimed, posted by Kira. Talk about it in #horizon-chat.' },
     ],
   },
@@ -231,7 +231,8 @@ export const GITHUB = {
   notifyByDm: false, // also DM the poster when their post gets an answer (the thread mention is the main channel)
 };
 
-// The work board (src/features/workboard.js): #work-board, #dev-log, /claim, /unclaim, /working, /link-github.
+// The work board (src/board.js, src/features/workboard.js): the kanban in #work-board, #dev-log, /claim, /unclaim,
+// /working, /board, /move (maintainers), /link-github.
 // `github`: Discord user → GitHub login known from the start; /link-github adds and overrides.
 export const WORK = {
   repo: 'horizon',
@@ -288,7 +289,7 @@ export const WELCOME = {
     '**How it works**',
     `• Get Horizon at ${LINKS.horizonSite}: download the launcher; you need your own copy of Minecraft: Java Edition.`,
     '• Bugs and ideas are forums with a template: read the 📌 **How to post here** post at the top first. Each post becomes a GitHub issue, and you hear back in your post.',
-    '• Want to contribute? Pick an issue on GitHub, `/claim` it here, and it shows on #work-board.',
+    '• Want to contribute? Pick a card in **To do** on #work-board, `/claim` it, and it moves to **In progress**.',
     '• Questions? Everything is in #faq. Need a mod? Send Kira a DM.',
     '',
     'Horizon is an unofficial fan project, not affiliated with Mojang or Microsoft. Read #rules, then pick your roles with the buttons below.',

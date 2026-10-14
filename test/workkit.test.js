@@ -55,19 +55,20 @@ test("lastActivity: comments, commits and cross-references count; Kira's comment
   assert.equal(wk.lastActivity([]), 0);
 });
 
-test('the board: three sections, links that do not unfurl, names escaped, cut to fit an embed', () => {
+test('a column: one line per card with link, people, labels, pull requests; cut to fit an embed', () => {
   const now = Date.now();
-  const many = Array.from({ length: 80 }, (_, i) => ({ number: i + 1, title: `A pull request with a long title number ${i}`, url: `https://github.com/x/y/pull/${i + 1}`, who: 'Cosmic', status: '✅ CI passed · in review', fixes: [2] }));
-  const b = wk.boardText({
-    claims: [{ number: 2, title: 'Water *renders* black', url: 'https://github.com/x/y/issues/2', who: 'some_one', since: now - wk.DAY, prs: [56], lapses: now + 2 * wk.DAY }],
-    prs: many, merged: [], mergedDays: 7, now,
-  });
-  assert.ok(b.description.length <= 4096);
-  assert.match(b.description, /\*\*🔨 Claimed issues\*\*\n• \[#2 Water \\\*renders\\\* black\]\(<https:\/\/github\.com\/x\/y\/issues\/2>\): \*\*some\\_one\*\* · since <t:\d+:R> · PR #56 · lapses <t:\d+:R>/);
-  assert.match(b.description, /…and \d+ more/);
-  assert.match(b.description, /Merged in the last 7 days\*\*\nNothing yet\./);
-  const empty = wk.boardText({ claims: [], prs: [], merged: [], mergedDays: 7, now });
-  assert.match(empty.description, /\/claim <issue number>/);
+  const card = (n) => ({ id: `issue#${n}`, kind: 'issue', number: n, title: `Water *renders* black ${n}`, url: `https://github.com/x/y/issues/${n}`, state: 'open', column: 'progress', labels: ['bug', 'rendering'],
+    people: [{ name: 'some_one', claimed: true }], claim: { since: new Date(now - wk.DAY).toISOString(), lapses: new Date(now + 2 * wk.DAY).toISOString() },
+    prs: [{ number: 56, url: 'https://github.com/x/y/pull/56', state: 'open', status: '👀 in review' }], moved: null });
+  const one = wk.columnText({ key: 'progress', cards: [card(2)] }, now);
+  assert.equal(one.title, '🔨 In progress (1)');
+  assert.match(one.description, /^• \[#2 Water \\\*renders\\\* black 2\]\(<https:\/\/github\.com\/x\/y\/issues\/2>\) · 🔨 \*\*some\\_one\*\* · `bug` `rendering` · 🔀 \[#56\]\(<https:\/\/github\.com\/x\/y\/pull\/56>\) 👀 in review · since <t:\d+:R> · lapses <t:\d+:R>$/);
+  const many = wk.columnText({ key: 'todo', cards: Array.from({ length: 80 }, (_, i) => ({ ...card(i + 1), people: [], claim: null, prs: [] })) }, now);
+  assert.ok(many.description.length <= 4096);
+  assert.match(many.description, /…and \d+ more on GitHub$/);
+  const empty = wk.columnText({ key: 'todo', cards: [] }, now);
+  assert.match(empty.description, /\/claim/);
+  assert.equal(empty.title, '📥 To do (0)');
 });
 
 test('dev-log lines never ping and name the PR', () => {

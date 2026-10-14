@@ -292,16 +292,16 @@ async function posts(guild) {
   });
   await upsert(guild, 'workguide', 'workboard', {
     embeds: [new EmbedBuilder().setColor(COLOR).setTitle('🧭 How the work board works').setDescription(L([
-      'Horizon is built by Ludovic (with his AI agents) and contributors. To avoid two people doing the same work:',
+      'Horizon is built by Ludovic (with his AI agents) and contributors. Below is the board: one message per column, kept in sync with GitHub every 10 minutes.',
       '',
-      `1. Pick an open issue on [GitHub](${LINKS.horizonIssues}).`,
-      '2. **`/claim <number>` before you start.** Kira puts the **in progress** label on it with a comment, and it shows below.',
-      '3. Open your pull request with **"Fixes #<number>"** in its description: it shows next to your claim.',
+      '🗃️ **Backlog**: parked for later · 📥 **To do**: open and free · 🔨 **In progress**: claimed, assigned, a branch or a draft pull request · 👀 **Review**: a pull request is ready · ✅ **Done**: closed or merged this week',
+      '',
+      `1. Pick a card in **To do** (or an issue on [GitHub](${LINKS.horizonIssues})).`,
+      '2. **`/claim <number>` before you start.** Kira puts the **in progress** label on it with a comment, and the card moves to In progress with your name.',
+      '3. Open your pull request with **"Fixes #<number>"** in its description: it shows on your card, and the card goes to Review when the pull request is ready.',
       '4. Stopping? `/unclaim <number>`. A claim lapses after ' + WORK.expireDays + ' days without activity (a comment, a pull request or a commit mentioning the issue); Kira DMs you a few days before.',
       '',
-      '`/link-github <username>` shows your Discord name next to your pull requests. `/working` lists who is on what. Every pull request opened or merged, and every claim, gets a line in #dev-log.',
-      '',
-      'The board below is refreshed from GitHub every 10 minutes.',
+      '`/board` shows the board (or a column, or one person\'s cards) just for you; `/working` lists who is on what; `/link-github <username>` shows your Discord name on your pull requests. Maintainers place cards by hand with `/move`. Every pull request opened or merged, every claim and every move gets a line in #dev-log.',
     ].join('\n')))],
   });
 
