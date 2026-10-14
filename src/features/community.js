@@ -15,6 +15,7 @@ const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowe
 // ── Commands ────────────────────────────────────────────────────────────────
 
 export const commands = [
+  new SlashCommandBuilder().setName('help').setDescription('What Kira does here, and its commands'),
   new SlashCommandBuilder().setName('links').setDescription("Horizon's links: website, launcher, GitHub"),
   new SlashCommandBuilder().setName('horizon').setDescription('What Horizon is, where to download it, and the disclaimer'),
   new SlashCommandBuilder().setName('roadmap').setDescription("Horizon's roadmap"),
@@ -33,7 +34,18 @@ const linksEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horiz
   state.invite ? `💬 This server: https://discord.gg/${state.invite}` : null,
 ].filter(Boolean).join('\n'));
 
+// /help: what Kira does, by topic (only the asker sees it).
+const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Kira, Horizon's helper").setDescription([
+  `**Horizon**: \`/horizon\` what it is and where to get it · \`/roadmap\` · \`/links\``,
+  `**Bugs and ideas**: post in <#${state.channels.horizonbugs}> or <#${state.channels.horizonideas}> with the template; I send each post to GitHub and tell you here when it's answered or fixed.`,
+  `**Contributing**: <#${state.channels.workboard}> is the board. \`/claim <issue>\` before you start, \`/unclaim\`, \`/working\`, \`/board\`, \`/link-github\`. Maintainers: \`/move\`.`,
+  `**Releases**: every new Horizon version and launcher in <#${state.channels.releases}>.`,
+  '**You**: `/rank`, `/leaderboard`, `/remind`, `/userinfo`, `/avatar`, `/room` (your own voice channel: join ➕ create your room).',
+  '**The mods**: DM me to reach them privately, `/report` or right-click a message → Apps → Report to mods. `/modmail`.',
+].join('\n\n'));
+
 export const handlers = {
+  help: (i) => i.reply({ embeds: [helpEmbed()], flags: MessageFlags.Ephemeral }),
   links: (i) => i.reply({ embeds: [linksEmbed()] }),
   horizon: (i) => i.reply({ embeds: [
     new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horizon').setURL(LINKS.horizon).setDescription(`${HORIZON.description}\n\n${HORIZON.get}`),

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as wk from '../src/workkit.js';
 import { announced } from '../src/releases.js';
-import { LAYOUT, DEFAULT_CHANNELS, ROLES, RETIRED_ROLES, RETIRED, WORK } from '../src/config.js';
+import { LAYOUT, DEFAULT_CHANNELS, ROLES, RETIRED_ROLES, RETIRED, WORK, SERVER } from '../src/config.js';
 
 test('fixesIn: the closing keywords GitHub knows, several issues, no false positives', () => {
   assert.deepEqual(wk.fixesIn('Fixes #12'), [12]);
@@ -100,4 +100,6 @@ test('the Horizon-only layout: the board channels exist, the old scope is gone, 
   const allKeys = LAYOUT.flatMap((g) => g.channels.map((c) => c.key));
   assert.equal(new Set(allKeys).size, allKeys.length);
   assert.equal(WORK.expireDays, 14);
+  assert.ok(SERVER.about.length <= 400 && /\/help/.test(SERVER.about) && /Horizon/.test(SERVER.about));
+  assert.ok(SERVER.description.length <= 120);
 });

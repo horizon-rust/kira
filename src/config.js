@@ -8,6 +8,8 @@ export const OWNER_ID = '622720516779802630'; // Ludovic
 export const SERVER = {
   name: 'Horizon',
   description: 'Minecraft Java Edition rewritten in Rust. Bugs, ideas, releases. playhorizon.dev · Not affiliated with Mojang/Microsoft.', // 120 max
+  // Kira's About me (the application's description, 400 max).
+  about: "Kira, Horizon's helper 🌅 I keep the work board in sync with GitHub, track who's on which task, post every Horizon release, send your bug reports and ideas to GitHub, and help the mods keep things friendly. Type /help to see what I can do, or DM me to reach the mods. playhorizon.dev",
   icon: 'assets/horizon-icon.png', // the website's favicon.svg (horizon repo, website/public), rendered at 512 px
 };
 

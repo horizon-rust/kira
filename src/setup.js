@@ -194,6 +194,12 @@ async function enableCommunity(guild) {
   if (!guild.features.includes('COMMUNITY')) settings.features = [...guild.features, 'COMMUNITY'];
   await guild.edit(settings);
   log('community', settings.features ? 'enabled' : 'on');
+  // Kira's About me: the application's description.
+  const app = await client.rest.get(Routes.currentApplication());
+  if (app.description !== SERVER.about) {
+    await client.rest.patch(Routes.currentApplication(), { body: { description: SERVER.about } });
+    log('about me updated');
+  }
   // The server icon: uploaded again only when the file changes (state.icon is its hash).
   const icon = readFileSync(new URL(`../${SERVER.icon}`, import.meta.url));
   const hash = createHash('sha256').update(icon).digest('hex');

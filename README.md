@@ -50,7 +50,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | GitHub issues | Posts in `#horizon-bugs` and `#horizon-ideas` that pass their template become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `/issue` (staff). Off until its token exists: see below |
 | Releases | Published releases of ludovic111/horizon → `#releases`: the game (`v…` tags, a summary of New and Fixed) and the launcher (`launcher-v…`), nothing else (REST API every 3 minutes, each release once by id; drafts and prereleases never; [`src/releases.js`](src/releases.js)). Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
 | Work board | The kanban in `#work-board`, `#dev-log`, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`: see below |
-| Info | `/links`, `/horizon`, `/roadmap`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
+| Info | `/help` (what Kira does, its commands), `/links`, `/horizon`, `/roadmap`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
 ## Running it
 
