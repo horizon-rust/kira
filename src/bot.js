@@ -5,7 +5,7 @@ import { MessageFlags, MessageType } from 'discord.js';
 import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS } from './config.js';
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
-import { releaseMessage, remember, announced } from './releases.js';
+import { releaseMessage, remember, announced, pingDecision } from './releases.js';
 import { makeGitHub } from './github.js';
 import { linkify } from './texts.js';
 import * as moderation from './features/moderation.js';
@@ -41,7 +41,10 @@ async function checkReleases() {
           save();
           continue;
         }
-        const msg = await channel('releases').send(releaseMessage(repo, release, state.roles.releases));
+        const plan = pingDecision(repo, release, state.releasePings);
+        const role = plan.applies && !plan.ping ? null : state.roles.releases;
+        const msg = await channel('releases').send(releaseMessage(repo, release, role, plan.earlier));
+        state.releasePings = plan.pings;
         state.releases[repo] = remember(state.releases[repo], release.id);
         save();
         console.log(`release posted: ${repo} ${release.tag_name} (${release.id}) → message ${msg.id}`);

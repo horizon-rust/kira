@@ -175,3 +175,29 @@ test('pings: a game release with New pings the role; fix-only game releases and 
   assert.doesNotMatch(launcher.content, /<@&/);
   assert.deepEqual(launcher.allowedMentions, { parse: [], roles: [] });
 });
+
+test('@Releases is pinged at most once every 6 hours; the next ping lists what came in between', () => {
+  const hour = 60 * 60 * 1000;
+  const game = (tag, added) => ({ tag_name: tag, name: tag, html_url: 'u', body: `### New\n- ${added}\n\n### Fixed\n- A fix.` });
+  const first = rel.pingDecision('horizon', game('v2026.10.15', 'Zoom'), {}, 0);
+  assert.equal(first.ping, true);
+  const quiet = rel.pingDecision('horizon', game('v2026.10.15.1', 'Minimap'), first.pings, 2 * hour);
+  assert.equal(quiet.ping, false);
+  assert.equal(quiet.applies, true);
+  assert.deepEqual(quiet.pings.pending, ['Minimap']);
+  const fixOnly = rel.pingDecision('horizon', { tag_name: 'v2026.10.15.2', name: 'x', body: '### Fixed\n- A fix.' }, quiet.pings, 3 * hour);
+  assert.equal(fixOnly.applies, false);
+  assert.equal(fixOnly.pings, quiet.pings);
+  const next = rel.pingDecision('horizon', game('v2026.10.15.3', 'Keystrokes'), quiet.pings, 6 * hour);
+  assert.equal(next.ping, true);
+  assert.deepEqual(next.earlier, ['Minimap']);
+  assert.deepEqual(next.pings, { lastAt: 6 * hour, pending: [] });
+  const m = rel.releaseMessage('horizon', game('v2026.10.15.3', 'Keystrokes'), ROLE, next.earlier);
+  assert.match(m.content, new RegExp(`<@&${ROLE}>`));
+  const field = m.embeds[0].fields.find((f) => f.name === 'Also new since the last ping');
+  assert.equal(field.value, '• Minimap');
+  const silent = rel.releaseMessage('horizon', game('v2026.10.15.1', 'Minimap'), null);
+  assert.doesNotMatch(silent.content, /<@&/);
+  assert.deepEqual(silent.allowedMentions.roles, []);
+  assert.equal(rel.pingDecision('kimchi', { tag_name: 'v1', body: '### New\n- x' }, {}, 0).applies, false, 'other repos keep their pings');
+});

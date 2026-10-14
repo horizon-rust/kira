@@ -84,7 +84,24 @@ const launcherVersion = (tag) => tag.replace(/^launcher-v/, '');
 // The message announcing one release: { content, embeds, allowedMentions }. `role` is the 📦 Releases role id.
 // Horizon releases ship automatically and often (Ludovic, 2026-10-14): the role is pinged only for a game
 // release with a "New" section (a new feature), never for fix-only game releases or launcher releases.
-export function releaseMessage(repo, release, role) {
+// Horizon releases as often as changes land, so @Releases is pinged at most once every PING_EVERY_MS: a game release
+// with new features posted sooner goes out without a ping, and the next ping lists what those added (`earlier`).
+export const PING_EVERY_MS = 6 * 60 * 60 * 1000;
+const MAX_PENDING = 40;
+
+// Whether this release pings, what earlier unpinged releases added, and the ping state to keep (state.releasePings:
+// { lastAt, pending }). Releases without new features (and other repos) leave the state as it is: `applies` false.
+export function pingDecision(repo, release, pings = {}, now = Date.now()) {
+  const added = repo === 'horizon' && kind(repo, release.tag_name) === 'game' ? bullets(release.body, 'New') : [];
+  if (!added.length) return { applies: false, ping: false, earlier: [], pings };
+  if (pings.lastAt == null || now - pings.lastAt >= PING_EVERY_MS) {
+    return { applies: true, ping: true, earlier: pings.pending ?? [], pings: { lastAt: now, pending: [] } };
+  }
+  const pending = [...(pings.pending ?? []), ...added].slice(-MAX_PENDING);
+  return { applies: true, ping: false, earlier: [], pings: { ...pings, pending } };
+}
+
+export function releaseMessage(repo, release, role, earlier = []) {
   if (role && (kind(repo, release.tag_name) === 'launcher'
     || (kind(repo, release.tag_name) === 'game' && !bullets(release.body, 'New').length))) role = null;
   const ping = role ? `<@&${role}> ` : '';
@@ -101,6 +118,7 @@ export function releaseMessage(repo, release, role) {
       const fields = [];
       if (added.length) fields.push({ name: 'New', value: bulletField(added) });
       if (fixed.length) fields.push({ name: 'Fixed', value: bulletField(fixed) });
+      if (earlier.length) fields.push({ name: 'Also new since the last ping', value: bulletField(earlier) });
       const summary = fields.length ? '' : firstLines(release.body, 1200) + '\n\n';
       fields.push({ name: 'Links', value: `[Release notes](${release.html_url}) · [playhorizon.dev](${LINKS.horizonSite}) · [Download the launcher](${LINKS.horizonLauncher})` });
       return {
