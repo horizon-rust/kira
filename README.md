@@ -23,7 +23,9 @@ projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no pai
   channels, `DEFAULT_CHANNELS` in `config.js`, include #new-members) and the
   **Server Guide** (Discord's newcomer home; bots get "Bots cannot use this endpoint", so Ludovic applies it
   by hand in Server Settings → Onboarding: setup writes the wanted body to `state.serverGuide`), the server icon
-  (`assets/horizon-icon.png`, the website's favicon.svg at 512 px; uploaded again only when it changes),
+  (`assets/horizon-icon.png`, Horizon's mark from the horizon repo's `docs/media/brand/social/discord-icon-512.png`;
+  uploaded again only when it changes; the running bot applies it and Kira's own avatar `assets/kira-avatar.png`
+  too, on start, when either file changes: `src/brand.js`),
   the same roles as buttons in `#welcome`, Community mode, **rules screening** (new members read and agree to
   the rules before they can talk: one TERMS field with each rule as "Title. first sentence", built from `RULES`
   by [`src/screening.js`](src/screening.js) and sent by setup, which only ever turns it on), Discord AutoMod rules,

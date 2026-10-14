@@ -21,6 +21,7 @@ import { adminRoutes } from './admin.js';
 import { rateLimiter } from './agents.js';
 import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
+import { applyBrand } from './brand.js';
 
 const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, agents];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
@@ -107,6 +108,7 @@ client.once('clientReady', async () => {
   await guild.commands.set(commands.map((c) => c.toJSON()));
   await client.application.commands.set([]); // no global commands: everything is per server
   client.user.setActivity('Horizon · playhorizon.dev');
+  await applyBrand(client, guild, state, save).catch((e) => console.error('brand', e.message));
   console.log(`Kira ready as ${client.user.tag}, ${commands.length} commands`);
   await checkReleases();
   setInterval(checkReleases, RELEASE_EVERY_MS);
