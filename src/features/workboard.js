@@ -12,7 +12,7 @@ import { dataFile } from '../store.js';
 import { makeGitHub } from '../github.js';
 import * as board from '../board.js';
 import * as wk from '../workkit.js';
-import { writeFileSync, renameSync } from 'node:fs';
+import { writeFileSync, renameSync, readFileSync } from 'node:fs';
 
 const TOKEN = process.env.GITHUB_TOKEN?.trim();
 export const enabled = !!TOKEN; // claims write labels and comments: no token, no board
@@ -237,7 +237,16 @@ async function logPulls(open, merged) {
 // ── The board ────────────────────────────────────────────────────────────────
 
 let raw = null; // the last fetch, so commands can rebuild without asking GitHub again
-let snapshot = null;
+// Until the first refresh: the last board written (data/board.json), so a GitHub hiccup at start doesn't
+// leave the board empty for 10 minutes.
+let snapshot = (() => {
+  try {
+    const s = JSON.parse(readFileSync(BOARD_FILE, 'utf8'));
+    return s.version === board.SNAPSHOT_VERSION ? s : null;
+  } catch {
+    return null;
+  }
+})();
 
 // The current board (null before the first refresh). For other features and the later agent API.
 export const current = () => snapshot;
@@ -315,6 +324,7 @@ export function refresh() {
       await render();
     } catch (e) {
       console.error('work board', e.message);
+      refreshSoon(60_000); // GitHub failed (a 5xx, a timeout): try again in a minute, not in 10
     } finally {
       running = null;
     }
@@ -325,6 +335,7 @@ let soon = null;
 export function refreshSoon(ms = 3000) {
   clearTimeout(soon);
   soon = setTimeout(() => refresh(), ms);
+  soon.unref?.(); // never what keeps the process alive (the Discord client does)
 }
 
 // A GitHub link to Horizon's pull requests or issues posted in the server: something probably changed.
