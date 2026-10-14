@@ -101,9 +101,9 @@ export const LAYOUT = [
     key: 'horizon', was: 'mine', category: '🌅 horizon',
     channels: [
       { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the disclaimer.' },
-      { key: 'horizonchat', name: 'horizon-chat', type: 'text', slowmode: 3, topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' },
+      { key: 'horizonchat', name: 'horizon-chat', type: 'text', topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' },
       {
-        key: 'horizonbugs', name: 'horizon-bugs', type: 'forum', every: 600,
+        key: 'horizonbugs', name: 'horizon-bugs', type: 'forum',
         topic: 'One bug per post, with the template. Search first: if it\'s already reported, add your details in that post.',
         tags: [['💥', 'crash'], ['🖼️', 'rendering'], ['🎮', 'gameplay'], ['🌍', 'world gen'], ['⚡', 'performance'], ['🔊', 'sound'], ['🖥️', 'install / launch'], ['🔍', 'confirmed', true], ['🔁', 'duplicate', true], ['✅', 'fixed', true]],
         guide: 'One bug per post. **Search first**: if someone already reported it, reply in their post instead. Title: what\'s broken, in a few words ("Water renders black on AMD"). Pick a tag. Kira checks that the template is filled in; posts without it are closed after an hour. Each post becomes a GitHub issue, and you are pinged here when it is answered or fixed.',
@@ -111,7 +111,7 @@ export const LAYOUT = [
         check: { min: 80, needs: [['What I did', /what i did|steps/i], ['What happened', /what happened|happen/i], ['What I expected', /expect/i], ['OS, CPU, GPU', /\b(os|windows|linux|mac|macos|gpu|nvidia|amd|intel|radeon|geforce)\b/i]] },
       },
       {
-        key: 'horizonideas', name: 'horizon-ideas', type: 'forum', every: 1800, react: ['👍', '👎'],
+        key: 'horizonideas', name: 'horizon-ideas', type: 'forum', react: ['👍', '👎'],
         topic: 'One idea per post, with the template. Vote with 👍 and 👎: the most wanted ones get built.',
         tags: [['⚡', 'performance'], ['🧩', 'modding'], ['🌐', 'multiplayer'], ['🤖', 'mcp / agents'], ['🎬', 'video studio'], ['🎮', 'gameplay'], ['🚀', 'launcher'], ['💡', 'other'], ['📌', 'planned', true], ['✅', 'done', true], ['❌', "won't do", true]],
         guide: 'One idea per post. **Search first** and vote 👍 on the existing post rather than making a new one. Title: the idea in a few words. Horizon aims at 100% vanilla behaviour first: ideas that change gameplay come after that. Kira closes posts without the template after an hour. Each post becomes a GitHub issue.',
@@ -119,7 +119,7 @@ export const LAYOUT = [
         check: { min: 40, needs: [['The idea', /the idea|idea/i], ['Why', /why/i]] },
       },
       {
-        key: 'showcase', was: 'videofeedback', name: 'showcase', type: 'forum', every: 3600, gallery: true, reaction: '🔥', react: ['🔥'],
+        key: 'showcase', was: 'videofeedback', name: 'showcase', type: 'forum', gallery: true, reaction: '🔥', react: ['🔥'],
         topic: 'Your Horizon creations: YouTube videos, clips, screenshots, builds, worlds, redstone, benchmarks. One post each, with the template.',
         tags: [['🎬', 'video'], ['📸', 'screenshot'], ['🏰', 'build'], ['🎞️', 'clip'], ['🔴', 'redstone'], ['🌍', 'world'], ['⚡', 'benchmark'], ['🧩', 'mod'], ['⭐', 'featured', true]],
         guide: 'Show what you made **in Horizon**: a video, a clip, screenshots, a build, a benchmark. One post per creation (updates go in your own post), one new post every hour at most. Your own YouTube videos about Horizon are welcome here: this is the place for them. A screenshot, a video or a link is required. Content that isn\'t about Horizon goes in #off-topic.',
@@ -134,10 +134,10 @@ export const LAYOUT = [
   {
     key: 'general', category: '💬 general',
     channels: [
-      { key: 'general', name: 'general', type: 'text', slowmode: 3, topic: 'Talk about anything. English please, so everyone can follow. Horizon talk is welcome here too.' },
-      { key: 'introductions', name: 'introductions', type: 'text', slowmode: 300, pin: 'intro', topic: 'Say hi once, with the template in the pinned message. One introduction per person.' },
-      { key: 'offtopic', name: 'off-topic', type: 'text', slowmode: 3, topic: "Everything that isn't Horizon: other games, music, AI coding, Ludovic's other projects, life. Any language." },
-      { key: 'memes', name: 'memes', type: 'text', slowmode: 10, topic: 'Memes and funny stuff (Minecraft ones welcome). SFW only. No XP here.' },
+      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything. English please, so everyone can follow. Horizon talk is welcome here too.' },
+      { key: 'introductions', name: 'introductions', type: 'text', pin: 'intro', topic: 'Say hi once, with the template in the pinned message. One introduction per person.' },
+      { key: 'offtopic', name: 'off-topic', type: 'text', topic: "Everything that isn't Horizon: other games, music, AI coding, Ludovic's other projects, life. Any language." },
+      { key: 'memes', name: 'memes', type: 'text', topic: 'Memes and funny stuff (Minecraft ones welcome). SFW only. No XP here.' },
       { key: 'halloffame', name: 'hall-of-fame', type: 'text', readonly: true, topic: 'Messages that got 5 ⭐. React ⭐ to a message you love to send it here.' },
       { key: 'botcommands', name: 'bot-commands', type: 'text', topic: 'Use Kira here: /rank, /leaderboard, /working, /remind, /userinfo… Level-ups are announced here. No XP here.' },
     ],
@@ -312,8 +312,9 @@ export const MOD = {
   // Raids are bursts of brand-new accounts, not a busy evening: 15 accounts younger than 7 days
   // joining within 2 minutes → raid mode (verified phone needed, DMs between members paused) for an hour.
   raidYoungDays: 7, raidJoins: 15, raidWindowMs: 120_000, raidHoldMs: 60 * 60_000,
-  // A channel moving faster than this gets an automatic slowmode, removed when it calms down.
-  autoSlowmode: [[60, 15], [30, 5]],             // [messages per minute, seconds of slowmode]
+  // No slowmode anywhere (Ludovic, 2026-10-14): channels have none and none is added when busy.
+  // [[messages per minute, seconds of slowmode], …] turns the automatic one back on.
+  autoSlowmode: [],
   // Greetings and join logs are grouped when many people arrive at once.
   joinBatchMs: 60_000,
   // Forum posts that don't follow the template are closed after this long.

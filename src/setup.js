@@ -134,7 +134,7 @@ async function ensureChannels(guild, community) {
         data.defaultSortOrder = SortOrderType.CreationDate;
         data.defaultReactionEmoji = spec.reaction ? { id: null, name: spec.reaction } : null;
         data.rateLimitPerUser = Math.min(spec.every ?? 0, 21600);            // time between two posts by the same member
-        data.defaultThreadRateLimitPerUser = 2;              // and between two replies inside a post
+        data.defaultThreadRateLimitPerUser = 0;              // and between two replies inside a post (none)
         data.flags = spec.readonly ? 0 : ChannelFlags.RequireTag;
       } else if (spec.type !== 'voice' && spec.topic) data.topic = linkify(spec.topic, state);
       if (ch && ch.type !== type) await ch.setType(type);

@@ -262,8 +262,8 @@ async function everyMinute() {
   }
   // Raid mode ends by itself after an hour of calm.
   if (state.raidmode && Date.now() > state.raidmode) await setRaidMode(guild, false, 'an hour without a raid');
-  // Automatic slowmode on channels too fast to read.
-  for (const [key, base] of baseSlowmode) {
+  // Automatic slowmode on channels too fast to read (off while MOD.autoSlowmode is empty).
+  for (const [key, base] of MOD.autoSlowmode.length ? baseSlowmode : []) {
     const ch = guild.channels.cache.get(state.channels[key]);
     if (!ch) continue;
     const rate = traffic.get(ch.id) ?? 0;
