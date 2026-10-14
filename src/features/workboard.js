@@ -398,5 +398,9 @@ export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, re
 export function setup() {
   if (!enabled) return console.log('work board: off (GITHUB_TOKEN is not set)');
   console.log(`work board: on, ${Object.keys(work.claims).length} claims`);
-  client.once('clientReady', () => { refreshSoon(10_000); setInterval(() => refresh(), WORK.refreshMs); });
+  client.once('clientReady', async () => {
+    await client.guilds.cache.first()?.members.fetch().catch(() => {}); // Discord names on the board from the first refresh
+    refreshSoon(10_000);
+    setInterval(() => refresh(), WORK.refreshMs);
+  });
 }
