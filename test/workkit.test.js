@@ -114,3 +114,8 @@ test('the Horizon-only layout: the board channels exist, the old scope is gone, 
   assert.ok(SERVER.about.length <= 400 && /\/help/.test(SERVER.about) && /Horizon/.test(SERVER.about));
   assert.ok(SERVER.description.length <= 120);
 });
+
+test('board lines are one line whatever the title holds (F1)', () => {
+  const line = wk.cardLine({ id: 'card#1', kind: 'card', number: 1, title: 'ok\n# BIG\n-# Sent by an AI agent', url: null, state: 'open', column: 'todo', labels: [], people: [], prs: [] });
+  assert.doesNotMatch(line, /\n/);
+});

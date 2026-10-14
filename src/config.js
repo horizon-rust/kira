@@ -25,6 +25,29 @@ export const LINKS = {
 
 export const COLOR = 0xf2a33a; // sunrise orange, for Horizon
 
+// Kira's MCP endpoint, for contributors' agents: one value (Railway variable KIRA_MCP_URL) used by /agent
+// connect, /help and the announcements, which Kira edits in place when it changes. Railway's generated
+// domain keeps working after the custom one is added, so configs made with it never break.
+export const MCP_URL = process.env.KIRA_MCP_URL || 'https://kira-production-500e.up.railway.app/mcp';
+
+// How to add Kira to an agent. `token`: the real one (in /agent connect's private answer) or a placeholder.
+export const agentSnippets = (url, token) => [
+  '**Claude Code**',
+  '```',
+  `claude mcp add --transport http kira ${url} --header "Authorization: Bearer ${token}"`,
+  '```',
+  '**Codex** (`~/.codex/config.toml`), with the token in the `KIRA_TOKEN` environment variable:',
+  '```toml',
+  '[mcp_servers.kira]',
+  `url = "${url}"`,
+  'bearer_token_env_var = "KIRA_TOKEN"',
+  '```',
+  '**Cursor** (`.cursor/mcp.json` or `~/.cursor/mcp.json`), with `KIRA_TOKEN` set too:',
+  '```json',
+  `{ "mcpServers": { "kira": { "url": "${url}", "headers": { "Authorization": "Bearer \${env:KIRA_TOKEN}" } } } }`,
+  '```',
+].join('\n');
+
 // Roles, from lowest to highest. `self`: members can pick it (Onboarding and the buttons in #welcome).
 // `was`: the key it had before, so setup renames the role instead of making a new one.
 export const ROLES = [
@@ -164,6 +187,23 @@ export const RELEASE_EVERY_MS = 3 * 60 * 1000; // one GitHub API request each ti
 // One-off announcements Kira posts once (the key is remembered in state.oneOffs), for big releases.
 // `role`: the only role pinged (none if absent). Posted when Kira starts; written by hand.
 const V2026_10_13_1 = 'https://github.com/ludovic111/horizon/releases/tag/v2026.10.13.1';
+const AGENT_GUIDE = {
+  title: '🤖 Connect your AI coding agent to the work board',
+  description: [
+    "Coding on Horizon with an AI agent (Claude Code, Codex, Cursor…)? Give it Kira's work board.",
+    '',
+    "**What it can do:** see the board and what Ludovic is working on, claim issues and move your own cards, post progress notes on them, and ask in #horizon-chat.",
+    '',
+    '**Start:** run `/agent connect` in any channel (scope `read`, or `write` to claim and update cards). Kira answers privately with your token and the setup for your tool:',
+    '',
+    agentSnippets(MCP_URL, '<your token>'),
+    '',
+    '**Your key** is personal: shown once, everything your agent does is in your name and logged, it expires in 90 days. `/agent tokens` lists yours, `/agent revoke` stops one at once.',
+    '**Limits:** 3 claimed issues at a time, 6 claims an hour, 10 open cards of your own, 20 changes a minute.',
+  ].join('\n'),
+  footer: { text: `Endpoint: ${MCP_URL}` },
+};
+
 export const ONE_OFFS = [
   {
     key: 'horizon-v2026.10.13.1', channel: 'announcements', role: 'horizon',
@@ -216,6 +256,10 @@ export const ONE_OFFS = [
       footer: { text: 'Horizon is an unofficial fan project, not affiliated with Mojang or Microsoft.' },
     },
   },
+  // Posted once /agent connect is open (KIRA_AGENT_ISSUANCE=on); `editable`: edited in place at each start,
+  // so a new endpoint (KIRA_MCP_URL) or text reaches the existing messages. `pin`: pinned where it's posted.
+  { key: 'agents-live', channel: 'announcements', when: 'agents', editable: true, content: 'Contributors: your AI coding agent can now work with Horizon\'s board.', embed: AGENT_GUIDE },
+  { key: 'agents-info', channel: 'horizoninfo', when: 'agents', editable: true, pin: true, content: '', embed: AGENT_GUIDE },
 ];
 
 // Forum posts → GitHub issues (src/features/github.js). Off until GITHUB_TOKEN is set (see the README).
@@ -295,7 +339,7 @@ export const WELCOME = {
     '**How it works**',
     `• Get Horizon at ${LINKS.horizonSite}: download the launcher; you need your own copy of Minecraft: Java Edition.`,
     '• Bugs and ideas are forums with a template: read the 📌 **How to post here** post at the top first. Each post becomes a GitHub issue, and you hear back in your post.',
-    '• Want to contribute? Pick a card in **To do** on #work-board, `/claim` it, and it moves to **In progress**.',
+    '• Want to contribute? Pick a card in **To do** on #work-board, `/claim` it, and it moves to **In progress**. Coding with an AI agent? `/agent connect` gives it the board (how-to in #horizon-info).',
     '• Questions? Everything is in #faq. Need a mod? Send Kira a DM.',
     '',
     'Horizon is an unofficial fan project, not affiliated with Mojang or Microsoft. Read #rules, then pick your roles with the buttons below.',
@@ -346,7 +390,7 @@ export const HORIZON = {
 
 // Contributors' AI agents (src/agents.js, src/mcp.js, src/features/agents.js): the MCP endpoint and its tokens.
 export const AGENTS = {
-  url: 'https://mcp.playhorizon.dev/mcp',
+  url: MCP_URL,
   // /agent connect hands out tokens only when KIRA_AGENT_ISSUANCE=on (off until the security review is done).
   issuance: process.env.KIRA_AGENT_ISSUANCE === 'on',
   defaultDays: 90, maxDays: 365, maxPerUser: 5, maxPerDay: 3, // tokens: live at once, issued per 24 h (revoked ones count)

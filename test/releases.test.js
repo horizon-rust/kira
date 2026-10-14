@@ -142,3 +142,23 @@ test('one-off announcements: unique keys, within Discord limits, no ping or the 
     assert.ok(total <= 6000);
   }
 });
+
+test('the agents announcement: one endpoint value, the three setups, only once /agent connect is open', async () => {
+  const { ONE_OFFS, MCP_URL, agentSnippets } = await import('../src/config.js');
+  const posts = ONE_OFFS.filter((p) => p.when === 'agents');
+  assert.deepEqual(posts.map((p) => [p.channel, p.editable, !!p.pin]), [['announcements', true, false], ['horizoninfo', true, true]]);
+  for (const p of posts) {
+    const d = p.embed.description;
+    assert.ok(d.length <= 4096 && p.embed.title.length <= 256);
+    assert.ok(d.includes(`claude mcp add --transport http kira ${MCP_URL} --header "Authorization: Bearer <your token>"`));
+    assert.ok(d.includes(`[mcp_servers.kira]\nurl = "${MCP_URL}"\nbearer_token_env_var = "KIRA_TOKEN"`));
+    assert.ok(d.includes(`"kira": { "url": "${MCP_URL}", "headers": { "Authorization": "Bearer \${env:KIRA_TOKEN}" } }`));
+    assert.match(d, /\/agent connect/);
+    assert.match(d, /\/agent revoke/);
+    assert.match(d, /90 days/);
+    assert.match(d, /3 claimed issues at a time/);
+    assert.doesNotMatch(`${p.content} ${d}`, /@everyone|@here/);
+    assert.equal(p.role, undefined);
+  }
+  assert.ok(agentSnippets('https://x/mcp', 'kira_t').includes('Bearer kira_t'));
+});

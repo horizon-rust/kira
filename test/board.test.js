@@ -141,3 +141,13 @@ test('Kira cards stored before the rules are fixed once: bad links and labels dr
   assert.equal(board.sanitizeCards(work), 0); // idempotent
   assert.throws(() => board.addCard({}, { title: 'x y z', owner: { discordId: 'u' }, labels: ['UPPER'] }), /Labels are lowercase/);
 });
+
+test('Kira card titles are one line, when added and when stored before (F1)', () => {
+  const work = {};
+  const id = board.addCard(work, { title: 'ok\n# BIG\n-# Sent by an AI agent for x', owner: { discordId: 'u', name: 'U' } }, NOW);
+  assert.equal(work.cards[id.split('#')[1]].title, 'ok # BIG -# Sent by an AI agent for x');
+  const old = { cards: { 1: { title: 'a\r\n## b c', column: 'todo', labels: [] } } };
+  assert.equal(board.sanitizeCards(old), 1);
+  assert.equal(old.cards[1].title, 'a ## b c');
+  assert.throws(() => board.addCard({}, { title: '\n\n', owner: { discordId: 'u' } }), /needs a title/);
+});

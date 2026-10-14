@@ -232,11 +232,11 @@ export function addCard(work, { title, column = 'todo', owner, url = null, label
   const open = Object.values(work.cards ?? {}).filter((k) => !k.closedAt && k.owner?.discordId === owner?.discordId).length;
   if (open >= maxOpen) throw refuse(`You already have ${open} open cards of your own: move some to Done (or ask a maintainer) first.`);
   if (!key || key === 'done') throw refuse(`New cards go in ${COLUMNS.filter((c) => c.key !== 'done').map((c) => c.name).join(', ')}.`);
-  if (!String(title ?? '').trim()) throw refuse('A card needs a title.');
+  if (!flat(title)) throw refuse('A card needs a title.');
   work.cards ??= {};
   const n = Math.max(0, ...Object.keys(work.cards).map(Number)) + 1;
   if (labels.some((l) => !LABEL.test(l))) throw refuse('Labels are lowercase letters, digits, spaces and dashes (30 at most).');
-  work.cards[n] = { title: String(title).trim().slice(0, 200), column: key, owner, url, labels: labels.slice(0, 5), createdAt: now, updatedAt: now };
+  work.cards[n] = { title: flat(title).slice(0, 200), column: key, owner, url, labels: labels.slice(0, 5), createdAt: now, updatedAt: now };
   return cardId('card', n);
 }
 
@@ -251,18 +251,23 @@ export function addNote(work, snapshot, ref, { by, text }, now = Date.now()) {
   return card;
 }
 
+// One line: newlines (and Unicode line breaks) become spaces, so a title can't make a heading or a fake line (F1).
+export const flat = (s) => String(s ?? '').replace(/[\r\n\u0085\u2028\u2029]+/g, ' ').replace(/[ \t]{2,}/g, ' ').trim();
+
 // Labels on Kira's cards: lowercase letters, digits, spaces and dashes (N3).
 export const LABEL = /^[a-z0-9 -]{1,30}$/;
 
-// Re-checks Kira's cards already stored (written before the link and label rules): a link that isn't
-// safeCardUrl is dropped, labels that don't match LABEL are dropped. Returns how many cards changed.
+// Re-checks Kira's cards already stored (written before the link, label and title rules): a link that isn't
+// safeCardUrl is dropped, labels that don't match LABEL are dropped, titles are made one line. Returns how many cards changed.
 export function sanitizeCards(work) {
   let changed = 0;
   for (const k of Object.values(work.cards ?? {})) {
     const labels = (k.labels ?? []).filter((l) => typeof l === 'string' && LABEL.test(l));
     const badUrl = k.url != null && !safeCardUrl(k.url);
-    if (badUrl || labels.length !== (k.labels ?? []).length) {
+    const title = flat(k.title).slice(0, 200) || 'untitled';
+    if (badUrl || labels.length !== (k.labels ?? []).length || title !== k.title) {
       if (badUrl) k.url = null;
+      k.title = title;
       k.labels = labels;
       changed++;
     }

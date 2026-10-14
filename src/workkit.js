@@ -66,7 +66,11 @@ export function lastActivity(timeline = []) {
 }
 
 const ts = (ms, style = 'R') => `<t:${Math.floor(ms / 1000)}:${style}>`;
-const short = (s, n = 70) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+// One line, then cut (titles come from GitHub and from Kira's cards).
+const short = (s, n = 70) => {
+  const t = String(s ?? '').replace(/[\r\n\u0085\u2028\u2029]+/g, ' ').replace(/[ \t]{2,}/g, ' ').trim();
+  return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
+};
 const esc = (s) => String(s).replace(/([\\*_~`|[\]])/g, '\\$1');
 // A link that doesn't unfurl into an embed.
 const link = (text, url) => `[${text}](<${url}>)`;

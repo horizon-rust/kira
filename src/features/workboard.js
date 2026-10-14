@@ -91,13 +91,24 @@ export async function claim(user, member, n) {
     const pause = wk.cooldownLeft(work.memberGithubAt?.[user.id], Date.now(), WORK.memberCooldownMs);
     if (pause) return `You claimed or unclaimed an issue a moment ago: try again in ${Math.ceil(pause / 1000)} s.`;
   }
+  // Reserved now, before the first await: claims running in parallel see this one and its cooldowns, so
+  // they can't pass the cap or write a second comment (F2). Rolled back if GitHub refuses.
   const who = nameOf(member, user);
-  await ensureLabel();
-  await gh.write('POST', `${REPO}/issues/${n}/labels`, { labels: [WORK.label] });
-  await gh.write('POST', `${REPO}/issues/${n}/comments`, { body: wk.claimComment(who, loginOf(user.id), n, WORK.expireDays) });
-  (work.githubAt ??= {})[n] = Date.now();
-  (work.memberGithubAt ??= {})[user.id] = Date.now();
-  Object.assign(board.assign(work, n, { user: user.id, who }), { title: issue.title, url: issue.html_url });
+  const now = Date.now();
+  const before = { issue: work.githubAt?.[n], member: work.memberGithubAt?.[user.id] };
+  Object.assign(board.assign(work, n, { user: user.id, who }, now), { title: issue.title, url: issue.html_url });
+  (work.githubAt ??= {})[n] = now;
+  (work.memberGithubAt ??= {})[user.id] = now;
+  try {
+    await ensureLabel();
+    await gh.write('POST', `${REPO}/issues/${n}/labels`, { labels: [WORK.label] });
+    await gh.write('POST', `${REPO}/issues/${n}/comments`, { body: wk.claimComment(who, loginOf(user.id), n, WORK.expireDays) });
+  } catch (e) {
+    board.unassign(work, n);
+    if (before.issue === undefined) delete work.githubAt[n]; else work.githubAt[n] = before.issue;
+    if (before.member === undefined) delete work.memberGithubAt[user.id]; else work.memberGithubAt[user.id] = before.member;
+    throw e;
+  }
   save();
   await log(wk.logLine.claimed({ ...work.claims[n], number: n }));
   refreshSoon();
@@ -118,15 +129,17 @@ async function release(n, why) {
 
 export async function unclaim(user, member, n) {
   const entry = work.claims[n];
-  if (!entry) return `#${n} isn't claimed on Discord.`;
+  if (!entry || entry.releasing) return `#${n} isn't claimed on Discord.`;
   if (entry.user !== user.id && !isStaff(member)) return `#${n} is claimed by **${entry.who}**: only they (or a mod) can unclaim it.`;
   const wait = wk.cooldownLeft(work.githubAt?.[n], Date.now(), WORK.claimCooldownMs);
   if (wait) return `#${n} was claimed a moment ago: you can unclaim it in ${Math.ceil(wait / 60_000)} min.`;
   const pause = isStaff(member) ? 0 : wk.cooldownLeft(work.memberGithubAt?.[user.id], Date.now(), WORK.memberCooldownMs);
   if (pause) return `You claimed or unclaimed an issue a moment ago: try again in ${Math.ceil(pause / 1000)} s.`;
-  await release(n, 'unclaimed');
+  // Marked before the first await, like claims (F2): a second unclaim in parallel finds nothing to release.
+  entry.releasing = true;
   (work.githubAt ??= {})[n] = Date.now();
   (work.memberGithubAt ??= {})[user.id] = Date.now();
+  await release(n, 'unclaimed');
   refreshSoon();
   return `↩️ #${n} is free again: the label is off, with a comment on GitHub.`;
 }

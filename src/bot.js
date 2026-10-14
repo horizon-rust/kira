@@ -2,7 +2,7 @@
 // KIRA_DISCORD=off: no Discord connection at all, only the board (from GitHub) and the MCP server, to test a
 // new host. PORT (Railway) or KIRA_HTTP_PORT: where the MCP server listens; none, no server.
 import { MessageFlags } from 'discord.js';
-import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK } from './config.js';
+import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS } from './config.js';
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
 import { releaseMessage, remember, announced } from './releases.js';
@@ -51,17 +51,27 @@ async function checkReleases() {
   }
 }
 
-// Hand-written announcements (ONE_OFFS in config.js), each posted once.
+// Hand-written announcements (ONE_OFFS in config.js), each posted once (its id in state.oneOffs). `when`:
+// posted only once that is on ('agents': /agent connect open). `editable`: edited in place at every start.
+const ON = { agents: () => AGENTS.issuance };
 async function postOneOffs() {
   state.oneOffs ??= {};
   for (const post of ONE_OFFS) {
-    if (state.oneOffs[post.key]) continue;
+    if (post.when && !ON[post.when]?.()) continue;
     const role = post.role && state.roles[post.role];
+    const payload = { content: (role ? `<@&${role}> ${post.content}` : post.content) || undefined, embeds: [{ color: COLOR, ...post.embed, description: post.embed.description && linkify(post.embed.description, state) }], allowedMentions: { parse: [], roles: role ? [role] : [] } };
     try {
-      const msg = await channel(post.channel).send({ content: role ? `<@&${role}> ${post.content}` : post.content, embeds: [{ color: COLOR, ...post.embed, description: post.embed.description && linkify(post.embed.description, state) }], allowedMentions: { parse: [], roles: role ? [role] : [] } });
+      if (state.oneOffs[post.key]) {
+        if (!post.editable) continue;
+        const old = await channel(post.channel)?.messages.fetch(state.oneOffs[post.key]).catch(() => null);
+        if (old) { await old.edit({ ...payload, content: payload.content ?? '' }); continue; }
+        if (old === null && !post.pin) continue; // deleted by hand: not posted again (pinned guides are)
+      }
+      const msg = await channel(post.channel).send(payload);
       state.oneOffs[post.key] = msg.id;
       save();
       console.log(`one-off posted: ${post.key} → message ${msg.id}`);
+      if (post.pin) await msg.pin().catch((e) => console.error('pin', post.key, e.message));
       await msg.crosspost().catch(() => {});
     } catch (e) {
       console.error('one-off', post.key, e.message);

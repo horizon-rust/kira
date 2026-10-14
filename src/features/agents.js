@@ -2,7 +2,7 @@
 // /status (what you're working on, in your words), /mytasks; the MCP server's actions (src/mcp.js) done in the
 // token owner's name; and #agent-log, where every agent call is written (staff only).
 import { SlashCommandBuilder, MessageFlags, Routes } from 'discord.js';
-import { AGENTS, GUILD_ID, OWNER_ID } from '../config.js';
+import { AGENTS, GUILD_ID, OWNER_ID, agentSnippets } from '../config.js';
 import { client, state, save, channel, isStaff } from '../core.js';
 import { dataFile } from '../store.js';
 import { openStore, issue, listFor, revoke, revokeAll, untrusted, oneLine, rateLimiter } from '../agents.js';
@@ -172,22 +172,7 @@ export const api = {
 
 // ── Commands ─────────────────────────────────────────────────────────────────
 
-const snippets = (token) => [
-  '**Claude Code**',
-  '```',
-  `claude mcp add --transport http horizon ${AGENTS.url} --header "Authorization: Bearer ${token}"`,
-  '```',
-  '**Codex** (`~/.codex/config.toml`; put the token in the `HORIZON_KIRA_TOKEN` environment variable)',
-  '```toml',
-  '[mcp_servers.horizon]',
-  `url = "${AGENTS.url}"`,
-  'bearer_token_env_var = "HORIZON_KIRA_TOKEN"',
-  '```',
-  '**Cursor** (`.cursor/mcp.json`)',
-  '```json',
-  `{ "mcpServers": { "horizon": { "url": "${AGENTS.url}", "headers": { "Authorization": "Bearer ${token}" } } } }`,
-  '```',
-].join('\n');
+const snippets = (token) => agentSnippets(AGENTS.url, token);
 
 export const commands = [
   new SlashCommandBuilder().setName('agent').setDescription("Connect your AI coding agent to Horizon's work board")
@@ -228,6 +213,7 @@ export const handlers = {
         `🔑 Your **${scope}** token \`${t.id}\` (expires ${date(t.record.expiresAt)}). **Shown once**: copy it now. It's personal: everything your agent does is in your name and logged.`,
         `\`\`\`\n${t.token}\n\`\`\``,
         snippets(t.token),
+        'For Codex and Cursor: `export KIRA_TOKEN=` followed by the token, in the shell that starts them.',
         'Lost it or leaked it? `/agent revoke id:' + t.id + '`, then connect again.',
       ].join('\n').slice(0, 2000)));
     }

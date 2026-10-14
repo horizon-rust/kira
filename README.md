@@ -98,8 +98,13 @@ requests: Read-only**, **Commit statuses: Read-only** and **Checks: Read-only**.
 
 ## Agents (MCP server)
 
-Contributors connect their AI coding agent (Claude Code, Codex, Cursor…) to Kira's MCP server at
-`https://mcp.playhorizon.dev/mcp` (until the DNS record exists: `https://kira-production-500e.up.railway.app/mcp`)
+Contributors connect their AI coding agent (Claude Code, Codex, Cursor…) to Kira's MCP server at the
+endpoint in the Railway variable `KIRA_MCP_URL` (now `https://kira-production-500e.up.railway.app/mcp`; later
+`https://mcp.playhorizon.dev/mcp`, once its DNS record exists). That one value feeds `/agent connect`, the
+announcement in #announcements and the pinned guide in #horizon-info (`ONE_OFFS` `agents-live` and
+`agents-info`, edited in place at every start): switching domains is setting the variable. Railway keeps the
+generated `*.up.railway.app` domain working after a custom domain is added, so agents set up with the old
+URL keep working.
 with a personal token from `/agent connect`. Streamable HTTP, stateless, the official SDK
 ([`src/mcp.js`](src/mcp.js)); tokens and limits in [`src/agents.js`](src/agents.js); the Discord side and the
 actions in [`src/features/agents.js`](src/features/agents.js).

@@ -365,7 +365,7 @@ async function onboarding(guild) {
             option('🎮', 'Playing it', 'Download, help, chat, share your creations', [], [c.horizoninfo, c.horizonchat, c.showcase]),
             option('🐛', 'Testing and bug reports', 'Find bugs and report them', [], [c.horizonbugs, c.releases]),
             option('💡', 'Ideas', 'Suggest and vote on what comes next', [], [c.horizonideas]),
-            option('🛠️', 'Contributing code', 'Pull requests: claim an issue, see who is on what', [r.contributor], [c.workboard, c.devlog]),
+            option('🛠️', 'Contributing code', 'Claim an issue, see who is on what, connect your AI agent', [r.contributor], [c.workboard, c.devlog, c.horizoninfo]),
             option('🧩', 'Modding', 'Mods for Horizon, when modding support lands', [r.modder], [c.horizonideas]),
             option('👀', 'Just following', 'News and hanging out', [], [c.general, c.announcements]),
           ],

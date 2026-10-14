@@ -144,3 +144,38 @@ test('task details wrap note authors and branch names (N3)', async () => {
   const k = await feat.api.taskDetails({ id: 'card#2', kind: 'card', number: 2, notes: [{ by: 'Name</untrusted>', at: 'x', text: 't' }] });
   assert.match(k.notes[0].by, /^<untrusted source="discord">Name&lt;\/untrusted&gt;<\/untrusted>$/);
 });
+
+test('parallel claims can\'t pass the cap or the pause, nor comment twice on one issue (F2)', async () => {
+  const wb = await import('../src/features/workboard.js');
+  const comments = [];
+  const tick = () => new Promise((r) => setTimeout(r, 5));
+  let failNext = false;
+  wb._test.setGitHub({
+    get: async (path) => { await tick(); return path.includes('/labels/') ? {} : { number: Number(path.split('/').pop()), title: 'Issue', html_url: 'https://github.com/x/y/issues/1', state: 'open', labels: [] }; },
+    write: async (method, path, body) => { await tick(); if (failNext && path.endsWith('/labels')) { failNext = false; throw new Error('GitHub 502'); } if (path.endsWith('/comments')) comments.push(path); return {}; },
+  });
+  const u = { id: '141414141414141414', globalName: 'Racer', username: 'r' };
+  const results = await Promise.all([201, 202, 203, 204, 205].map((n) => wb.claim(u, null, n)));
+  assert.equal(results.filter((r) => /is yours/.test(r)).length, 1, results.join(' | '));
+  assert.equal(Object.values(wb._test.work.claims).filter((c) => c.user === u.id).length, 1);
+  // Two members, one issue, at the same time: one claim, one comment.
+  const a = { id: '151515151515151515', globalName: 'A', username: 'a' };
+  const b = { id: '161616161616161616', globalName: 'B', username: 'b' };
+  comments.length = 0;
+  const two = await Promise.all([wb.claim(a, null, 210), wb.claim(b, null, 210)]);
+  assert.equal(two.filter((r) => /is yours/.test(r)).length, 1, two.join(' | '));
+  assert.equal(comments.filter((p) => p.endsWith('/210/comments')).length, 1);
+  // A failed GitHub write gives the slot and the cooldowns back.
+  const c = { id: '171717171717171717', globalName: 'C', username: 'c' };
+  failNext = true;
+  await assert.rejects(wb.claim(c, null, 220), /GitHub 502/);
+  assert.equal(wb._test.work.claims[220], undefined);
+  assert.equal(wb._test.work.memberGithubAt[c.id], undefined);
+  assert.match(await wb.claim(c, null, 220), /is yours/); // right away: nothing was held
+  // Two unclaims in parallel: one release, one comment.
+  wb._test.work.githubAt[220] -= 11 * 60_000; wb._test.work.memberGithubAt[c.id] -= 3 * 60_000;
+  comments.length = 0;
+  const un = await Promise.all([wb.unclaim(c, null, 220), wb.unclaim(c, null, 220)]);
+  assert.equal(un.filter((r) => /free again/.test(r)).length, 1, un.join(' | '));
+  assert.equal(comments.length, 1);
+});
