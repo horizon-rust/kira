@@ -66,6 +66,8 @@ test('a column: one line per card with link, people, labels, pull requests; cut 
   const many = wk.columnText({ key: 'todo', cards: Array.from({ length: 80 }, (_, i) => ({ ...card(i + 1), people: [], claim: null, prs: [] })) }, now);
   assert.ok(many.description.length <= 4096);
   assert.match(many.description, /…and \d+ more on GitHub$/);
+  const own = wk.columnText({ key: 'progress', cards: [{ id: 'card#3', kind: 'card', number: 3, title: 'Release 2026.10.15', url: null, state: 'open', column: 'progress', labels: [], people: [{ name: 'ludovic', claimed: true }], prs: [], notes: [{ by: 'x', at: '', text: 'tagging   now' }] }] }, now);
+  assert.equal(own.description, '• 🗂️ Release 2026.10.15 `card#3` · 🔨 **ludovic** · 📝 tagging now');
   const empty = wk.columnText({ key: 'todo', cards: [] }, now);
   assert.match(empty.description, /\/claim/);
   assert.equal(empty.title, '📥 To do (0)');

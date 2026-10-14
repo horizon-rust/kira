@@ -1,6 +1,8 @@
-// Kira at runtime: wires the feature modules, the commands, the releases and the one-off posts.
+// Kira at runtime: wires the feature modules, the commands, the releases, the one-off posts and the MCP server.
+// KIRA_DISCORD=off: no Discord connection at all, only the board (from GitHub) and the MCP server, to test a
+// new host. PORT (Railway) or KIRA_HTTP_PORT: where the MCP server listens; none, no server.
 import { MessageFlags } from 'discord.js';
-import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_REPOS, ONE_OFFS, COLOR } from './config.js';
+import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK } from './config.js';
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
 import { releaseMessage, remember, announced } from './releases.js';
@@ -13,8 +15,12 @@ import * as community from './features/community.js';
 import * as forums from './features/forums.js';
 import * as github from './features/github.js';
 import * as workboard from './features/workboard.js';
+import * as agents from './features/agents.js';
+import { startServer } from './mcp.js';
+import { publicKey } from './secrets.js';
 
-const FEATURES = [moderation, levels, rooms, community, forums, github, workboard];
+const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, agents];
+const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
 
@@ -60,7 +66,18 @@ async function postOneOffs() {
   }
 }
 
-for (const f of FEATURES) f.setup?.();
+if (DISCORD) for (const f of FEATURES) f.setup?.();
+else { // the board alone, from GitHub
+  console.log('discord: off (KIRA_DISCORD=off): board and MCP server only');
+  workboard.refresh();
+  setInterval(() => workboard.refresh(), WORK.refreshMs);
+}
+
+const port = process.env.PORT || process.env.KIRA_HTTP_PORT;
+if (port) {
+  const routes = publicKey ? { '/seal-key': (req, res) => { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(publicKey); } } : {};
+  startServer(Number(port), { store: agents.store, api: agents.api, routes }).then(() => console.log(`mcp server on :${port}`));
+}
 
 client.once('clientReady', async () => {
   const guild = await client.guilds.fetch(GUILD_ID);
@@ -102,4 +119,4 @@ client.on('messageCreate', async (msg) => {
 
 process.on('unhandledRejection', (e) => console.error('unhandled', e));
 process.on('SIGTERM', () => { save(); process.exit(0); });
-client.login(process.env.DISCORD_TOKEN);
+if (DISCORD) client.login(process.env.DISCORD_TOKEN);

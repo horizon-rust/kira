@@ -79,12 +79,15 @@ export function cardLine(card, now = Date.now()) {
     : card.claim ? `since ${ts(Date.parse(card.claim.since))}` : null;
   const lapses = card.claim?.lapses && Date.parse(card.claim.lapses) - now < 4 * DAY ? `lapses ${ts(Date.parse(card.claim.lapses))}` : null;
   return [
-    `• ${card.kind === 'pr' ? '🔀 ' : ''}${link(`#${card.number} ${esc(short(card.title, 60))}`, card.url)}`,
+    card.kind === 'card'
+      ? `• 🗂️ ${card.url ? link(`${esc(short(card.title, 60))}`, card.url) : esc(short(card.title, 60))} \`card#${card.number}\``
+      : `• ${card.kind === 'pr' ? '🔀 ' : ''}${link(`#${card.number} ${esc(short(card.title, 60))}`, card.url)}`,
     who,
     card.labels?.length ? card.labels.slice(0, 4).map((l) => `\`${l.replace(/`/g, "'")}\``).join(' ') : null,
     card.kind === 'pr' && card.status && card.state === 'open' ? card.status : null,
     ...prs, when, lapses,
     card.moved ? `📌 moved by ${esc(card.moved.by)}` : null,
+    card.notes?.length && card.column !== 'done' ? `📝 ${esc(short(card.notes.at(-1).text.replace(/\s+/g, ' '), 80))}` : null,
   ].filter(Boolean).join(' · ');
 }
 

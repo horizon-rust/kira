@@ -137,6 +137,7 @@ export const LAYOUT = [
       { key: 'reports', name: 'reports', type: 'text', staff: true, topic: 'Reports from members: /report and "Report to mods" on a message.' },
       { key: 'modmail', name: 'mod-mail', type: 'text', staff: true, topic: "Members DM Kira; each conversation is a thread here. Write in the thread to answer (start with // for a note they don't see, //close to close)." },
       { key: 'discordupdates', name: 'discord-updates', type: 'text', staff: true, topic: 'Messages from Discord to community servers.' },
+      { key: 'agentlog', name: 'agent-log', type: 'text', staff: true, topic: "Every call contributors' AI agents make through Kira's MCP server: who (the token's owner), which tool, the outcome. Tokens: /agent tokens member:." },
     ],
   },
 ];
@@ -338,4 +339,13 @@ export const HORIZON = {
   ].join('\n'),
   get: `Website: ${LINKS.horizonSite}\nLauncher: [download](${LINKS.horizonLauncher})\nCode: ${LINKS.horizon}`,
   disclaimer: 'Horizon is an unofficial fan project. It is not affiliated with, endorsed by, or connected to Mojang Studios or Microsoft. Minecraft is a trademark of Mojang and Microsoft; the game, its name, textures and sounds belong to them. Horizon contains none of Minecraft\'s code or files, and none are distributed. To play Horizon you must own a legal copy of Minecraft Java Edition. Horizon is a free, personal, educational project, not for sale, and used at your own risk.',
+};
+
+// Contributors' AI agents (src/agents.js, src/mcp.js, src/features/agents.js): the MCP endpoint and its tokens.
+export const AGENTS = {
+  url: 'https://mcp.playhorizon.dev/mcp',
+  // /agent connect hands out tokens only when KIRA_AGENT_ISSUANCE=on (off until the security review is done).
+  issuance: process.env.KIRA_AGENT_ISSUANCE === 'on',
+  defaultDays: 90, maxDays: 365, maxPerUser: 5,
+  ludovicLogin: 'ludovic111',
 };

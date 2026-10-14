@@ -1,0 +1,6 @@
+node_modules
+data
+scratch
+.git
+.env.op
+test

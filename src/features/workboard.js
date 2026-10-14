@@ -16,7 +16,8 @@ import { writeFileSync, renameSync } from 'node:fs';
 
 const TOKEN = process.env.GITHUB_TOKEN?.trim();
 export const enabled = !!TOKEN; // claims write labels and comments: no token, no board
-let gh = makeGitHub({ token: TOKEN });
+// KIRA_GITHUB_DRY_RUN=1: GitHub writes (labels, comments) are only logged, for a test deployment.
+let gh = makeGitHub({ token: TOKEN, dryRun: process.env.KIRA_GITHUB_DRY_RUN === '1' });
 const REPO = `/repos/${GITHUB.owner}/${WORK.repo}`;
 const LABEL = encodeURIComponent(WORK.label);
 export const BOARD_FILE = dataFile('board.json');
@@ -49,7 +50,7 @@ const person = (login) => {
 const whoIs = (login) => person(login).name;
 const nameOf = (member, user) => member?.displayName ?? user.globalName ?? user.username;
 
-async function log(line) {
+export async function log(line) {
   const ch = channel('devlog');
   if (ch) await ch.send({ content: line, allowedMentions: { parse: [] } }).catch((e) => console.error('dev-log', e.message));
 }
@@ -222,6 +223,19 @@ let snapshot = null;
 
 // The current board (null before the first refresh). For other features and the later agent API.
 export const current = () => snapshot;
+// The last fetch's open pull requests and branches (public GitHub data), for "what is Ludovic working on".
+export const openPullsNow = () => (raw?.pulls ?? []).filter((p) => p.state === 'open')
+  .map((p) => ({ number: p.number, title: p.title, url: p.html_url, author: p.user?.login, draft: !!p.draft, status: p.status ?? null, updatedAt: p.updated_at }));
+export const branchesNow = () => raw?.branches ?? [];
+// A read of Horizon's repo on GitHub (issues, pulls, comments of ludovic111/horizon only).
+export const repoGet = (path) => gh.get(`${REPO}${path}`);
+export const workState = () => work;
+// After a change made outside the commands (agents): save, rebuild the board, repaint it.
+export async function changed() {
+  save();
+  rebuild();
+  await render().catch((e) => console.error('work board', e.message));
+}
 
 function rebuild() {
   if (!raw) return null;
@@ -393,7 +407,7 @@ export const handlers = {
 };
 
 // For end-to-end checks (scratch scripts): the GitHub client can be swapped.
-export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render };
+export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render, setRaw: (r) => { raw = r; } };
 
 export function setup() {
   if (!enabled) return console.log('work board: off (GITHUB_TOKEN is not set)');

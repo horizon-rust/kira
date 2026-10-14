@@ -24,12 +24,13 @@ export function columnKey(text) {
   return COLUMNS.find((c) => c.key === t || c.name.toLowerCase().replace(/[^a-z]/g, '') === t)?.key ?? null;
 }
 
-// Card ids: "issue#40", "pr#56". `ref` may be one, a number, "#40" or "pr 56".
+// Card ids: "issue#40", "pr#56", "card#3" (a card of Kira's own: work that is not a GitHub issue or pull
+// request, like a release or an agent's task). `ref` may be one, a number, "#40" or "pr 56".
 export const cardId = (kind, number) => `${kind}#${number}`;
 export function parseRef(ref) {
-  const m = String(ref).trim().toLowerCase().match(/^(?:(issue|pr|pull)\s*)?#?\s*(\d+)$/);
+  const m = String(ref).trim().toLowerCase().match(/^(?:(issue|pr|pull|card)\s*)?#?\s*(\d+)$/);
   if (!m) return null;
-  return { kind: m[1] === 'pr' || m[1] === 'pull' ? 'pr' : m[1] ? 'issue' : null, number: Number(m[2]) };
+  return { kind: m[1] === 'pr' || m[1] === 'pull' ? 'pr' : m[1] ?? null, number: Number(m[2]) };
 }
 
 // The issues a pull request closes when merged: "Fixes #12", "closes #3, resolves #4".
@@ -53,6 +54,7 @@ export function branchIssue(name) {
 // assignee or a branch → progress; the "backlog" label → backlog; else → todo. Closed → done.
 // Pull request of its own (it fixes no open issue): draft → progress, ready → review; merged → done.
 export function autoColumn(card) {
+  if (card.kind === 'card') return card.state === 'open' ? card.place : 'done';
   if (card.state !== 'open') return 'done';
   if (card.kind === 'pr') return card.draft ? 'progress' : 'review';
   if (card.prs.some((p) => p.state === 'open' && !p.draft)) return 'review';
@@ -69,7 +71,8 @@ export function autoColumn(card) {
 //          draft, state, merged_at, updated_at, body, labels, assignees, status } (status: a short text),
 //   branches: branch names,
 // }
-// work: { claims: { [issueNumber]: { user, who, since, activity } }, moves: { [cardId]: { column, by, at, auto } } }
+// work: { claims: { [issueNumber]: { user, who, since, activity } }, cards: { [n]: Kira's own cards (addCard) },
+//        notes: { [cardId]: [{ by, at, text }] } (progress notes, newest last), moves: { [cardId]: { column, by, at, auto } } }
 // person(login) → { login, discordId, name } (the Discord side when it is linked; else just the login).
 // hide: labels whose issues and pull requests stay off the board (Kira's own test issues).
 // Returns { snapshot, stale }: `stale` are ids of manual moves GitHub has overtaken (the caller drops them).
@@ -115,8 +118,29 @@ export function build(gh, work, { now = Date.now(), doneDays = 7, expireDays = 1
     });
   }
 
+  // Kira's own cards: open ones, and those done in the last days.
+  for (const [n, k] of Object.entries(work.cards ?? {})) {
+    if (k.closedAt && k.closedAt < since) continue;
+    cards.push({
+      id: cardId('card', Number(n)), kind: 'card', number: Number(n), title: k.title, url: k.url ?? null,
+      state: k.closedAt ? 'closed' : 'open', closedAs: k.closedAt ? 'completed' : null, author: null, labels: k.labels ?? [],
+      assignees: [], claim: null, branches: [], prs: [], place: k.column, owner: k.owner,
+      updatedAt: new Date(k.closedAt ?? k.updatedAt ?? k.createdAt).toISOString(),
+    });
+  }
+
   const stale = [];
   for (const card of cards) {
+    card.notes = (work.notes?.[card.id] ?? []).slice(-5).map((x) => ({ by: x.by, at: new Date(x.at).toISOString(), text: x.text }));
+    if (card.kind === 'card') {
+      card.people = card.owner ? [{ login: null, discordId: card.owner.discordId, name: card.owner.name, claimed: true }] : [];
+      delete card.owner;
+      card.auto = autoColumn(card);
+      delete card.place;
+      card.moved = null;
+      card.column = card.auto;
+      continue;
+    }
     // Who works on it: the Discord claim first, then GitHub's assignees, then the pull request authors.
     const logins = [...new Set([...card.assignees, ...(card.kind === 'pr' ? [card.author] : pulls.filter((p) => card.prs.some((x) => x.number === p.number)).map((p) => p.author))].filter(Boolean))];
     card.people = [
@@ -170,6 +194,13 @@ export function move(work, snapshot, ref, column, by, now = Date.now()) {
   if (!key) throw new Error(`"${column}" isn't a column: ${COLUMNS.map((c) => c.name).join(', ')}.`);
   const card = find(snapshot, ref);
   if (!card) throw new Error(`#${parseRef(ref)?.number ?? ref} isn't on the board.`);
+  if (card.kind === 'card') { // Kira's own cards have no GitHub state: the column is theirs
+    const k = work.cards[card.number];
+    if (key === 'done') k.closedAt ??= now;
+    else { k.column = key; delete k.closedAt; }
+    k.updatedAt = now;
+    return { card, from: card.column, to: key };
+  }
   work.moves ??= {};
   if (key === card.auto) delete work.moves[card.id];
   else work.moves[card.id] = { column: key, by, at: now, auto: card.auto };
@@ -189,3 +220,30 @@ export function unassign(work, number) {
   if (c) delete work.claims[number];
   return c ?? null;
 }
+
+// A card of Kira's own, for work that is not (yet) a GitHub issue or pull request: a release, an agent's task,
+// an investigation. { title, column, owner: { discordId, name }, url?, labels? } → the new card's id.
+export function addCard(work, { title, column = 'todo', owner, url = null, labels = [] }, now = Date.now()) {
+  const key = columnKey(column);
+  if (!key || key === 'done') throw new Error(`New cards go in ${COLUMNS.filter((c) => c.key !== 'done').map((c) => c.name).join(', ')}.`);
+  if (!String(title ?? '').trim()) throw new Error('A card needs a title.');
+  work.cards ??= {};
+  const n = Math.max(0, ...Object.keys(work.cards).map(Number)) + 1;
+  work.cards[n] = { title: String(title).trim().slice(0, 200), column: key, owner, url, labels: labels.slice(0, 5), createdAt: now, updatedAt: now };
+  return cardId('card', n);
+}
+
+// A progress note on a card (kept: the last 20 per card; the snapshot shows the last 5).
+export function addNote(work, snapshot, ref, { by, text }, now = Date.now()) {
+  const card = find(snapshot, ref);
+  if (!card) throw new Error(`#${parseRef(ref)?.number ?? ref} isn't on the board.`);
+  const t = String(text ?? '').trim();
+  if (!t) throw new Error('The note is empty.');
+  work.notes ??= {};
+  work.notes[card.id] = [...(work.notes[card.id] ?? []), { by, at: now, text: t.slice(0, 500) }].slice(-20);
+  return card;
+}
+
+// Whether a Discord member counts as working on a card: they claimed it, own it (Kira's cards), or are one of
+// its people (assignee or pull request author, through /link-github).
+export const isMine = (card, discordId) => card.people.some((p) => p.discordId && p.discordId === discordId);
