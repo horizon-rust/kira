@@ -8,4 +8,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 COPY scripts ./scripts
 COPY assets ./assets
+COPY docker-entrypoint.sh ./
+# Starts as root only to chown the volume, then drops to the node user (docker-entrypoint.sh).
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["node", "src/main.js"]

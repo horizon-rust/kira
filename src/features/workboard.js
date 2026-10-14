@@ -81,10 +81,13 @@ export async function claim(user, member, n) {
     return `#${n} is still yours: the ${WORK.expireDays} days start again.`;
   }
   if (issue.labels.some((l) => l.name === WORK.label) && !isStaff(member)) return `#${n} already has the **${WORK.label}** label on GitHub: someone is on it. Ask in #horizon-chat.`;
+  const wait = wk.cooldownLeft(work.githubAt?.[n], Date.now(), WORK.claimCooldownMs);
+  if (wait) return `#${n} was claimed or unclaimed a moment ago: try again in ${Math.ceil(wait / 60_000)} min.`;
   const who = nameOf(member, user);
   await ensureLabel();
   await gh.write('POST', `${REPO}/issues/${n}/labels`, { labels: [WORK.label] });
   await gh.write('POST', `${REPO}/issues/${n}/comments`, { body: wk.claimComment(who, loginOf(user.id), n, WORK.expireDays) });
+  (work.githubAt ??= {})[n] = Date.now();
   Object.assign(board.assign(work, n, { user: user.id, who }), { title: issue.title, url: issue.html_url });
   save();
   await log(wk.logLine.claimed({ ...work.claims[n], number: n }));
@@ -108,7 +111,10 @@ export async function unclaim(user, member, n) {
   const entry = work.claims[n];
   if (!entry) return `#${n} isn't claimed on Discord.`;
   if (entry.user !== user.id && !isStaff(member)) return `#${n} is claimed by **${entry.who}**: only they (or a mod) can unclaim it.`;
+  const wait = wk.cooldownLeft(work.githubAt?.[n], Date.now(), WORK.claimCooldownMs);
+  if (wait) return `#${n} was claimed a moment ago: you can unclaim it in ${Math.ceil(wait / 60_000)} min.`;
   await release(n, 'unclaimed');
+  (work.githubAt ??= {})[n] = Date.now();
   refreshSoon();
   return `↩️ #${n} is free again: the label is off, with a comment on GitHub.`;
 }

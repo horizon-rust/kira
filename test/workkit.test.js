@@ -77,7 +77,16 @@ test('dev-log lines never ping and name the PR', () => {
   const line = wk.logLine.opened({ number: 56, title: 'Fix creative tab', url: 'https://github.com/x/y/pull/56', who: 'Cosmic', fixes: [12] });
   assert.equal(line, '🟢 **Cosmic** opened [#56 Fix creative tab](<https://github.com/x/y/pull/56>) (fixes #12)');
   assert.doesNotMatch(Object.values(wk.logLine).map((f) => f({ number: 1, title: 't', url: 'u', who: 'w' }, 14)).join(), /<@/);
-  assert.match(wk.claimComment('Cosmic', 'Online5277', 12, 14), /Claimed by \*\*Cosmic\*\* on Discord \(GitHub: `Online5277`\)/);
+  assert.match(wk.claimComment('Cosmic', 'Online5277', 12, 14), /Claimed by `Cosmic` on Discord \(GitHub: `Online5277`\)/);
+  // Display names can't mention, link or format on GitHub (L5).
+  assert.equal(wk.githubName('@ludovic111 **[x](https://evil.example)**'), '`@ludovic111 **[x](https://evil.example)*`'); // cut at 40
+  assert.equal(wk.githubName('a`b`\n@team'), "`a'b''@team`");
+  assert.equal(wk.githubName(''), '`someone`');
+  assert.match(wk.unclaimComment('@here', 'expired'), /^The claim by `@here` lapsed/);
+  // Claim/unclaim cooldown per issue (H1).
+  assert.equal(wk.cooldownLeft(undefined, 1000, 600_000), 0);
+  assert.equal(wk.cooldownLeft(1000, 1000 + 60_000, 600_000), 540_000);
+  assert.equal(wk.cooldownLeft(1000, 1000 + 600_000, 600_000), 0);
   assert.ok(wk.unclaimComment('Cosmic', 'expired').includes(wk.MARK));
 });
 

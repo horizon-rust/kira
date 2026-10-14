@@ -9,6 +9,9 @@
 
 export const SNAPSHOT_VERSION = 1;
 
+// An error meant to be shown (a refusal), unlike a bug's.
+const refuse = (message) => Object.assign(new Error(message), { expose: true });
+
 export const COLUMNS = [
   { key: 'backlog', name: 'Backlog', emoji: '🗃️', color: 0x7f8c8d, about: 'Not planned yet: parked by a maintainer, or labelled "backlog" on GitHub.' },
   { key: 'todo', name: 'To do', emoji: '📥', color: 0x5aa9ff, about: 'Open and free: nobody is on it. Pick one and /claim it.' },
@@ -191,9 +194,9 @@ export function list(snapshot, { column, person, kind } = {}) {
 // Moves a card to `column` by hand. Moving it back to where GitHub puts it clears the manual move.
 export function move(work, snapshot, ref, column, by, now = Date.now()) {
   const key = columnKey(column);
-  if (!key) throw new Error(`"${column}" isn't a column: ${COLUMNS.map((c) => c.name).join(', ')}.`);
+  if (!key) throw refuse(`"${column}" isn't a column: ${COLUMNS.map((c) => c.name).join(', ')}.`);
   const card = find(snapshot, ref);
-  if (!card) throw new Error(`#${parseRef(ref)?.number ?? ref} isn't on the board.`);
+  if (!card) throw refuse(`#${parseRef(ref)?.number ?? ref} isn't on the board.`);
   if (card.kind === 'card') { // Kira's own cards have no GitHub state: the column is theirs
     const k = work.cards[card.number];
     if (key === 'done') k.closedAt ??= now;
@@ -211,7 +214,7 @@ export function move(work, snapshot, ref, column, by, now = Date.now()) {
 export function assign(work, number, { user, who }, now = Date.now()) {
   work.claims ??= {};
   const mine = work.claims[number];
-  if (mine && mine.user !== user) throw new Error(`#${number} is already claimed by ${mine.who}.`);
+  if (mine && mine.user !== user) throw refuse(`#${number} is already claimed by ${mine.who}.`);
   return (work.claims[number] = mine ? { ...mine, activity: now } : { user, who, since: now, activity: 0, reminded: 0 });
 }
 
@@ -223,10 +226,13 @@ export function unassign(work, number) {
 
 // A card of Kira's own, for work that is not (yet) a GitHub issue or pull request: a release, an agent's task,
 // an investigation. { title, column, owner: { discordId, name }, url?, labels? } → the new card's id.
-export function addCard(work, { title, column = 'todo', owner, url = null, labels = [] }, now = Date.now()) {
+export function addCard(work, { title, column = 'todo', owner, url = null, labels = [] }, now = Date.now(), { maxOpen = 10 } = {}) {
   const key = columnKey(column);
-  if (!key || key === 'done') throw new Error(`New cards go in ${COLUMNS.filter((c) => c.key !== 'done').map((c) => c.name).join(', ')}.`);
-  if (!String(title ?? '').trim()) throw new Error('A card needs a title.');
+  if (url != null && !safeCardUrl(url)) throw refuse('A card link must be an https link on github.com or playhorizon.dev.');
+  const open = Object.values(work.cards ?? {}).filter((k) => !k.closedAt && k.owner?.discordId === owner?.discordId).length;
+  if (open >= maxOpen) throw refuse(`You already have ${open} open cards of your own: move some to Done (or ask a maintainer) first.`);
+  if (!key || key === 'done') throw refuse(`New cards go in ${COLUMNS.filter((c) => c.key !== 'done').map((c) => c.name).join(', ')}.`);
+  if (!String(title ?? '').trim()) throw refuse('A card needs a title.');
   work.cards ??= {};
   const n = Math.max(0, ...Object.keys(work.cards).map(Number)) + 1;
   work.cards[n] = { title: String(title).trim().slice(0, 200), column: key, owner, url, labels: labels.slice(0, 5), createdAt: now, updatedAt: now };
@@ -236,12 +242,30 @@ export function addCard(work, { title, column = 'todo', owner, url = null, label
 // A progress note on a card (kept: the last 20 per card; the snapshot shows the last 5).
 export function addNote(work, snapshot, ref, { by, text }, now = Date.now()) {
   const card = find(snapshot, ref);
-  if (!card) throw new Error(`#${parseRef(ref)?.number ?? ref} isn't on the board.`);
+  if (!card) throw refuse(`#${parseRef(ref)?.number ?? ref} isn't on the board.`);
   const t = String(text ?? '').trim();
-  if (!t) throw new Error('The note is empty.');
+  if (!t) throw refuse('The note is empty.');
   work.notes ??= {};
   work.notes[card.id] = [...(work.notes[card.id] ?? []), { by, at: now, text: t.slice(0, 500) }].slice(-20);
   return card;
+}
+
+// Whether a member may move or note a card: an issue they claimed, or a Kira card they own. Linked GitHub
+// logins don't count: /link-github doesn't prove the account is theirs.
+export const ownsForWrite = (card, discordId) => !!discordId && (card.claim?.discordId === discordId
+  || (card.kind === 'card' && card.people.some((p) => p.claimed && p.discordId === discordId)));
+
+// A link a card may carry: plain https on GitHub or Horizon's site, exactly as the URL parser writes it, with
+// nothing that could break out of a Markdown link (spaces, < > ( )).
+const LINK_HOSTS = /^(?:(?:www\.)?github\.com|(?:[a-z0-9-]+\.)?playhorizon\.dev)$/;
+export function safeCardUrl(u) {
+  if (typeof u !== 'string' || u.length > 300 || /[\s<>()\[\]`\\]/.test(u)) return false;
+  try {
+    const url = new URL(u);
+    return url.href === u && url.protocol === 'https:' && !url.username && !url.password && !url.port && LINK_HOSTS.test(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 // Whether a Discord member counts as working on a card: they claimed it, own it (Kira's cards), or are one of

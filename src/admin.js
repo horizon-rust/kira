@@ -8,6 +8,16 @@ import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 const MAX = 2 * 1024 * 1024;
 
 // `save` writes what is in memory first; `freeze` stops all later writes; `exit` restarts.
+// agents.json as Kira writes it: { tokens: { <8 hex>: { hash: 64 hex, user: a Discord id, scope, times } } } (M4).
+export function validAgents(a) {
+  if (!a || typeof a !== 'object' || !a.tokens || typeof a.tokens !== 'object' || Array.isArray(a.tokens)) return false;
+  const time = (x) => x === null || x === undefined || Number.isSafeInteger(x);
+  return Object.entries(a.tokens).every(([id, t]) => /^[0-9a-f]{8}$/.test(id) && t && typeof t === 'object'
+    && /^[0-9a-f]{64}$/.test(t.hash) && /^\d{17,20}$/.test(t.user) && ['read', 'write', 'maintain'].includes(t.scope)
+    && Number.isSafeInteger(t.createdAt) && Number.isSafeInteger(t.expiresAt) && time(t.revokedAt) && time(t.lastUsedAt)
+    && (t.name === undefined || typeof t.name === 'string') && (t.label == null || typeof t.label === 'string'));
+}
+
 export function adminRoutes({ hash, files, limiter, save, freeze, exit = () => process.exit(75) }) { // non-zero: every restart policy starts it again
   if (!/^[0-9a-f]{64}$/.test(hash ?? '')) return {};
   const want = Buffer.from(hash, 'hex');
@@ -39,7 +49,7 @@ export function adminRoutes({ hash, files, limiter, save, freeze, exit = () => p
       req.on('end', () => {
         let body;
         try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { body = null; }
-        if (size > MAX || !body || typeof body.state !== 'object' || !body.state?.channels) {
+        if (size > MAX || !body || typeof body.state !== 'object' || !body.state?.channels || (body.agents && !validAgents(body.agents))) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ error: 'expected { state, agents } with a real state' }));
         }

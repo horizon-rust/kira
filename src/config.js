@@ -241,6 +241,7 @@ export const WORK = {
   repo: 'horizon',
   label: 'in progress', labelColor: 'fbca04',
   refreshMs: 10 * 60 * 1000,
+  claimCooldownMs: 10 * 60 * 1000, // between a claim and an unclaim of the same issue (each writes to GitHub)
   expireDays: 14, remindDays: 3,  // a claim lapses after 14 days without activity; a DM 3 days before
   mergedDays: 7,                  // "merged in the last 7 days"
   github: {
@@ -346,6 +347,7 @@ export const AGENTS = {
   url: 'https://mcp.playhorizon.dev/mcp',
   // /agent connect hands out tokens only when KIRA_AGENT_ISSUANCE=on (off until the security review is done).
   issuance: process.env.KIRA_AGENT_ISSUANCE === 'on',
-  defaultDays: 90, maxDays: 365, maxPerUser: 5,
+  defaultDays: 90, maxDays: 365, maxPerUser: 5, maxPerDay: 3, // tokens: live at once, issued per 24 h (revoked ones count)
+  maxOpenCards: 10, // Kira cards a member may have open
   ludovicLogin: 'ludovic111',
 };

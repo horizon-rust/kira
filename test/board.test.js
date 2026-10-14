@@ -93,3 +93,38 @@ test('the snapshot is plain JSON', () => {
   const { snapshot } = board.build(gh({ issues: [issue(1)], pulls: [pull(2)] }), {}, { now: NOW });
   assert.deepEqual(JSON.parse(JSON.stringify(snapshot)), snapshot);
 });
+
+test('writes count only claims and owned Kira cards, never linked GitHub logins (M1)', () => {
+  const person = (login) => ({ login, discordId: login === 'Online5277' ? 'u1' : null, name: login });
+  const work = { claims: { 3: { user: 'u2', who: 'B', since: NOW } }, cards: {} };
+  board.addCard(work, { title: 'mine', owner: { discordId: 'u1', name: 'Cosmic' } }, NOW);
+  const { snapshot } = board.build(gh({ issues: [issue(3), issue(4, { assignees: [{ login: 'Online5277' }] })], pulls: [pull(9)] }), work, { now: NOW, person });
+  assert.ok(board.isMine(board.find(snapshot, 'pr#9'), 'u1')); // shown as theirs (/mytasks)…
+  assert.ok(!board.ownsForWrite(board.find(snapshot, 'pr#9'), 'u1')); // …but not theirs to move
+  assert.ok(!board.ownsForWrite(board.find(snapshot, 4), 'u1')); // assigned through a linked login: no
+  assert.ok(board.ownsForWrite(board.find(snapshot, 3), 'u2')); // claimed: yes
+  assert.ok(board.ownsForWrite(board.find(snapshot, 'card#1'), 'u1')); // their Kira card: yes
+  assert.ok(!board.ownsForWrite(board.find(snapshot, 'card#1'), 'u2'));
+  assert.ok(!board.ownsForWrite(board.find(snapshot, 3), null));
+});
+
+test('card links: https on github.com or playhorizon.dev only, nothing that breaks a Markdown link (M3)', () => {
+  for (const ok of ['https://github.com/ludovic111/horizon/issues/40', 'https://playhorizon.dev/', 'https://www.github.com/x', 'https://docs.playhorizon.dev/a?b=c#d']) assert.ok(board.safeCardUrl(ok), ok);
+  for (const bad of [
+    'https://a.com/x>)[free nitro](https://evil.example)', 'https://github.com/x>)[free nitro](https://evil.example)',
+    'https://github.com/a b', 'https://github.com/x)', 'https://github.com/<x>', 'http://github.com/x', 'javascript:alert(1)',
+    'https://evil.example/', 'https://github.com.evil.example/', 'https://user:pw@github.com/', 'https://github.com:8443/',
+    'https://GITHUB.com/x', 'https://github.com/x\\y', 'https://github.com/[x]', 'https://github.com/`x`',
+  ]) assert.ok(!board.safeCardUrl(bad), bad);
+  assert.throws(() => board.addCard({}, { title: 'x y z', owner: { discordId: 'u' }, url: 'https://evil.example/' }), /github.com or playhorizon.dev/);
+});
+
+test('at most 10 open Kira cards per member (H1)', () => {
+  const work = {};
+  for (let i = 0; i < 10; i++) board.addCard(work, { title: `card ${i}`, owner: { discordId: 'u1', name: 'C' } }, NOW);
+  assert.throws(() => board.addCard(work, { title: 'one more', owner: { discordId: 'u1', name: 'C' } }, NOW), /already have 10 open cards/);
+  assert.ok(board.addCard(work, { title: 'theirs', owner: { discordId: 'u2', name: 'D' } }, NOW)); // per member
+  work.cards[1].closedAt = NOW; // one done: room again
+  assert.ok(board.addCard(work, { title: 'now ok', owner: { discordId: 'u1', name: 'C' } }, NOW));
+  assert.throws(() => board.move({}, { columns: [] }, 1, 'todo', 'x'), (e) => e.expose === true); // refusals are shown
+});

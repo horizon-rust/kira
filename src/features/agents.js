@@ -1,11 +1,11 @@
 // Contributors' AI agents, the Discord side: /agent connect (a token, shown once), /agent tokens, /agent revoke,
 // /status (what you're working on, in your words), /mytasks; the MCP server's actions (src/mcp.js) done in the
 // token owner's name; and #agent-log, where every agent call is written (staff only).
-import { SlashCommandBuilder, MessageFlags } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags, Routes } from 'discord.js';
 import { AGENTS, GUILD_ID, OWNER_ID } from '../config.js';
 import { client, state, save, channel, isStaff } from '../core.js';
 import { dataFile } from '../store.js';
-import { openStore, issue, listFor, revoke, untrusted } from '../agents.js';
+import { openStore, issue, listFor, revoke, revokeAll, untrusted } from '../agents.js';
 import * as board from '../board.js';
 import * as wb from './workboard.js';
 import { columnText } from '../workkit.js';
@@ -15,8 +15,30 @@ const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowe
 const guild = () => client.guilds.cache.get(GUILD_ID);
 const memberOf = (id) => guild()?.members.cache.get(id) ?? null;
 const colName = (key) => board.COLUMNS.find((c) => c.key === key)?.name ?? key;
-const clean = (s, n) => String(s).replace(/@(everyone|here)/gi, '@​$1').replace(/<[@#][!&]?\d+>/g, '').slice(0, n);
+// Text from agents or people, made harmless in Discord: no @everyone/@here, no mentions, no masked links
+// ([text](url) and its escapes: brackets are escaped, so a link shows as the plain URL it is) (M3).
+export const clean = (s, n) => String(s).slice(0, n)
+  .replace(/@(everyone|here)/gi, '@\u200b$1').replace(/<[@#][!&]?\d+>/g, '')
+  .replace(/\\/g, '\\\\').replace(/[[\]]/g, (c) => `\\${c}`);
 const link = (c) => `[#${c.number}](<${c.url ?? `https://discord.com/channels/${GUILD_ID}/${state.channels.workboard}`}>)`;
+
+// Whether a token's owner is still an active member: on the server and not timed out. Asked from Discord's
+// API (works with or without the gateway), remembered 5 seconds at most (H2).
+const memberCache = new Map(); // user → { ok, at }
+export async function isActiveMember(userId, now = Date.now()) {
+  const hit = memberCache.get(userId);
+  if (hit && now - hit.at < 5_000) return hit.ok;
+  let ok = false;
+  try {
+    const m = await client.rest.get(Routes.guildMember(GUILD_ID, userId));
+    ok = !(m.communication_disabled_until && Date.parse(m.communication_disabled_until) > now);
+  } catch {
+    ok = false; // not a member (404), or Discord can't tell: refuse
+  }
+  memberCache.set(userId, { ok, at: now });
+  if (memberCache.size > 1000) for (const [k, v] of memberCache) if (now - v.at > 5_000) memberCache.delete(k);
+  return ok;
+}
 
 // Maintainers: Ludovic, and members with the Mod role (or any staff permission).
 async function isMaintainer(userId) {
@@ -43,6 +65,7 @@ async function audit(p, tool, args, outcome) {
   console.log(`agent ${p.id} ${p.user} ${tool} ${a.slice(0, 200)} → ${outcome}`);
   pending.push(line);
   timer ??= setTimeout(flushAudit, 30_000);
+  timer.unref?.();
 }
 
 // ── What the MCP tools do (src/mcp.js decides who may) ───────────────────────
@@ -52,6 +75,7 @@ const agentName = (p) => `${p.name}'s agent`;
 export const api = {
   snapshot: () => wb.current(),
   isMaintainer,
+  isActiveMember,
   audit,
   async taskDetails(card) {
     if (card.kind === 'card') return { kind: 'card', notes: card.notes.map((n) => ({ ...n, text: untrusted(n.text, 'discord') })) };
@@ -99,7 +123,7 @@ export const api = {
     return `Note added to ${card.id}; it shows on the card and in #dev-log.`;
   },
   async addCard(p, { title, column, url, labels }) {
-    const id = board.addCard(wb.workState(), { title, column, url, labels, owner: { discordId: p.user, name: p.name } });
+    const id = board.addCard(wb.workState(), { title, column, url, labels, owner: { discordId: p.user, name: p.name } }, Date.now(), { maxOpen: AGENTS.maxOpenCards });
     await wb.changed();
     const c = board.find(wb.current(), id);
     await wb.log(`🆕 **${clean(agentName(p), 60)}** added ${link(c)} ${clean(title, 120)} (${colName(column)})`);
@@ -162,7 +186,7 @@ export const handlers = {
       const days = i.options.getInteger('days') ?? AGENTS.defaultDays;
       let t;
       try {
-        t = issue(store, { user: i.user.id, name: i.member?.displayName ?? i.user.username, scope, days, label: i.options.getString('label'), maxPerUser: AGENTS.maxPerUser });
+        t = issue(store, { user: i.user.id, name: i.member?.displayName ?? i.user.username, scope, days, label: i.options.getString('label'), maxPerUser: AGENTS.maxPerUser, maxPerDay: AGENTS.maxPerDay });
       } catch (e) {
         return i.reply(ephemeral(e.message));
       }
@@ -210,3 +234,16 @@ export const handlers = {
     return i.reply(ephemeral(cols.map((c) => { const t = columnText(c, Date.now(), 900); return `**${t.title}**\n${t.description}`; }).join('\n\n').slice(0, 1990)));
   },
 };
+
+// Members who leave or are banned lose their tokens at once (and the 5-second check covers the gap) (H2).
+async function dropTokens(user, why) {
+  memberCache.delete(user.id);
+  const ids = revokeAll(store, user.id);
+  if (ids.length) audit({ id: ids.join(','), user: user.id, name: user.username ?? user.id, scope: '-' }, 'tokens revoked', {}, `${ids.length} token(s): ${why}`);
+}
+
+export function setup() {
+  client.on('guildMemberRemove', (m) => { if (m.guild.id === GUILD_ID) dropTokens(m.user, 'left the server').catch((e) => console.error('agent tokens', e.message)); });
+  client.on('guildBanAdd', (ban) => { if (ban.guild.id === GUILD_ID) dropTokens(ban.user, 'banned').catch((e) => console.error('agent tokens', e.message)); });
+}
+export const _test = { dropTokens, memberCache };

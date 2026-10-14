@@ -111,7 +111,7 @@ actions in [`src/features/agents.js`](src/features/agents.js).
 | `task_get` | read | one card, its issue or pull request text and latest comments |
 | `ludovic_now` | read | what Ludovic works on: his `/status`, his open pull requests, the repo's branches, his cards. Public data only |
 | `task_claim`, `task_unclaim` | write | `/claim` and `/unclaim`, in the token owner's name |
-| `card_move`, `card_note` | write | move or note **their own** cards (claimed, theirs, their pull requests) |
+| `card_move`, `card_note` | write | move or note **their own** cards: an issue they claimed, or a Kira card they own (not to Done: maintainers only) |
 | `card_add` | write | a card of Kira's own (`card#N`) for work that is not a GitHub issue or pull request |
 | `ask` | write | a question in #horizon-chat, as "<name>'s agent", 5 an hour |
 | `task_assign`, `card_close` | maintain | claim for someone else; close Kira's cards; move any card |
@@ -127,7 +127,7 @@ maintainers, and checked again at every call). 90 days by default, 365 at most, 
 **Every agent's work goes on the board.** Agents without MCP support use the same tools from a shell:
 `KIRA_TOKEN=… node scripts/board.mjs list | get #40 | add "Release 2026.10.15" progress | move card#3 done | note card#3 "tagged" | claim 40 | ludovic`.
 
-**Rate limits** per token: 120 reads and 20 writes a minute, 5 questions an hour; 30 failed logins a minute per
+**Rate limits** per member (all their tokens together): 120 reads and 20 writes a minute, 5 questions an hour; 30 failed logins a minute per
 address, then 429. **Audit**: every call (who, token id, tool, arguments, outcome, refusals included) goes to
 the staff channel `#agent-log` (grouped every 30 s) and the service log.
 
@@ -135,15 +135,16 @@ the staff channel `#agent-log` (grouped every 30 s) and the service log.
 
 | Threat | Answer |
 | --- | --- |
-| A token leaks (pasted in a repo, a log) | Only a hash is stored; revocation is immediate; tokens expire (90 days); scope `read` by default; every action is logged with the token id and owner |
+| A token leaks (pasted in a repo, a log) | Only a hash is stored; revocation is immediate; tokens expire (90 days); scope `read` by default; every action is logged with the token id and owner. Tokens die when their owner leaves or is banned (all revoked at once, logged in #agent-log), and every call checks that the owner is still a member and not timed out (5-second cache) |
 | Someone guesses or forges tokens | 256-bit secrets, constant-time hash comparison, 30 failures a minute per address then 429 |
-| A contributor's agent does what the contributor may not | Scopes, then ownership: write tokens only move or note cards that are theirs; maintainer actions check the scope **and** the Discord role at each call; actions run in the owner's name |
-| Prompt injection through issues, comments, notes, names | All text people wrote comes wrapped in `<untrusted source=…>` (the wrapper can't be closed from inside), and every answer says to treat it as data. No tool can do anything an injected agent could abuse beyond its owner's own cards |
+| A contributor's agent does what the contributor may not | Scopes, then ownership: write tokens only move or note issues their owner **claimed** and Kira cards they own (a GitHub login linked with `/link-github` is not proof, so it never counts for writes); Done is for maintainers; maintainer actions check the scope **and** the Discord role at each call; actions run in the owner's name |
+| Prompt injection through issues, comments, notes, names | All text people wrote comes wrapped in `<untrusted source=…>`, with `&`, `<`, `>` and their lookalikes (＜ ＞ ‹ › ⟨ ⟩ 〈 〉 …) escaped inside, so nothing in it can open or close a tag; every answer says to treat it as data. No tool can do anything an injected agent could abuse beyond its owner's own cards |
 | An agent reads what it shouldn't | No tool reads files, runs code, sees tokens (others' or its own), DMs, mod-mail, private channels or the server's members. `ludovic_now` uses only public GitHub data and the `/status` Ludovic sets |
-| Spam through agents in Discord | `ask` and notes are rate-limited, never ping (no mentions parsed, `@everyone` broken), and say they come from an agent |
-| Malformed or oversized input | zod schemas on every argument (numbers, refs, columns, lengths, https links only), 64 KB bodies, POST only, 15/30 s timeouts |
-| The host is compromised | Kira runs on Railway, not on Ludovic's machines; it holds only the Discord bot token and the fine-grained GitHub token (Issues: write on horizon). Nothing on the internet talks to the ThinkPad |
-| The admin routes (`/admin/backup`, `/admin/restore`: Kira's files, for moving hosts) | Absent unless `KIRA_ADMIN_TOKEN_SHA256` is set; a separate random token whose secret is only in 1Password; constant-time check; failures rate-limited like logins. A backup holds token hashes, never tokens |
+| Spam and abuse through agents | Limits per member, not per token; at most 3 tokens issued a day (revoked ones count) and 5 live; at most 10 open Kira cards per member; 10 minutes between a claim and an unclaim of an issue (each writes a label and a comment on GitHub in Kira's name). `ask` and notes never ping (no mentions parsed, `@everyone` broken), can't make masked links (brackets escaped), and say they come from an agent. Card links: https on github.com or playhorizon.dev only, exactly as parsed, with no spaces, `< > ( )` |
+| Names in GitHub comments | Discord names go in a code span: no @mention, link or Markdown |
+| Malformed or oversized input, and errors | zod schemas on every argument (numbers, refs, columns, lengths, card links), 64 KB bodies, POST only, 15/30 s timeouts. Agents see refusals; any other error is logged and shown as "Internal error." |
+| The host is compromised | Kira runs on Railway, not on Ludovic's machines, as the unprivileged `node` user (the entrypoint only chowns `/data` as root); it holds only the Discord bot token and the fine-grained GitHub token (Issues: write on horizon). Nothing on the internet talks to the ThinkPad |
+| The admin routes (`/admin/backup`, `/admin/restore`: Kira's files, for moving hosts) | **Off**: `KIRA_ADMIN_TOKEN_SHA256` is empty on Railway, so the routes don't exist. Turned on only for a move (below), with a separate random token whose secret is only in 1Password; constant-time check; failures rate-limited like logins; a restore must have a well-formed agents.json. A backup holds token hashes, never tokens |
 | Secrets in transit to the host | Sealed: `op read … \| node scripts/seal.mjs <host>/seal-key` encrypts with a key generated on the host's volume; only ciphertext (`FOO_SEALED`) is in Railway's variables and anyone's terminal |
 
 ## Hosting (Railway)
@@ -156,9 +157,11 @@ MCP server only) and `KIRA_GITHUB_DRY_RUN=1`. Health: `GET /health`.
 
 - **A secret changes**: `~/fleet/op read "op://Agents/<item>/credential" | node scripts/seal.mjs https://mcp.playhorizon.dev/seal-key`,
   then set the printed blob as `<NAME>_SEALED`. A new volume means a new key: seal again.
-- **Moving Kira's files** (state.json, agents.json): `node scripts/admin.mjs backup|restore <host>` with the
+- **Moving Kira's files** (state.json, agents.json): the admin routes are off. For a move, set
+  `KIRA_ADMIN_TOKEN_SHA256` to `~/fleet/op read "op://Agents/Kira admin token/credential" | tr -d '\n' | sha256sum`
+  (the hash only), then `node scripts/admin.mjs backup|restore <host>` with the
   admin token (`op://Agents/Kira admin token/credential`; Railway only has its SHA-256 in
-  `KIRA_ADMIN_TOKEN_SHA256`). A restore replaces the files and restarts the service on them.
+  `KIRA_ADMIN_TOKEN_SHA256`). A restore replaces the files and restarts the service on them. Empty the variable again afterwards.
 - **Setup** (`npm run setup`): back up, run setup on the ThinkPad against the backup's state
   (`KIRA_STATE=… npm run setup`), restore it. Setup only touches Discord and its own keys of the state.
 - **Rollback to the ThinkPad**: back up from Railway, set `KIRA_DISCORD=off` on Railway (or remove the

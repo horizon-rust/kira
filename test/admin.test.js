@@ -41,10 +41,16 @@ test('backup and restore need the admin token; restore replaces the files and re
   const backup = await (await fetch(`${url}/admin/backup`, { headers: auth })).json();
   assert.deepEqual(backup, { state: { channels: { a: '1' } }, agents: { tokens: {} } });
   assert.equal((await fetch(`${url}/admin/restore`, { method: 'POST', headers: auth, body: '{"state":{}}' })).status, 400);
-  const r = await fetch(`${url}/admin/restore`, { method: 'POST', headers: auth, body: JSON.stringify({ state: { channels: { b: '2' } }, agents: { tokens: { x: 1 } } }) });
+  // agents.json must look like Kira's (M4).
+  const record = { hash: 'a'.repeat(64), user: '622720516779802630', name: 'L', scope: 'read', label: null, createdAt: 1, expiresAt: 2, revokedAt: null, lastUsedAt: null };
+  for (const agents of [{ tokens: { x: 1 } }, { tokens: [] }, { tokens: { abcdef12: { ...record, scope: 'root' } } }, { tokens: { abcdef12: { ...record, hash: 'zz' } } }, { tokens: { abcdef12: { ...record, user: 'bob' } } }, { tokens: { ABCDEF: record } }, { tokens: { abcdef12: { ...record, expiresAt: '2' } } }]) {
+    assert.equal((await fetch(`${url}/admin/restore`, { method: 'POST', headers: auth, body: JSON.stringify({ state: { channels: {} }, agents }) })).status, 400, JSON.stringify(agents));
+  }
+  assert.ok(!exited);
+  const r = await fetch(`${url}/admin/restore`, { method: 'POST', headers: auth, body: JSON.stringify({ state: { channels: { b: '2' } }, agents: { tokens: { abcdef12: record } } }) });
   assert.equal(r.status, 200);
   assert.deepEqual(JSON.parse(readFileSync(files.state, 'utf8')), { channels: { b: '2' } });
-  assert.deepEqual(JSON.parse(readFileSync(files.agents, 'utf8')), { tokens: { x: 1 } });
+  assert.deepEqual(JSON.parse(readFileSync(files.agents, 'utf8')), { tokens: { abcdef12: record } });
   await new Promise((ok) => setTimeout(ok, 600));
   assert.ok(exited);
   // Failed attempts are rate-limited.

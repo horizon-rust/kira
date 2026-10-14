@@ -119,10 +119,17 @@ export const logLine = {
   expired: (c, days) => `⌛ **${esc(c.who)}**'s claim on ${link(`#${c.number} ${esc(short(c.title, 90))}`, c.url)} lapsed after ${days} days without activity: it's free again`,
 };
 
+// A Discord name in a GitHub comment: in a code span, so no @mention, link or Markdown in it works (L5).
+export const githubName = (who) => `\`${String(who).replace(/[`\r\n]/g, "'").slice(0, 40).trim() || 'someone'}\``;
+
 // The GitHub comments Kira leaves on a claimed issue.
 export const claimComment = (who, login, n, days) =>
-  `Claimed by **${who}** on Discord${login ? ` (GitHub: \`${login}\`)` : ''}, to avoid duplicate work. The claim lapses after ${days} days without activity (a comment, a pull request or a commit mentioning #${n}).\n${MARK}`;
-export const unclaimComment = (who, why) => `${why === 'expired' ? `The claim by **${who}** lapsed` : `Unclaimed by **${who}** on Discord`}: this issue is free to take.\n${MARK}`;
+  `Claimed by ${githubName(who)} on Discord${login ? ` (GitHub: \`${login}\`)` : ''}, to avoid duplicate work. The claim lapses after ${days} days without activity (a comment, a pull request or a commit mentioning #${n}).\n${MARK}`;
+export const unclaimComment = (who, why) => `${why === 'expired' ? `The claim by ${githubName(who)} lapsed` : `Unclaimed by ${githubName(who)} on Discord`}: this issue is free to take.\n${MARK}`;
+
+// How long until an issue may be claimed or unclaimed again (ms, 0 = now): each one writes a label and a
+// comment on GitHub in Kira's name, so they can't be toggled in a loop (H1).
+export const cooldownLeft = (lastAt, now, ms) => (lastAt ? Math.max(0, lastAt + ms - now) : 0);
 
 // Remembers numbers already announced, newest first, at most `keep`.
 export const remember = (list = [], n, keep = 300) => [n, ...list.filter((x) => x !== n)].slice(0, keep);

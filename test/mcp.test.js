@@ -19,12 +19,15 @@ let snapshot = board.build(github, work).snapshot;
 
 const calls = [];
 const audits = [];
+const inactive = new Set(['gone']); // members who left, or are timed out
+let ludovicThrows = false;
 const api = {
   snapshot: () => snapshot,
+  isActiveMember: async (u) => !inactive.has(u),
   isMaintainer: async (u) => u === 'boss',
   audit: async (p, tool, args, outcome) => { audits.push({ user: p.user, tool, outcome }); },
   taskDetails: async (c) => ({ body: ag.untrusted(`body of ${c.id}`, 'github') }),
-  ludovic: async () => ({ status: null, openPullRequests: [], branches: ['main'], cards: [] }),
+  ludovic: async () => { if (ludovicThrows) throw new Error('ENOENT: /data/secret-path.json'); return { status: null, openPullRequests: [], branches: ['main'], cards: [] }; },
   claim: async (p, n) => { calls.push(['claim', p.user, n]); return `claimed #${n}`; },
   unclaim: async (p, n) => { calls.push(['unclaim', p.user, n]); return `unclaimed #${n}`; },
   assign: async (p, n, m) => { calls.push(['assign', p.user, n, m]); return 'assigned'; },
@@ -159,4 +162,63 @@ test('every call is audited in the token owner\'s name, refusals included', () =
   assert.ok(audits.some((a) => a.user === 'u2' && /denied: not a maintainer/.test(a.outcome)));
   assert.ok(audits.some((a) => /denied: rate limit/.test(a.outcome)));
   assert.ok(audits.some((a) => a.tool === 'card_move' && /refused: .*isn't yours|error: .*isn't yours/.test(a.outcome)));
+});
+
+test('a member who left (or is timed out) can do nothing, even with a valid token (H2)', async () => {
+  const t = ag.issue(store, { user: 'gone', name: 'Gone', scope: 'write' }).token;
+  const res = await raw({ Authorization: `Bearer ${t}` });
+  assert.equal(res.status, 403);
+  assert.match((await res.json()).error.message, /no longer an active member/);
+  const live = ag.issue(store, { user: 'u7', name: 'Soon gone', scope: 'read' }).token;
+  const c = await connect(live);
+  assert.ok(!(await call(c, 'whoami')).error);
+  inactive.add('u7'); // kicked, banned or timed out now
+  const after = await c.callTool({ name: 'whoami', arguments: {} }).then(() => 'ok', (e) => e.message);
+  assert.notEqual(after, 'ok');
+  assert.match(after, /403|no longer an active member/);
+});
+
+test('rate limits count per member across all their tokens (H1)', async () => {
+  const a = await connect(ag.issue(store, { user: 'u8', name: 'Many', scope: 'write' }).token);
+  const b = await connect(ag.issue(store, { user: 'u8', name: 'Many', scope: 'write' }).token);
+  const results = [];
+  for (let i = 0; i < 5; i++) results.push(await call(a, 'card_add', { title: `a ${i}`, column: 'todo' }));
+  for (let i = 0; i < 4; i++) results.push(await call(b, 'card_add', { title: `b ${i}`, column: 'todo' }));
+  assert.equal(results.filter((r) => !r.error).length, 8); // the member's 8, not 8 per token
+  assert.match(results.at(-1).text, /Rate limit/);
+});
+
+test('write tokens never move a card to Done; maintainers can (L1)', async () => {
+  const c = await connect(tokens.write);
+  const r = await call(c, 'card_move', { ref: 'card#1', column: 'done' }).catch((e) => ({ error: true, text: e.message }));
+  assert.ok(r.error && /Only maintainers move cards to Done/.test(r.text), r.text);
+  const boss = await connect(tokens.boss);
+  assert.ok(!(await call(boss, 'card_move', { ref: 'card#1', column: 'done' })).error);
+});
+
+test("a linked GitHub login doesn't make someone's pull request yours (M1)", async () => {
+  github.pulls = [{ number: 9, title: 'PR 9', html_url: 'https://github.com/x/y/pull/9', state: 'open', draft: false, user: { login: 'Online5277' }, body: '', labels: [], assignees: [], updated_at: new Date().toISOString() }];
+  // u9 linked Online5277 with /link-github (unproven): the card lists them, but writes don't count it.
+  snapshot = board.build(github, work, { person: (login) => ({ login, discordId: login === 'Online5277' ? 'u9' : null, name: login }) }).snapshot;
+  const c = await connect(ag.issue(store, { user: 'u9', name: 'Linker', scope: 'write' }).token);
+  assert.match((await call(c, 'card_note', { ref: 'pr#9', text: 'taking this over' })).text, /isn't yours/);
+  assert.match((await call(c, 'card_move', { ref: 'pr#9', column: 'backlog' })).text, /isn't yours/);
+});
+
+test('card links that would inject a masked link are refused (M3)', async () => {
+  const c = await connect(ag.issue(store, { user: 'u10', name: 'Links', scope: 'write' }).token);
+  for (const url of ['https://a.com/x>)[free nitro](https://evil.example)', 'https://github.com/x>)[free nitro](https://evil.example)', 'https://evil.example/']) {
+    const r = await c.callTool({ name: 'card_add', arguments: { title: 'linked card', url } }).catch((e) => ({ isError: true, content: [{ text: e.message }] }));
+    assert.ok(r.isError, url);
+  }
+  assert.ok(!(await call(c, 'card_add', { title: 'linked card', url: 'https://github.com/ludovic111/horizon/pull/56' })).error);
+});
+
+test('unexpected errors are not shown to the agent (L3)', async () => {
+  ludovicThrows = true;
+  const r = await call(await connect(tokens.read), 'ludovic_now');
+  ludovicThrows = false;
+  assert.ok(r.error);
+  assert.equal(r.text, 'Internal error.');
+  assert.ok(audits.some((a) => a.tool === 'ludovic_now' && /^error: ENOENT/.test(a.outcome))); // but logged
 });

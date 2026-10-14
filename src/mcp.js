@@ -10,7 +10,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import * as board from './board.js';
-import { verify, touch, allows, rateLimiter, untrusted, UNTRUSTED_NOTE } from './agents.js';
+import { verify, touch, allows, rateLimiter, untrusted, refusal, UNTRUSTED_NOTE } from './agents.js';
 
 const MAX_BODY = 64 * 1024;
 const COLUMN = z.enum(board.COLUMNS.map((c) => c.key));
@@ -38,23 +38,28 @@ export function buildServer(principal, api, limiter) {
     instructions: "Horizon's work board (Minecraft Java Edition in Rust, github.com/ludovic111/horizon). Read the board, see what Ludovic works on, claim a task before you start, move your own card, post short progress notes. Every action is done in the name of the Discord member who owns this token and is logged. " + UNTRUSTED_NOTE,
   });
 
-  // Wraps a tool: scope, rate limit, audit, errors.
+  // Wraps a tool: still a member, scope, rate limit, audit, errors.
+  // Rate limits count per member (principal.user), not per token: more tokens don't give more room (H1).
   const tool = (name, { scope, bucket, description, input, readOnly }, run) => server.registerTool(name, {
     description, inputSchema: input ?? {}, annotations: { readOnlyHint: !!readOnly, openWorldHint: false },
   }, async (args) => {
     let outcome = 'ok';
     try {
+      if (!(await api.isActiveMember(principal.user))) { outcome = 'denied: not an active member'; return fail('This token belongs to someone who is no longer an active member of the server.'); }
       if (!allows(principal.scope, scope)) { outcome = 'denied: scope'; return fail(`This token's scope is "${principal.scope}"; ${name} needs "${scope}". Make a token with /agent connect.`); }
       if (scope === 'maintain' && !(await api.isMaintainer(principal.user))) { outcome = 'denied: not a maintainer'; return fail('Only maintainers can do this.'); }
       for (const b of bucket === 'ask' ? ['write', 'ask'] : [bucket]) {
-        if (!limiter.take(principal.id, b)) { outcome = `denied: rate limit ${b}`; return fail(`Rate limit: try again in ${limiter.retryAfter(principal.id, b)} s.`); }
+        if (!limiter.take(principal.user, b)) { outcome = `denied: rate limit ${b}`; return fail(`Rate limit: try again in ${limiter.retryAfter(principal.user, b)} s.`); }
       }
       const r = await run(args);
       if (r?.isError) outcome = `refused: ${r.content[0].text.slice(0, 120)}`;
       return r;
     } catch (e) {
-      outcome = `error: ${e.message.slice(0, 120)}`;
-      return fail(e.message);
+      // Refusals are for the agent; anything else is a bug: logged, never shown (L3).
+      if (e.expose) { outcome = `refused: ${e.message.slice(0, 120)}`; return fail(e.message); }
+      console.error('mcp tool', name, e);
+      outcome = `error: ${String(e.message).slice(0, 120)}`;
+      return fail('Internal error.');
     } finally {
       await api.audit(principal, name, args, outcome).catch(() => {});
     }
@@ -62,20 +67,22 @@ export function buildServer(principal, api, limiter) {
 
   const snapshot = () => {
     const s = api.snapshot();
-    if (!s) throw new Error('The board is loading: try again in a minute.');
+    if (!s) throw refusal('The board is loading: try again in a minute.');
     return s;
   };
   const cardFor = (ref) => {
     const c = board.find(snapshot(), ref);
-    if (!c) throw new Error(`${ref} isn't on the board (open issues and pull requests, Kira's cards, and what closed in the last days).`);
+    if (!c) throw refusal(`${ref} isn't on the board (open issues and pull requests, Kira's cards, and what closed in the last days).`);
     return c;
   };
-  // The principal's own card, or a maintainer's: else an error.
+  const maintainer = async () => allows(principal.scope, 'maintain') && await api.isMaintainer(principal.user);
+  // The principal's own card (claimed by them, or a Kira card they own; not one of a linked GitHub login, which
+  // /link-github doesn't prove: M1), or any card for a maintainer: else a refusal.
   const own = async (ref) => {
     const c = cardFor(ref);
-    if (board.isMine(c, principal.user)) return c;
-    if (allows(principal.scope, 'maintain') && await api.isMaintainer(principal.user)) return c;
-    throw new Error(`${c.id} isn't yours: claim it first (task_claim), or ask its owner. Only your own cards can be moved or noted.`);
+    if (board.ownsForWrite(c, principal.user)) return c;
+    if (await maintainer()) return c;
+    throw refusal(`${c.id} isn't yours: claim it first (task_claim), or ask its owner. Only your own cards can be moved or noted.`);
   };
 
   tool('whoami', { scope: 'read', bucket: 'read', readOnly: true, description: 'Who this token belongs to, its scope, and what it can do.' },
@@ -123,10 +130,11 @@ export function buildServer(principal, api, limiter) {
 
   tool('card_move', {
     scope: 'write', bucket: 'write',
-    description: "Move one of the token owner's own cards (claimed, theirs, or one of their pull requests) to another column. A move holds until the card's state on GitHub changes.",
+    description: "Move one of the token owner's own cards (an issue they claimed, or a Kira card they own) to another column, except Done (maintainers only). A move holds until the card's state on GitHub changes.",
     input: { ref: REF, column: COLUMN },
   }, async ({ ref, column }) => {
     const c = await own(ref);
+    if (column === 'done' && !(await maintainer())) return fail('Only maintainers move cards to Done (issues and pull requests get there when they close on GitHub).');
     return json({ result: await api.move(principal, c, column) });
   });
 
@@ -142,7 +150,7 @@ export function buildServer(principal, api, limiter) {
   tool('card_add', {
     scope: 'write', bucket: 'write',
     description: "Add a card of Kira's own for Horizon work that is not a GitHub issue or pull request yet (an agent's task, a release, an investigation). The token owner owns it and can move and note it.",
-    input: { title: z.string().trim().min(3).max(200), column: z.enum(['backlog', 'todo', 'progress', 'review']).default('progress'), url: z.string().url().max(300).regex(/^https:\/\//, 'an https link').optional(), labels: z.array(z.string().trim().min(1).max(30)).max(5).default([]) },
+    input: { title: z.string().trim().min(3).max(200), column: z.enum(['backlog', 'todo', 'progress', 'review']).default('progress'), url: z.string().max(300).refine(board.safeCardUrl, 'an https link on github.com or playhorizon.dev, with no spaces, < > ( or )').optional(), labels: z.array(z.string().trim().min(1).max(30)).max(5).default([]) },
   }, async (card) => json({ result: await api.addCard(principal, card) }));
 
   tool('ask', {
@@ -212,6 +220,7 @@ export function makeHandler({ store, api, limiter = rateLimiter(), routes = {}, 
         const why = { malformed: 'Missing or malformed token', unknown: 'Unknown token', revoked: 'This token was revoked', expired: 'This token expired' }[who.why];
         return rpcError(res, 401, -32001, `${why}. Get one with /agent connect in Horizon's Discord.`, { 'WWW-Authenticate': 'Bearer realm="kira"' });
       }
+      if (!(await api.isActiveMember(who.user))) return rpcError(res, 403, -32001, 'This token belongs to someone who is no longer an active member of the server.');
       touch(store, who.id, now());
 
       if (Number(req.headers['content-length'] ?? 0) > MAX_BODY) return rpcError(res, 413, -32600, 'Request too large.', { Connection: 'close' });

@@ -3,5 +3,7 @@
 import { dirname } from 'node:path';
 import { unseal } from './secrets.js';
 
+if (process.getuid?.() === 0) console.warn('running as root: use docker-entrypoint.sh');
+else console.log(`running as uid ${process.getuid?.()}`);
 unseal(process.env.KIRA_SEAL_DIR || dirname(process.env.KIRA_STATE || 'data/state.json'));
 await import('./bot.js');
