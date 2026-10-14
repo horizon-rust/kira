@@ -5,19 +5,23 @@ import { SlashCommandBuilder, MessageFlags, Routes } from 'discord.js';
 import { AGENTS, GUILD_ID, OWNER_ID } from '../config.js';
 import { client, state, save, channel, isStaff } from '../core.js';
 import { dataFile } from '../store.js';
-import { openStore, issue, listFor, revoke, revokeAll, untrusted } from '../agents.js';
+import { openStore, issue, listFor, revoke, revokeAll, untrusted, oneLine, rateLimiter } from '../agents.js';
 import * as board from '../board.js';
 import * as wb from './workboard.js';
 import { columnText } from '../workkit.js';
 
 export const store = openStore(process.env.KIRA_AGENTS || dataFile('agents.json'));
+{
+  const fixed = board.sanitizeCards(wb.workState());
+  if (fixed) { save(); console.log(`kira cards: ${fixed} fixed (link or labels against the rules)`); }
+}
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
 const guild = () => client.guilds.cache.get(GUILD_ID);
 const memberOf = (id) => guild()?.members.cache.get(id) ?? null;
 const colName = (key) => board.COLUMNS.find((c) => c.key === key)?.name ?? key;
-// Text from agents or people, made harmless in Discord: no @everyone/@here, no mentions, no masked links
+// Text from agents or people, made harmless in Discord: one line, no @everyone/@here, no mentions, no masked links
 // ([text](url) and its escapes: brackets are escaped, so a link shows as the plain URL it is) (M3).
-export const clean = (s, n) => String(s).slice(0, n)
+export const clean = (s, n) => oneLine(s).slice(0, n)
   .replace(/@(everyone|here)/gi, '@\u200b$1').replace(/<[@#][!&]?\d+>/g, '')
   .replace(/\\/g, '\\\\').replace(/[[\]]/g, (c) => `\\${c}`);
 const link = (c) => `[#${c.number}](<${c.url ?? `https://discord.com/channels/${GUILD_ID}/${state.channels.workboard}`}>)`;
@@ -31,7 +35,7 @@ export async function isActiveMember(userId, now = Date.now()) {
   let ok = false;
   try {
     const m = await client.rest.get(Routes.guildMember(GUILD_ID, userId));
-    ok = !(m.communication_disabled_until && Date.parse(m.communication_disabled_until) > now);
+    ok = !m.pending && !(m.communication_disabled_until && Date.parse(m.communication_disabled_until) > now);
   } catch {
     ok = false; // not a member (404), or Discord can't tell: refuse
   }
@@ -68,6 +72,33 @@ async function audit(p, tool, args, outcome) {
   timer.unref?.();
 }
 
+// ── #dev-log lines from agents (N2) ───────────────────────────────────────────
+// At most AGENTS.devlogPerHour new lines per member; a note on the same card by the same member within 15
+// minutes is added to their last line (an edit) instead of a new one. Over the limit, the note or move still
+// happens on the board, just without a line.
+const devlog = rateLimiter({ devlog: [AGENTS.devlogPerHour, 3_600_000] });
+const noteLines = new Map(); // `${cardId} ${user}` → { msg, head, parts, at }
+let post = (line) => wb.log(line);
+async function agentLine(p, line) {
+  if (!devlog.take(p.user, 'devlog')) return false;
+  return (await post(line)) ?? false;
+}
+async function noteLine(p, card, text, now = Date.now()) {
+  const key = `${card.id} ${p.user}`;
+  const prev = noteLines.get(key);
+  if (prev?.msg && now - prev.at < 15 * 60_000) {
+    prev.parts.push(clean(text, 400));
+    prev.at = now;
+    const content = `${prev.head}${prev.parts.join(' · ')}`;
+    if (content.length <= 1900) { await prev.msg.edit({ content, allowedMentions: { parse: [] } }).catch(() => {}); return true; }
+  }
+  const head = `📝 **${clean(agentName(p), 60)}** on ${link(card)}: `;
+  const msg = await agentLine(p, `${head}${clean(text, 400)}`);
+  if (msg) noteLines.set(key, { msg, head, parts: [clean(text, 400)], at: now });
+  if (noteLines.size > 500) for (const [k, v] of noteLines) if (now - v.at > 15 * 60_000) noteLines.delete(k);
+  return !!msg;
+}
+
 // ── What the MCP tools do (src/mcp.js decides who may) ───────────────────────
 const asUser = (p) => ({ id: p.user, globalName: p.name, username: p.name });
 const agentName = (p) => `${p.name}'s agent`;
@@ -78,7 +109,7 @@ export const api = {
   isActiveMember,
   audit,
   async taskDetails(card) {
-    if (card.kind === 'card') return { kind: 'card', notes: card.notes.map((n) => ({ ...n, text: untrusted(n.text, 'discord') })) };
+    if (card.kind === 'card') return { kind: 'card', notes: card.notes.map((n) => ({ by: untrusted(n.by, 'discord'), at: n.at, text: untrusted(n.text, 'discord') })) };
     const [item, comments] = await Promise.all([
       wb.repoGet(`/issues/${card.number}`),
       wb.repoGet(`/issues/${card.number}/comments?per_page=100`),
@@ -88,7 +119,7 @@ export const api = {
       kind: card.kind, author: item?.user?.login ?? null, createdAt: item?.created_at, state: item?.state,
       body: untrusted((item?.body ?? '').slice(0, 6000), 'github'),
       comments: (comments ?? []).slice(-8).map((c) => ({ author: c.user?.login, at: c.created_at, body: untrusted(c.body.slice(0, 2000), 'github') })),
-      pullRequest: pr ? { draft: pr.draft, mergeable: pr.mergeable_state, head: pr.head?.ref, base: pr.base?.ref, additions: pr.additions, deletions: pr.deletions, changedFiles: pr.changed_files } : null,
+      pullRequest: pr ? { draft: pr.draft, mergeable: pr.mergeable_state, head: pr.head?.ref == null ? null : untrusted(pr.head.ref, 'github'), base: pr.base?.ref == null ? null : untrusted(pr.base.ref, 'github'), additions: pr.additions, deletions: pr.deletions, changedFiles: pr.changed_files } : null,
     };
   },
   async ludovic() {
@@ -100,11 +131,12 @@ export const api = {
       status: st ? { text: untrusted(st.text, 'discord'), setAt: new Date(st.at).toISOString() } : null,
       openPullRequests: wb.openPullsNow().filter((p) => p.author === AGENTS.ludovicLogin).map((p) => ({ ...p, title: untrusted(p.title, 'github') })),
       branches: wb.branchesNow(),
-      cards: mine.map((c) => ({ id: c.id, title: untrusted(c.title, c.kind === 'card' ? 'discord' : 'github'), column: c.column, url: c.url })),
+      cards: mine.map((c) => ({ id: c.id, title: untrusted(c.title, c.kind === 'card' ? 'discord' : 'github'), column: c.column, url: c.kind === 'card' && c.url ? untrusted(c.url, 'discord') : c.url })),
     };
   },
-  claim: (p, n) => wb.claim(asUser(p), memberOf(p.user), n),
-  unclaim: (p, n) => wb.unclaim(asUser(p), memberOf(p.user), n),
+  // Without maintain scope + role, an agent is a plain member: no staff exemptions, own claims only (N1, N6).
+  claim: (p, n, { asMaintainer = false } = {}) => wb.claim(asUser(p), asMaintainer ? memberOf(p.user) : null, n),
+  unclaim: (p, n, { asMaintainer = false } = {}) => wb.unclaim(asUser(p), asMaintainer ? memberOf(p.user) : null, n),
   async assign(p, n, memberId) {
     const m = memberOf(memberId) ?? await guild()?.members.fetch(memberId).catch(() => null);
     if (!m) return `No member ${memberId} on the server.`;
@@ -113,26 +145,27 @@ export const api = {
   async move(p, card, column) {
     const r = board.move(wb.workState(), wb.current(), card.id, column, agentName(p));
     await wb.changed();
-    if (r.from !== r.to) await wb.log(`📌 **${clean(agentName(p), 60)}** moved ${link(card)} ${clean(card.title, 80)} to ${colName(r.to)}`);
+    if (r.from !== r.to) await agentLine(p, `📌 **${clean(agentName(p), 60)}** moved ${link(card)} ${clean(card.title, 80)} to ${colName(r.to)}`);
     return `${card.id} → ${colName(r.to)}`;
   },
   async note(p, card, text) {
-    board.addNote(wb.workState(), wb.current(), card.id, { by: agentName(p), text });
+    const line = oneLine(text);
+    board.addNote(wb.workState(), wb.current(), card.id, { by: agentName(p), text: line });
     await wb.changed();
-    await wb.log(`📝 **${clean(agentName(p), 60)}** on ${link(card)}: ${clean(text, 400)}`);
-    return `Note added to ${card.id}; it shows on the card and in #dev-log.`;
+    const shown = await noteLine(p, card, line);
+    return `Note added to ${card.id}; it shows on the card${shown ? ' and in #dev-log' : ' (not in #dev-log: your agents reached their lines for this hour)'}.`;
   },
   async addCard(p, { title, column, url, labels }) {
     const id = board.addCard(wb.workState(), { title, column, url, labels, owner: { discordId: p.user, name: p.name } }, Date.now(), { maxOpen: AGENTS.maxOpenCards });
     await wb.changed();
     const c = board.find(wb.current(), id);
-    await wb.log(`🆕 **${clean(agentName(p), 60)}** added ${link(c)} ${clean(title, 120)} (${colName(column)})`);
+    await agentLine(p, `🆕 **${clean(agentName(p), 60)}** added ${link(c)} ${clean(oneLine(title), 120)} (${colName(column)})`);
     return `${id} added in ${colName(column)}.`;
   },
   async ask(p, question, card) {
     const ch = channel('horizonchat');
     if (!ch) return 'Discord is not reachable right now.';
-    const msg = await ch.send({ content: `🤖 **${clean(agentName(p), 60)}** asks${card ? ` about ${link(card)}` : ''}: ${clean(question, 800)}\n-# Sent by an AI agent through Kira for <@${p.user}>. Answer here.`, allowedMentions: { parse: [] } });
+    const msg = await ch.send({ content: `🤖 **${clean(agentName(p), 60)}** asks${card ? ` about ${link(card)}` : ''}: ${clean(oneLine(question), 800)}\n-# Sent by an AI agent through Kira for <@${p.user}>. Answer here.`, allowedMentions: { parse: [] } });
     return `Posted in #horizon-chat: ${msg.url}. Answers come in Discord.`;
   },
 };
@@ -246,4 +279,4 @@ export function setup() {
   client.on('guildMemberRemove', (m) => { if (m.guild.id === GUILD_ID) dropTokens(m.user, 'left the server').catch((e) => console.error('agent tokens', e.message)); });
   client.on('guildBanAdd', (ban) => { if (ban.guild.id === GUILD_ID) dropTokens(ban.user, 'banned').catch((e) => console.error('agent tokens', e.message)); });
 }
-export const _test = { dropTokens, memberCache };
+export const _test = { dropTokens, memberCache, setPoster: (fn) => { post = fn; }, noteLines, agentLine, noteLine };

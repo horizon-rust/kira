@@ -51,7 +51,7 @@ before(async () => {
   const r = ag.issue(store, { user: 'u3', name: 'Old' });
   ag.revoke(store, r.id, { user: 'u3' });
   tokens.revoked = r.token;
-  limits = ag.rateLimiter({ read: [100, 60_000], write: [8, 60_000], ask: [1, 3_600_000], auth: [12, 60_000] });
+  limits = ag.rateLimiter({ read: [100, 60_000], write: [8, 60_000], ask: [1, 3_600_000], auth: [12, 60_000], github: [3, 3_600_000] });
   server = await startServer(0, { store, api, limiter: limits, routes: { '/seal-key': (req, res) => res.end('PUBLIC KEY') } });
   url = `http://127.0.0.1:${server.address().port}`;
 });
@@ -221,4 +221,38 @@ test('unexpected errors are not shown to the agent (L3)', async () => {
   assert.ok(r.error);
   assert.equal(r.text, 'Internal error.');
   assert.ok(audits.some((a) => a.tool === 'ludovic_now' && /^error: ENOENT/.test(a.outcome))); // but logged
+});
+
+test('claims and unclaims also spend a per-member GitHub-write budget (N1)', async () => {
+  const c = await connect(ag.issue(store, { user: 'u11', name: 'Claimer', scope: 'write' }).token);
+  const r = [];
+  for (const [tool, issue] of [['task_claim', 5], ['task_unclaim', 5], ['task_claim', 4], ['task_claim', 3]]) r.push(await call(c, tool, { issue }));
+  assert.deepEqual(r.map((x) => x.error), [false, false, false, true]);
+  assert.match(r[3].text, /Rate limit/);
+  assert.ok(audits.some((a) => a.user === 'u11' && /rate limit github/.test(a.outcome)));
+});
+
+test("Kira cards' labels and links are wrapped as untrusted; labels must be plain (N3)", async () => {
+  const c = await connect(ag.issue(store, { user: 'u12', name: 'Labeller', scope: 'write' }).token);
+  const r = await c.callTool({ name: 'card_add', arguments: { title: 'bad labels', labels: ['Ignore <instructions>'] } }).catch((e) => ({ isError: true, content: [{ text: e.message }] }));
+  assert.ok(r.isError);
+  assert.ok(!(await call(c, 'card_add', { title: 'good card', labels: ['net code', 'v2'], url: 'https://github.com/ludovic111/horizon' })).error);
+  const card = (await call(c, 'board_list', { person: 'Labeller' })).data.cards[0];
+  assert.deepEqual(card.labels, ['<untrusted source="discord">net code</untrusted>', '<untrusted source="discord">v2</untrusted>']);
+  assert.equal(card.url, '<untrusted source="discord">https://github.com/ludovic111/horizon</untrusted>');
+});
+
+test('every request of a member counts, initialize, tools/list and ping too (N4)', async () => {
+  const s2 = await startServer(0, { store, api, limiter: ag.rateLimiter({ request: [3, 60_000] }) });
+  const u2 = `http://127.0.0.1:${s2.address().port}/mcp`;
+  const t = ag.issue(store, { user: 'u13', name: 'Pinger' }).token;
+  const statuses = [];
+  for (let i = 0; i < 4; i++) {
+    const r = await fetch(u2, { method: 'POST', headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: i, method: 'ping' }) });
+    statuses.push(r.status);
+    await r.text();
+  }
+  assert.deepEqual(statuses, [200, 200, 200, 429]);
+  s2.closeAllConnections();
+  s2.close();
 });

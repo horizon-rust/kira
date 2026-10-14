@@ -142,3 +142,10 @@ test('refusals carry expose: their message is meant to be shown (L3)', () => {
   assert.equal(e.expose, true);
   assert.throws(() => ag.issue(fresh(), { user: 'u', name: 'n', scope: 'admin' }), (err) => err.expose === true);
 });
+
+test('client address for the login limit: X-Real-IP, else the last X-Forwarded-For hop, never the first (N5)', () => {
+  const req = (headers) => ({ headers, socket: { remoteAddress: '10.0.0.1' } });
+  assert.equal(ag.clientIp(req({ 'x-real-ip': '203.0.113.7', 'x-forwarded-for': '1.2.3.4, 203.0.113.7' })), '203.0.113.7');
+  assert.equal(ag.clientIp(req({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8, 203.0.113.7' })), '203.0.113.7'); // spoofed first hops ignored
+  assert.equal(ag.clientIp(req({})), '10.0.0.1');
+});

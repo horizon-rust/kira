@@ -235,6 +235,7 @@ export function addCard(work, { title, column = 'todo', owner, url = null, label
   if (!String(title ?? '').trim()) throw refuse('A card needs a title.');
   work.cards ??= {};
   const n = Math.max(0, ...Object.keys(work.cards).map(Number)) + 1;
+  if (labels.some((l) => !LABEL.test(l))) throw refuse('Labels are lowercase letters, digits, spaces and dashes (30 at most).');
   work.cards[n] = { title: String(title).trim().slice(0, 200), column: key, owner, url, labels: labels.slice(0, 5), createdAt: now, updatedAt: now };
   return cardId('card', n);
 }
@@ -248,6 +249,25 @@ export function addNote(work, snapshot, ref, { by, text }, now = Date.now()) {
   work.notes ??= {};
   work.notes[card.id] = [...(work.notes[card.id] ?? []), { by, at: now, text: t.slice(0, 500) }].slice(-20);
   return card;
+}
+
+// Labels on Kira's cards: lowercase letters, digits, spaces and dashes (N3).
+export const LABEL = /^[a-z0-9 -]{1,30}$/;
+
+// Re-checks Kira's cards already stored (written before the link and label rules): a link that isn't
+// safeCardUrl is dropped, labels that don't match LABEL are dropped. Returns how many cards changed.
+export function sanitizeCards(work) {
+  let changed = 0;
+  for (const k of Object.values(work.cards ?? {})) {
+    const labels = (k.labels ?? []).filter((l) => typeof l === 'string' && LABEL.test(l));
+    const badUrl = k.url != null && !safeCardUrl(k.url);
+    if (badUrl || labels.length !== (k.labels ?? []).length) {
+      if (badUrl) k.url = null;
+      k.labels = labels;
+      changed++;
+    }
+  }
+  return changed;
 }
 
 // Whether a member may move or note a card: an issue they claimed, or a Kira card they own. Linked GitHub

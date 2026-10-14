@@ -10,7 +10,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import * as board from './board.js';
-import { verify, touch, allows, rateLimiter, untrusted, refusal, UNTRUSTED_NOTE } from './agents.js';
+import { verify, touch, allows, rateLimiter, untrusted, refusal, clientIp, UNTRUSTED_NOTE } from './agents.js';
 
 const MAX_BODY = 64 * 1024;
 const COLUMN = z.enum(board.COLUMNS.map((c) => c.key));
@@ -20,11 +20,13 @@ const NUMBER = z.number().int().min(1).max(9_999_999);
 // A card as an agent sees it: people's text wrapped as untrusted.
 export function cardOut(c) {
   return {
-    id: c.id, kind: c.kind, number: c.number, title: untrusted(c.title, c.kind === 'card' ? 'discord' : 'github'), url: c.url,
+    id: c.id, kind: c.kind, number: c.number, title: untrusted(c.title, c.kind === 'card' ? 'discord' : 'github'),
     state: c.state, column: c.column, movedByHand: c.moved ? { by: untrusted(c.moved.by, 'discord'), at: c.moved.at } : null,
     people: c.people.map((p) => ({ name: untrusted(p.name, 'discord'), github: p.login, claimed: p.claimed })),
     claim: c.claim ? { by: untrusted(c.claim.name, 'discord'), since: c.claim.since, lapses: c.claim.lapses } : null,
-    labels: c.labels, prs: c.prs, branches: c.branches,
+    labels: c.kind === 'card' ? c.labels.map((l) => untrusted(l, 'discord')) : c.labels,
+    url: c.kind === 'card' && c.url ? untrusted(c.url, 'discord') : c.url,
+    prs: c.prs, branches: c.branches,
     notes: (c.notes ?? []).map((n) => ({ by: untrusted(n.by, 'discord'), at: n.at, text: untrusted(n.text, 'discord') })),
   };
 }
@@ -48,7 +50,7 @@ export function buildServer(principal, api, limiter) {
       if (!(await api.isActiveMember(principal.user))) { outcome = 'denied: not an active member'; return fail('This token belongs to someone who is no longer an active member of the server.'); }
       if (!allows(principal.scope, scope)) { outcome = 'denied: scope'; return fail(`This token's scope is "${principal.scope}"; ${name} needs "${scope}". Make a token with /agent connect.`); }
       if (scope === 'maintain' && !(await api.isMaintainer(principal.user))) { outcome = 'denied: not a maintainer'; return fail('Only maintainers can do this.'); }
-      for (const b of bucket === 'ask' ? ['write', 'ask'] : [bucket]) {
+      for (const b of [].concat(bucket)) {
         if (!limiter.take(principal.user, b)) { outcome = `denied: rate limit ${b}`; return fail(`Rate limit: try again in ${limiter.retryAfter(principal.user, b)} s.`); }
       }
       const r = await run(args);
@@ -117,16 +119,16 @@ export function buildServer(principal, api, limiter) {
   }, async () => json(await api.ludovic()));
 
   tool('task_claim', {
-    scope: 'write', bucket: 'write',
+    scope: 'write', bucket: ['write', 'github', 'githubDay'],
     description: 'Claim an open issue for the token owner before starting on it: the "in progress" label and a comment on GitHub, the card moves to In progress with their name. Lapses after 14 days without activity.',
     input: { issue: NUMBER },
-  }, async ({ issue }) => json({ result: await api.claim(principal, issue) }));
+  }, async ({ issue }) => json({ result: await api.claim(principal, issue, { asMaintainer: await maintainer() }) }));
 
   tool('task_unclaim', {
-    scope: 'write', bucket: 'write',
+    scope: 'write', bucket: ['write', 'github', 'githubDay'],
     description: "Release the token owner's claim on an issue: it becomes free again.",
     input: { issue: NUMBER },
-  }, async ({ issue }) => json({ result: await api.unclaim(principal, issue) }));
+  }, async ({ issue }) => json({ result: await api.unclaim(principal, issue, { asMaintainer: await maintainer() }) }));
 
   tool('card_move', {
     scope: 'write', bucket: 'write',
@@ -150,17 +152,17 @@ export function buildServer(principal, api, limiter) {
   tool('card_add', {
     scope: 'write', bucket: 'write',
     description: "Add a card of Kira's own for Horizon work that is not a GitHub issue or pull request yet (an agent's task, a release, an investigation). The token owner owns it and can move and note it.",
-    input: { title: z.string().trim().min(3).max(200), column: z.enum(['backlog', 'todo', 'progress', 'review']).default('progress'), url: z.string().max(300).refine(board.safeCardUrl, 'an https link on github.com or playhorizon.dev, with no spaces, < > ( or )').optional(), labels: z.array(z.string().trim().min(1).max(30)).max(5).default([]) },
+    input: { title: z.string().trim().min(3).max(200), column: z.enum(['backlog', 'todo', 'progress', 'review']).default('progress'), url: z.string().max(300).refine(board.safeCardUrl, 'an https link on github.com or playhorizon.dev, with no spaces, < > ( or )').optional(), labels: z.array(z.string().trim().regex(board.LABEL, 'lowercase letters, digits, spaces, dashes')).max(5).default([]) },
   }, async (card) => json({ result: await api.addCard(principal, card) }));
 
   tool('ask', {
-    scope: 'write', bucket: 'ask',
+    scope: 'write', bucket: ['write', 'ask'],
     description: "Ask Horizon's contributors a question in Discord's #horizon-chat, in the token owner's name (shown as their agent's). Use it sparingly: 5 an hour. Answers come in Discord, not here.",
     input: { question: z.string().trim().min(10).max(800), ref: REF.optional() },
   }, async ({ question, ref }) => json({ result: await api.ask(principal, question, ref ? cardFor(ref) : null) }));
 
   tool('task_assign', {
-    scope: 'maintain', bucket: 'write',
+    scope: 'maintain', bucket: ['write', 'github', 'githubDay'],
     description: 'Maintainers: claim an issue for another Discord member (by their Discord user id).',
     input: { issue: NUMBER, member: z.string().regex(/^\d{17,20}$/) },
   }, async ({ issue, member }) => json({ result: await api.assign(principal, issue, member) }));
@@ -178,7 +180,6 @@ export function buildServer(principal, api, limiter) {
   return server;
 }
 
-const clientIp = (req) => String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0].trim();
 
 // The body, at most MAX_BODY bytes: beyond that it's read to the end and dropped, and the answer is 413.
 function readBody(req) {
@@ -216,11 +217,14 @@ export function makeHandler({ store, api, limiter = rateLimiter(), routes = {}, 
       const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
       const who = verify(store, token, now());
       if (!who.ok) {
+        console.log(`mcp auth failed (${who.why}) from ${ip}`);
         if (!limiter.take(ip, 'auth')) return rpcError(res, 429, -32000, 'Too many failed attempts.', { 'Retry-After': String(limiter.retryAfter(ip, 'auth')) });
         const why = { malformed: 'Missing or malformed token', unknown: 'Unknown token', revoked: 'This token was revoked', expired: 'This token expired' }[who.why];
         return rpcError(res, 401, -32001, `${why}. Get one with /agent connect in Horizon's Discord.`, { 'WWW-Authenticate': 'Bearer realm="kira"' });
       }
       if (!(await api.isActiveMember(who.user))) return rpcError(res, 403, -32001, 'This token belongs to someone who is no longer an active member of the server.');
+      // Every request counts, initialize, tools/list and ping included (N4).
+      if (!limiter.take(who.user, 'request')) return rpcError(res, 429, -32000, 'Too many requests.', { 'Retry-After': String(limiter.retryAfter(who.user, 'request')) });
       touch(store, who.id, now());
 
       if (Number(req.headers['content-length'] ?? 0) > MAX_BODY) return rpcError(res, 413, -32600, 'Request too large.', { Connection: 'close' });

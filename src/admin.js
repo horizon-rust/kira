@@ -3,6 +3,7 @@
 // token: its secret is in 1Password (op://Agents/Kira admin token/credential), the host only has its SHA-256
 // (KIRA_ADMIN_TOKEN_SHA256). No variable, no admin routes. Failed attempts count in the "auth" rate limit.
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { clientIp } from './agents.js';
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 
 const MAX = 2 * 1024 * 1024;
@@ -27,7 +28,7 @@ export function adminRoutes({ hash, files, limiter, save, freeze, exit = () => p
     return timingSafeEqual(got, want);
   };
   const deny = (req, res) => {
-    const ip = String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0].trim();
+    const ip = clientIp(req);
     const limited = !limiter.take(ip, 'auth');
     res.writeHead(limited ? 429 : 401, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: limited ? 'too many attempts' : 'unauthorized' }));

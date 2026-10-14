@@ -52,7 +52,8 @@ const nameOf = (member, user) => member?.displayName ?? user.globalName ?? user.
 
 export async function log(line) {
   const ch = channel('devlog');
-  if (ch) await ch.send({ content: line, allowedMentions: { parse: [] } }).catch((e) => console.error('dev-log', e.message));
+  if (!ch) return null;
+  return ch.send({ content: line, allowedMentions: { parse: [] } }).catch((e) => { console.error('dev-log', e.message); return null; });
 }
 
 let labelReady = false;
@@ -83,11 +84,19 @@ export async function claim(user, member, n) {
   if (issue.labels.some((l) => l.name === WORK.label) && !isStaff(member)) return `#${n} already has the **${WORK.label}** label on GitHub: someone is on it. Ask in #horizon-chat.`;
   const wait = wk.cooldownLeft(work.githubAt?.[n], Date.now(), WORK.claimCooldownMs);
   if (wait) return `#${n} was claimed or unclaimed a moment ago: try again in ${Math.ceil(wait / 60_000)} min.`;
+  // Per member, across issues (N1): a few claims at once, and a pause between two claims or unclaims.
+  if (!isStaff(member)) {
+    const held = Object.values(work.claims).filter((c) => c.user === user.id).length;
+    if (held >= WORK.maxClaims) return `You already have ${held} claimed issues: finish or \`/unclaim\` one before claiming another.`;
+    const pause = wk.cooldownLeft(work.memberGithubAt?.[user.id], Date.now(), WORK.memberCooldownMs);
+    if (pause) return `You claimed or unclaimed an issue a moment ago: try again in ${Math.ceil(pause / 1000)} s.`;
+  }
   const who = nameOf(member, user);
   await ensureLabel();
   await gh.write('POST', `${REPO}/issues/${n}/labels`, { labels: [WORK.label] });
   await gh.write('POST', `${REPO}/issues/${n}/comments`, { body: wk.claimComment(who, loginOf(user.id), n, WORK.expireDays) });
   (work.githubAt ??= {})[n] = Date.now();
+  (work.memberGithubAt ??= {})[user.id] = Date.now();
   Object.assign(board.assign(work, n, { user: user.id, who }), { title: issue.title, url: issue.html_url });
   save();
   await log(wk.logLine.claimed({ ...work.claims[n], number: n }));
@@ -113,8 +122,11 @@ export async function unclaim(user, member, n) {
   if (entry.user !== user.id && !isStaff(member)) return `#${n} is claimed by **${entry.who}**: only they (or a mod) can unclaim it.`;
   const wait = wk.cooldownLeft(work.githubAt?.[n], Date.now(), WORK.claimCooldownMs);
   if (wait) return `#${n} was claimed a moment ago: you can unclaim it in ${Math.ceil(wait / 60_000)} min.`;
+  const pause = isStaff(member) ? 0 : wk.cooldownLeft(work.memberGithubAt?.[user.id], Date.now(), WORK.memberCooldownMs);
+  if (pause) return `You claimed or unclaimed an issue a moment ago: try again in ${Math.ceil(pause / 1000)} s.`;
   await release(n, 'unclaimed');
   (work.githubAt ??= {})[n] = Date.now();
+  (work.memberGithubAt ??= {})[user.id] = Date.now();
   refreshSoon();
   return `↩️ #${n} is free again: the label is off, with a comment on GitHub.`;
 }

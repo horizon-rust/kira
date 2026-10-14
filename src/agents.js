@@ -106,8 +106,28 @@ export function revokeAll(store, user, now = Date.now()) {
 }
 
 // Rate limits: a sliding window per key (a member, or an address for failed logins) and bucket. `limits`: { bucket: [count, windowMs] }.
-export const LIMITS = { read: [120, 60_000], write: [20, 60_000], ask: [5, 3_600_000], auth: [30, 60_000] };
-export function rateLimiter(limits = LIMITS) {
+// Per member: requests of any kind (N4), reads, writes, questions, and the claims/unclaims an agent makes,
+// which write to GitHub in Kira's name (N1); per address: failed logins.
+export const LIMITS = {
+  request: [240, 60_000], read: [120, 60_000], write: [20, 60_000], ask: [5, 3_600_000],
+  github: [6, 3_600_000], githubDay: [20, 86_400_000], auth: [30, 60_000],
+};
+
+// The caller's address for the failed-login limit (N5). Railway's edge sets X-Real-IP to the address it
+// saw, and appends that same address as the LAST X-Forwarded-For entry; the first entries are whatever the
+// client sent, so they never count.
+export function clientIp(req) {
+  const real = String(req.headers['x-real-ip'] ?? '').trim();
+  if (real) return real;
+  const hops = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  return hops.at(-1) ?? req.socket?.remoteAddress ?? '';
+}
+
+// Text from agents on one line: newlines (and Unicode line breaks) become spaces, so nothing can start a
+// Markdown heading, list, quote or a fake "-# Sent by…" line in Discord.
+export const oneLine = (s) => String(s ?? '').replace(/[\r\n\u0085\u2028\u2029]+/g, ' ').replace(/[ \t]{2,}/g, ' ').trim();
+export function rateLimiter(custom = {}) {
+  const limits = { ...LIMITS, ...custom }; // custom limits override the defaults, bucket by bucket
   const hits = new Map(); // key → timestamps
   let calls = 0;
   // Drops the keys whose hits are all out of their window, so the map doesn't grow forever.

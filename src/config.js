@@ -242,6 +242,8 @@ export const WORK = {
   label: 'in progress', labelColor: 'fbca04',
   refreshMs: 10 * 60 * 1000,
   claimCooldownMs: 10 * 60 * 1000, // between a claim and an unclaim of the same issue (each writes to GitHub)
+  maxClaims: 3, // issues a member may hold at once (maintainers: no limit)
+  memberCooldownMs: 2 * 60 * 1000, // between two claims or unclaims by the same member, any issues
   expireDays: 14, remindDays: 3,  // a claim lapses after 14 days without activity; a DM 3 days before
   mergedDays: 7,                  // "merged in the last 7 days"
   github: {
@@ -349,5 +351,6 @@ export const AGENTS = {
   issuance: process.env.KIRA_AGENT_ISSUANCE === 'on',
   defaultDays: 90, maxDays: 365, maxPerUser: 5, maxPerDay: 3, // tokens: live at once, issued per 24 h (revoked ones count)
   maxOpenCards: 10, // Kira cards a member may have open
+  devlogPerHour: 10, // #dev-log lines from a member's agents (notes on the same card within 15 min merge into one line)
   ludovicLogin: 'ludovic111',
 };

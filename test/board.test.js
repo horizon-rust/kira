@@ -128,3 +128,16 @@ test('at most 10 open Kira cards per member (H1)', () => {
   assert.ok(board.addCard(work, { title: 'now ok', owner: { discordId: 'u1', name: 'C' } }, NOW));
   assert.throws(() => board.move({}, { columns: [] }, 1, 'todo', 'x'), (e) => e.expose === true); // refusals are shown
 });
+
+test('Kira cards stored before the rules are fixed once: bad links and labels dropped (N3, re-validation)', () => {
+  const work = { cards: {
+    1: { title: 'old', column: 'todo', url: 'https://a.com/x>)[free nitro](https://evil.example)', labels: ['ok', 'Bad<>', 'fine-2'] },
+    2: { title: 'good', column: 'todo', url: 'https://github.com/x', labels: ['a'] },
+  } };
+  assert.equal(board.sanitizeCards(work), 1);
+  assert.equal(work.cards[1].url, null);
+  assert.deepEqual(work.cards[1].labels, ['ok', 'fine-2']);
+  assert.equal(work.cards[2].url, 'https://github.com/x');
+  assert.equal(board.sanitizeCards(work), 0); // idempotent
+  assert.throws(() => board.addCard({}, { title: 'x y z', owner: { discordId: 'u' }, labels: ['UPPER'] }), /Labels are lowercase/);
+});
