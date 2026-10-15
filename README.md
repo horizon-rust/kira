@@ -23,7 +23,7 @@ projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no pai
   channels, `DEFAULT_CHANNELS` in `config.js`, include #new-members) and the
   **Server Guide** (Discord's newcomer home; bots get "Bots cannot use this endpoint", so Ludovic applies it
   by hand in Server Settings → Onboarding: setup writes the wanted body to `state.serverGuide`), the server icon
-  (`assets/horizon-icon.png`, Horizon's mark from the horizon repo's `docs/media/brand/social/discord-icon-512.png`;
+  (`assets/horizon-icon.png`, Horizon's mark: the horizon repo's `docs/media/brand/avatar.svg` at 512 px;
   uploaded again only when it changes; the running bot applies it and Kira's own avatar `assets/kira-avatar.png`
   too, on start, when either file changes: `src/brand.js`),
   the same roles as buttons in `#welcome`, Community mode, **rules screening** (new members read and agree to
@@ -237,3 +237,19 @@ give it the desktop's `gh` login: that token can do everything.
 To try it first without writing anything, add `Environment=KIRA_GITHUB_DRY_RUN=1` with
 `systemctl --user edit kira`, restart, and read the journal. Test end to end in a staff-only forum
 post (`/issue repo:horizon`), with a throwaway issue labelled `test`, closed afterwards.
+
+## Discord brand assets
+
+The Discord server's and Kira's images live here, not in the horizon repo (which holds only the game, the launcher and
+the website). Moved from horizon's `docs/media/brand` on 2026-10-15.
+
+| File | What | Made from |
+|------|------|-----------|
+| `assets/horizon-icon.png` | the server icon | `rsvg-convert -w 512 -h 512 ~/code/horizon/docs/media/brand/avatar.svg` |
+| `assets/kira-avatar.svg` | Kira's avatar, master: Horizon's mark on violet, so Kira reads apart from the project | |
+| `assets/kira-avatar.png` | Kira's avatar | `rsvg-convert -w 512 -h 512 assets/kira-avatar.svg` |
+| `assets/discord-banner.html` | the server banner, as a page (uses the mark and fonts from a horizon checkout next to this one) | |
+| `assets/discord-banner.png` | the server banner, 960×540 (needs boost level 2) | a 960×540 Playwright screenshot of the page |
+
+Uploading (Ludovic's accounts): server icon and banner in *Server Settings › Server Profile*; Kira's avatar in
+discord.com/developers/applications › Kira › *Bot* (the running bot also applies both icons when they change).

@@ -1,7 +1,7 @@
 // Horizon's mark on Discord: the server icon and Kira's avatar follow the PNGs in assets/.
 // Kira applies them when it starts and a file changed (state.brand keeps their hashes), so a
-// new mark ships by replacing the files. They are renders from the horizon repo,
-// docs/media/brand/social (discord-icon-512.png and kira-avatar-512.png).
+// new mark ships by replacing the files. They are made as described in
+// README.md, Discord brand assets.
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { SERVER } from './config.js';

@@ -12,8 +12,8 @@ export const SERVER = {
   about: "Kira, Horizon's helper 🌅 I keep the work board in sync with GitHub, track who's on which task, post every Horizon release, send your bug reports and ideas to GitHub, and help the mods keep things friendly. Type /help to see what I can do, or DM me to reach the mods. playhorizon.dev",
   // Horizon's mark (horizon repo, docs/media/brand/social): the server icon and Kira's own avatar, on violet so
   // Kira reads apart from the project. src/brand.js applies them when they change.
-  icon: 'assets/horizon-icon.png', // discord-icon-512.png
-  avatar: 'assets/kira-avatar.png', // kira-avatar-512.png
+  icon: 'assets/horizon-icon.png', // Horizon's avatar.svg at 512 px (README: Discord brand assets)
+  avatar: 'assets/kira-avatar.png', // from assets/kira-avatar.svg
 };
 
 export const LINKS = {
