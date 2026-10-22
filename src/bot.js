@@ -5,7 +5,7 @@ import { MessageFlags, MessageType } from 'discord.js';
 import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS } from './config.js';
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
-import { releaseMessage, remember, announced, pingDecision } from './releases.js';
+import { releaseMessage, nightlyMessage, remember, rememberNightly, announced, pingDecision } from './releases.js';
 import { makeGitHub } from './github.js';
 import { linkify } from './texts.js';
 import * as moderation from './features/moderation.js';
@@ -28,14 +28,32 @@ const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
 
-// New Horizon releases → #releases: published game and launcher releases only, each once (by release id).
+// New Horizon releases → #releases, each once by release id: game pre-releases as silent Nightly posts
+// (state.nightlies), then the same id again with the ping when it is promoted to stable (state.releases),
+// and the launcher's and other stable releases once.
 const releasesGh = makeGitHub({ token: process.env.GITHUB_TOKEN });
 async function checkReleases() {
   state.releases ??= {};
+  state.nightlies ??= {};
   for (const key of Object.keys(state.seen)) if (key.startsWith('gh:') || key === 'youtube') delete state.seen[key]; // the old feeds
   for (const repo of RELEASE_REPOS) {
     try {
-      for (const release of await newReleases(releasesGh, repo, state.releases[repo])) {
+      const list = await newReleases(releasesGh, repo, state.releases[repo], state.nightlies[repo] ?? []);
+      // The first run with Nightly posts: the pre-releases already out are the baseline, never posted.
+      const baseline = state.nightlies[repo] === undefined;
+      if (baseline) {
+        state.nightlies[repo] = list.filter((r) => r.prerelease).reduce((ids, r) => rememberNightly(ids, r.id), []);
+        save();
+      }
+      for (const release of list) {
+        if (release.prerelease) {
+          if (baseline) continue;
+          const msg = await channel('releases').send(nightlyMessage(repo, release));
+          state.nightlies[repo] = rememberNightly(state.nightlies[repo], release.id);
+          save();
+          console.log(`nightly posted: ${repo} ${release.tag_name} (${release.id}) → message ${msg.id}`);
+          continue;
+        }
         if (!announced(repo, release)) { // another kind of tag (a test, a tool): remembered, never posted
           state.releases[repo] = remember(state.releases[repo], release.id);
           save();

@@ -55,6 +55,10 @@ test('tag routing: game, launcher, everything else', () => {
   assert.equal(rel.kind('horizon', 'v2026.10.13.1'), 'game');
   assert.equal(rel.kind('horizon', 'launcher-v0.1.2'), 'launcher');
   assert.equal(rel.kind('horizon', 'archive/wip-horizon-mobs-split'), 'generic');
+  assert.equal(rel.kind('horizon', 'launcher@0.2.3'), 'launcher'); // the tags from 0.2
+  assert.equal(rel.kind('horizon', 'v0.2.3'), 'game');
+  assert.equal(rel.kind('horizon', 'launcher-0.2.3'), 'generic');
+  assert.equal(rel.kind('lsuite', 'launcher@0.3.0'), 'generic');
   assert.equal(rel.kind('lsuite', 'launcher-v0.3.0'), 'generic'); // lsuite's launcher is not Horizon's
   assert.equal(rel.kind('kimchi', 'v0.10.0'), 'generic');
 });
@@ -200,4 +204,79 @@ test('@Releases is pinged at most once every 6 hours; the next ping lists what c
   assert.doesNotMatch(silent.content, /<@&/);
   assert.deepEqual(silent.allowedMentions.roles, []);
   assert.equal(rel.pingDecision('kimchi', { tag_name: 'v1', body: '### New\n- x' }, {}, 0).applies, false, 'other repos keep their pings');
+});
+
+const NOTES = '### New\n- **Zoom:** hold C to zoom in, like OptiFine does.\n### Fixed\n- Composters take items.';
+const beta = (id, tag, at, extra = {}) => ({ id, tag_name: tag, name: `Horizon ${tag.slice(1)}`, prerelease: true, draft: false,
+  published_at: at, html_url: `https://github.com/ludovic111/horizon/releases/tag/${tag}`, body: NOTES, ...extra });
+
+test('a Nightly is a silent post: no role, no mentions, the @silent flag, the compact notes and the link', () => {
+  const m = rel.nightlyMessage('horizon', beta(1, 'v0.2.5', '2026-10-23T10:00:00Z'));
+  assert.equal(m.content, '🌙 Nightly v0.2.5');
+  assert.deepEqual(m.allowedMentions, { parse: [] });
+  assert.equal(m.flags, 4096);
+  assert.equal(rel.SUPPRESS_NOTIFICATIONS, 4096);
+  const [e] = m.embeds;
+  assert.equal(e.title, 'Horizon 0.2.5');
+  assert.equal(e.url, 'https://github.com/ludovic111/horizon/releases/tag/v0.2.5');
+  assert.match(e.description, /^• \*\*Zoom:\*\* hold C to zoom in, like OptiFine does\.\n• Composters take items\./);
+  assert.match(e.description, /Nightly\*\* channel/);
+  assert.match(e.description, /\[Release notes\]\(https:\/\/github\.com\/ludovic111\/horizon\/releases\/tag\/v0\.2\.5\)/);
+  assert.doesNotMatch(JSON.stringify(m), /<@|@everyone|@here/);
+  const bare = rel.nightlyMessage('horizon', beta(2, 'v0.2.6', '2026-10-23T10:10:00Z', { name: '', body: 'Just a build.' }));
+  assert.equal(bare.embeds[0].title, 'v0.2.6');
+  assert.match(bare.embeds[0].description, /^Just a build\./);
+  // the stable post keeps today's format: no flags, the role pinged
+  const stable = rel.releaseMessage('horizon', { ...beta(1, 'v0.2.5', '2026-10-23T10:00:00Z'), prerelease: false }, ROLE);
+  assert.equal(stable.flags, undefined);
+  assert.match(stable.content, new RegExp(`^<@&${ROLE}> \\*\\*Horizon 0\\.2\\.5\\*\\* is out`));
+});
+
+test('Nightly then Stable: each id is posted once per channel, across restarts and a promotion in place', () => {
+  const at = (h, m) => `2026-10-23T${h}:${m}:00Z`;
+  const a = beta(11, 'v0.2.5', at('10', '00'));
+  const b = beta(12, 'v0.2.6', at('10', '10'));
+  const launcher = { ...beta(13, 'launcher@0.2.1', at('10', '05')), prerelease: false };
+  const tags = (list, stable, nights) => rel.fresh(list, stable, SINCE, nights).map((r) => `${r.prerelease ? 'nightly' : 'stable'} ${r.tag_name}`);
+  // without a Nightly list (other repos), pre-releases stay unposted
+  assert.deepEqual(tags([a, b, launcher], [], null), ['stable launcher@0.2.1']);
+  // new pre-releases: Nightly, oldest first; the launcher (not a pre-release) is stable as today
+  assert.deepEqual(tags([b, launcher, a], [], []), ['nightly v0.2.5', 'stable launcher@0.2.1', 'nightly v0.2.6']);
+  // after posting them, a restart (same state) posts nothing
+  let nights = [11, 12].reduce((ids, id) => rel.rememberNightly(ids, id), []);
+  let stable = rel.remember([], 13);
+  assert.deepEqual(tags([a, b, launcher], stable, nights), []);
+  // v0.2.5 is promoted in place: same id, no longer a pre-release, notes rewritten: posted once as Stable
+  const promoted = { ...a, prerelease: false, body: '### New\n- **Zoom:** rewritten.' };
+  assert.deepEqual(tags([b, promoted, launcher], stable, nights), ['stable v0.2.5']);
+  stable = rel.remember(stable, 11);
+  assert.deepEqual(tags([b, promoted, launcher], stable, nights), []); // never twice, even though the Nightly list still has it
+  // a Nightly id forgotten from the list (never) would repost; 400 ids are kept
+  assert.equal(Array.from({ length: 500 }, (_, i) => i).reduce((ids, id) => rel.rememberNightly(ids, id), []).length, 400);
+  // drafts, old releases and non-game pre-releases are never Nightly posts
+  const odd = [beta(21, 'v0.2.7', at('11', '00'), { draft: true, published_at: null }), beta(22, 'v0.2.8', '2026-10-01T00:00:00Z'),
+    beta(23, 'launcher@0.2.2', at('11', '30')), beta(24, 'archive/wip', at('11', '40'))];
+  assert.deepEqual(tags(odd, [], []), []);
+  assert.equal(rel.isNightly('horizon', a), true);
+  assert.equal(rel.isNightly('kimchi', a), false);
+  assert.equal(rel.isNightly('horizon', promoted), false);
+});
+
+test('newReleases reads a second page when the first is full, and passes the Nightly list', async () => {
+  const mk = (n, off) => Array.from({ length: n }, (_, i) => beta(1000 + off + i, `v0.2.${off + i}`, `2026-10-23T10:${String(i % 60).padStart(2, '0')}:00Z`));
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(url);
+    return new Response(JSON.stringify(url.endsWith('page=2') ? [{ ...mk(1, 200)[0], prerelease: false }] : mk(100, 0)), { status: 200 });
+  };
+  const gh = makeGitHub({ fetchImpl });
+  const got = await newReleases(gh, 'horizon', [], []);
+  assert.equal(urls.length, 2);
+  assert.match(urls[0], /releases\?per_page=100$/);
+  assert.match(urls[1], /releases\?per_page=100&page=2$/);
+  assert.equal(got.length, 101);
+  assert.equal(got.filter((r) => !r.prerelease).length, 1);
+  urls.length = 0;
+  assert.equal((await newReleases(gh, 'horizon', [], null)).length, 1); // other repos: no Nightly
+  assert.equal((await newReleases(gh, 'kimchi', [], [])).filter((r) => r.prerelease).length, 0);
 });
