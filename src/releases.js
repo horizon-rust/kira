@@ -1,8 +1,8 @@
 // GitHub releases → #releases. The source is the REST API (`GET /repos/<owner>/<repo>/releases`), not
 // the Atom feed: the feed lists bare tags and drafts, so Kira once announced a launcher still being built.
 // Published releases are posted by release id (a draft keeps its id when it is published). Horizon's game
-// releases are pre-releases first (Nightly, many a day) and are promoted in place to stable about once a day:
-// each pre-release is posted once as a silent Nightly, and the same id once more, with the ping, when it
+// releases are pre-releases first (Alpha, many a day) and are promoted in place to stable about once a day:
+// each pre-release is posted once as a silent Alpha, and the same id once more, with the ping, when it
 // becomes stable. Ids are tracked separately per channel. This file is pure (no Discord, no network) so it
 // can be tested; bot.js sends.
 import { COLOR, LINKS, GITHUB } from './config.js';
@@ -12,30 +12,30 @@ const RELEASE_BLUE = 0x5aa9ff; // the 📦 Releases role's colour, for the other
 // Releases published before this were announced by the old Atom feed: never posted again.
 export const SINCE = '2026-10-13T18:00:00Z';
 const KEEP = 100; // stable ids remembered per repo
-export const KEEP_NIGHTLY = 400; // Nightly ids: more than the releases listed (feeds.js), so none is posted twice
+export const KEEP_ALPHA = 400; // Alpha ids: more than the releases listed (feeds.js), so none is posted twice
 export const SUPPRESS_NOTIFICATIONS = 1 << 12; // Discord's @silent message flag (4096): no push for anyone
 
-// Whether this is a Nightly: a pre-release of Horizon's game (v0.2.N, v2026.10.22.N).
-export const isNightly = (repo, release) => !!release.prerelease && kind(repo, release.tag_name) === 'game';
+// Whether this is an Alpha: a pre-release of Horizon's game (v0.2.N, v2026.10.22.N).
+export const isAlpha = (repo, release) => !!release.prerelease && kind(repo, release.tag_name) === 'game';
 
 // The releases of `list` to announce now, oldest first. `announced` is the list of ids already posted as
-// stable; `nightlies` the ids already posted as Nightly, or null for a repo with no Nightly posts (its
-// pre-releases are never posted). A promoted release is in `nightlies` but not in `announced`: it is posted again.
-export function fresh(list, announced = [], since = SINCE, nightlies = null, repo = 'horizon') {
+// stable; `alphas` the ids already posted as Alpha, or null for a repo with no Alpha posts (its
+// pre-releases are never posted). A promoted release is in `alphas` but not in `announced`: it is posted again.
+export function fresh(list, announced = [], since = SINCE, alphas = null, repo = 'horizon') {
   const done = new Set(announced);
-  const quiet = new Set(nightlies ?? []);
+  const quiet = new Set(alphas ?? []);
   return (list ?? [])
     .filter((r) => {
       if (r.draft || !r.published_at || Date.parse(r.published_at) < Date.parse(since) || done.has(r.id)) return false;
       if (!r.prerelease) return true;
-      return nightlies != null && isNightly(repo, r) && !quiet.has(r.id);
+      return alphas != null && isAlpha(repo, r) && !quiet.has(r.id);
     })
     .sort((a, b) => Date.parse(a.published_at) - Date.parse(b.published_at));
 }
 
 // Records a posted release; returns the new list of ids.
 export const remember = (announced = [], id) => [id, ...announced.filter((x) => x !== id)].slice(0, KEEP);
-export const rememberNightly = (announced = [], id) => [id, ...announced.filter((x) => x !== id)].slice(0, KEEP_NIGHTLY);
+export const rememberAlpha = (announced = [], id) => [id, ...announced.filter((x) => x !== id)].slice(0, KEEP_ALPHA);
 
 // Horizon's tags: `v0.2.5` (before 0.2: `v2026.10.13.1`) is the game, `launcher@0.2.5` (before: `launcher-v0.1.2`) the launcher.
 export function kind(repo, tag) {
@@ -117,18 +117,18 @@ export function pingDecision(repo, release, pings = {}, now = Date.now()) {
   return { applies: true, ping: false, earlier: [], pings: { ...pings, pending } };
 }
 
-// The Nightly post of a game pre-release: short, no role, no mention at all, and sent @silent, so it can come
-// every few minutes without a notification for anyone. It is only for players on the launcher's Nightly channel.
-export function nightlyMessage(repo, release) {
+// The Alpha post of a game pre-release: short, no role, no mention at all, and sent @silent, so it can come
+// every few minutes without a notification for anyone. It is only for players on the launcher's Alpha channel.
+export function alphaMessage(repo, release) {
   const tag = release.tag_name;
   const name = (release.name || tag).trim();
   const notes = [...bullets(release.body, 'New'), ...bullets(release.body, 'Fixed')];
   const what = notes.length ? bulletField(notes, 700) : firstLines(release.body, 500);
   return {
-    content: `🌙 Nightly ${tag}`,
+    content: `🧪 Alpha ${tag}`,
     embeds: [{
       color: COLOR, title: clipTo(name, 256), url: release.html_url,
-      description: [what, 'For players on the **Nightly** channel (launcher Settings, Updates): it can break. The Stable post comes about once a day.',
+      description: [what, 'For players on the **Alpha** channel (launcher Settings, Updates): it can break. The Stable post comes about once a day.',
         `[Release notes](${release.html_url})`].filter(Boolean).join('\n\n'),
       footer: { text: `${GITHUB.owner}/${repo} · ${tag}` }, timestamp: release.published_at,
     }],
