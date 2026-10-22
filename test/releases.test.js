@@ -79,7 +79,7 @@ test('a game release: its title, New and Fixed in short, the launcher line and t
   for (const l of field('New').split('\n')) assert.ok(l.length <= 112, l);
   assert.match(field('Links'), /\(https:\/\/github\.com\/ludovic111\/horizon\/releases\/tag\/v2026\.10\.13\.1\)/);
   assert.match(field('Links'), /\(https:\/\/playhorizon\.dev\)/);
-  assert.match(field('Links'), /\(https:\/\/github\.com\/ludovic111\/horizon\/releases\?q=launcher-v&expanded=true\)/);
+  assert.match(field('Links'), /\(https:\/\/github\.com\/ludovic111\/horizon\/releases\?q=launcher&expanded=true\)/);
   assert.match(m.content, new RegExp(`^<@&${ROLE}> \\*\\*Horizon 2026\\.10\\.13\\.1`));
 });
 
@@ -89,7 +89,7 @@ test('a launcher release: its own small embed, even with empty notes', () => {
   assert.equal(e.title, 'Horizon launcher 0.1.2');
   assert.equal(e.fields, undefined);
   assert.match(e.description, /^• \*\*Downloads resume\*\*\n• The window remembers its size\./);
-  assert.match(e.description, /Your launcher updates itself; new here\? \[Download it\]\(https:\/\/github\.com\/ludovic111\/horizon\/releases\?q=launcher-v&expanded=true\)/);
+  assert.match(e.description, /Your launcher updates itself; new here\? \[Download it\]\(https:\/\/github\.com\/ludovic111\/horizon\/releases\?q=launcher&expanded=true\)/);
   const empty = rel.releaseMessage('horizon', byTag('launcher-v0.1.1'), ROLE).embeds[0];
   assert.equal(empty.title, 'Horizon launcher 0.1.1');
   assert.match(empty.description, /^Your launcher updates itself/);
