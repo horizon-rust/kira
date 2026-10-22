@@ -20,7 +20,7 @@ export const LINKS = {
   github: 'https://github.com/ludovic111',
   horizon: 'https://github.com/ludovic111/horizon',
   horizonSite: 'https://playhorizon.dev',
-  horizonLauncher: 'https://github.com/ludovic111/horizon/releases?q=launcher-v&expanded=true',
+  horizonLauncher: 'https://github.com/ludovic111/horizon/releases?q=launcher&expanded=true',
   horizonIssues: 'https://github.com/ludovic111/horizon/issues',
   horizonPulls: 'https://github.com/ludovic111/horizon/pulls',
   youtube: 'https://youtube.com/@lu4ovic',
