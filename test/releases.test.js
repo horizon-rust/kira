@@ -13,11 +13,13 @@ const byTag = (tag) => structuredClone(horizon.find((r) => r.tag_name === tag));
 const ROLE = '1559242159775940619';
 const SINCE = '2026-10-13T00:00:00Z';
 
-test('drafts, prereleases and releases from before the switch are never announced', () => {
+test('drafts and releases from before the switch are never announced; pre-releases only for the game', () => {
   const draft = { ...byTag('launcher-v0.1.1'), id: 1, tag_name: 'launcher-v0.1.2', draft: true, published_at: null };
-  const pre = { ...byTag('v2026.10.13.1'), id: 2, prerelease: true };
-  const tags = rel.fresh([draft, pre, ...horizon], [], SINCE).map((r) => r.tag_name);
-  assert.deepEqual(tags, ['v2026.10.13', 'launcher-v0.1.1', 'v2026.10.13.1']); // oldest first; 2026.10.12 is older than SINCE
+  const pre = { ...byTag('v2026.10.13.1'), id: 2, tag_name: 'v2026.10.13.2', prerelease: true, published_at: '2026-10-14T00:00:00Z' };
+  const preLauncher = { ...byTag('launcher-v0.1.1'), id: 3, tag_name: 'launcher@0.2.9', prerelease: true };
+  const tags = rel.fresh([draft, pre, preLauncher, ...horizon], [], SINCE).map((r) => r.tag_name);
+  assert.deepEqual(tags, ['v2026.10.13', 'launcher-v0.1.1', 'v2026.10.13.1', 'v2026.10.13.2']); // oldest first; 2026.10.12 is older than SINCE
+  assert.deepEqual(rel.fresh([pre], [], SINCE, [], 'kimchi'), []); // other repos' pre-releases: never
   // The real cut-over (since 2026-10-23): every release in the fixture is older, so none is posted again.
   assert.deepEqual(rel.fresh(horizon, []).map((r) => r.tag_name), []);
   assert.deepEqual(rel.fresh(horizon, [], '2026-10-13T18:00:00Z').map((r) => r.tag_name), ['v2026.10.13.1']);
@@ -36,7 +38,7 @@ test('once per release id: a draft that gets published is announced once', () =>
   assert.deepEqual(rel.remember(rel.remember([], 1), 1), [1]);
   assert.equal(Array.from({ length: 500 }, (_, i) => i).reduce(rel.remember, []).length, rel.KEEP);
   // More ids kept than releases listed (feeds.js: two pages of 100), or a listed release falls out and is posted again.
-  assert.ok(rel.KEEP > 200 && rel.KEEP_ALPHA > 200);
+  assert.ok(rel.KEEP > 200);
 });
 
 test('newReleases reads the REST API, with or without a token', async () => {
@@ -171,103 +173,107 @@ test('the agents announcement: one endpoint value, the three setups, only once /
   assert.ok(agentSnippets('https://x/mcp', 'kira_t').includes('Bearer kira_t'));
 });
 
-test('pings: a game release with New pings the role; fix-only game releases and launcher releases are quiet', () => {
-  const ping = (tag, body) => rel.releaseMessage('horizon', { tag_name: tag, name: tag, html_url: 'u', body }, ROLE);
-  const feature = ping('v2026.10.15', '### New\n- **Controllers:** play with a pad.\n### Fixed\n- A crash.');
-  assert.match(feature.content, new RegExp(`^<@&${ROLE}> `));
-  assert.deepEqual(feature.allowedMentions, { parse: [], roles: [ROLE] });
-  const fixes = ping('v2026.10.15.1', '### Fixed\n- Composters take items.');
-  assert.doesNotMatch(fixes.content, /<@&/);
-  assert.deepEqual(fixes.allowedMentions, { parse: [], roles: [] });
-  const launcher = ping('launcher-v0.1.9', '### New\n- A logs button.');
-  assert.doesNotMatch(launcher.content, /<@&/);
-  assert.deepEqual(launcher.allowedMentions, { parse: [], roles: [] });
-});
-
-test('@Releases is pinged at most once every 6 hours; the next ping lists what came in between', () => {
-  const hour = 60 * 60 * 1000;
-  const game = (tag, added) => ({ tag_name: tag, name: tag, html_url: 'u', body: `### New\n- ${added}\n\n### Fixed\n- A fix.` });
-  const first = rel.pingDecision('horizon', game('v2026.10.15', 'Zoom'), {}, 0);
-  assert.equal(first.ping, true);
-  const quiet = rel.pingDecision('horizon', game('v2026.10.15.1', 'Minimap'), first.pings, 2 * hour);
-  assert.equal(quiet.ping, false);
-  assert.equal(quiet.applies, true);
-  assert.deepEqual(quiet.pings.pending, ['Minimap']);
-  const fixOnly = rel.pingDecision('horizon', { tag_name: 'v2026.10.15.2', name: 'x', body: '### Fixed\n- A fix.' }, quiet.pings, 3 * hour);
-  assert.equal(fixOnly.applies, false);
-  assert.equal(fixOnly.pings, quiet.pings);
-  const next = rel.pingDecision('horizon', game('v2026.10.15.3', 'Keystrokes'), quiet.pings, 6 * hour);
-  assert.equal(next.ping, true);
-  assert.deepEqual(next.earlier, ['Minimap']);
-  assert.deepEqual(next.pings, { lastAt: 6 * hour, pending: [] });
-  const m = rel.releaseMessage('horizon', game('v2026.10.15.3', 'Keystrokes'), ROLE, next.earlier);
-  assert.match(m.content, new RegExp(`<@&${ROLE}>`));
-  const field = m.embeds[0].fields.find((f) => f.name === 'Also new since the last ping');
-  assert.equal(field.value, '• Minimap');
-  const silent = rel.releaseMessage('horizon', game('v2026.10.15.1', 'Minimap'), null);
-  assert.doesNotMatch(silent.content, /<@&/);
-  assert.deepEqual(silent.allowedMentions.roles, []);
-  assert.equal(rel.pingDecision('kimchi', { tag_name: 'v1', body: '### New\n- x' }, {}, 0).applies, false, 'other repos keep their pings');
-});
-
 const NOTES = '### New\n- **Zoom:** hold C to zoom in, like OptiFine does.\n### Fixed\n- Composters take items.';
-const beta = (id, tag, at, extra = {}) => ({ id, tag_name: tag, name: `Horizon ${tag.slice(1)}`, prerelease: true, draft: false,
+const game = (id, tag, at, extra = {}) => ({ id, tag_name: tag, name: `Horizon ${tag.slice(1)}: Zoom`, prerelease: false, draft: false,
   published_at: at, html_url: `https://github.com/ludovic111/horizon/releases/tag/${tag}`, body: NOTES, ...extra });
 
-test('an Alpha is a silent post: no role, no mentions, the @silent flag, the compact notes and the link', () => {
-  const m = rel.alphaMessage('horizon', beta(1, 'v0.2.5', '2026-10-23T10:00:00Z'));
-  assert.equal(m.content, '🧪 Alpha v0.2.5');
-  assert.deepEqual(m.allowedMentions, { parse: [] });
-  assert.equal(m.flags, 4096);
+test('a post pings only when given the role; every other post is @silent, with no mention at all', () => {
+  const pinged = rel.releaseMessage('horizon', game(1, 'v0.2.20', '2026-10-24T20:05:00Z'), ROLE);
+  assert.match(pinged.content, new RegExp(`^<@&${ROLE}> \\*\\*Horizon 0\\.2\\.20: Zoom\\*\\* is out`));
+  assert.deepEqual(pinged.allowedMentions, { parse: [], roles: [ROLE] });
+  assert.equal(pinged.flags, undefined);
+  for (const silent of [rel.releaseMessage('horizon', game(2, 'v0.2.21', '2026-10-24T20:10:00Z'), null),
+    rel.releaseMessage('horizon', { ...game(3, 'launcher@0.2.4', '2026-10-24T20:10:00Z'), body: '### New\n- A logs button.' }, null),
+    rel.releaseMessage('kimchi', fixture('kimchi-releases')[0], null)]) {
+    assert.doesNotMatch(silent.content, /<@/);
+    assert.deepEqual(silent.allowedMentions, { parse: [], roles: [] });
+    assert.equal(silent.flags, rel.SUPPRESS_NOTIFICATIONS);
+  }
   assert.equal(rel.SUPPRESS_NOTIFICATIONS, 4096);
-  const [e] = m.embeds;
-  assert.equal(e.title, 'Horizon 0.2.5');
-  assert.equal(e.url, 'https://github.com/ludovic111/horizon/releases/tag/v0.2.5');
-  assert.match(e.description, /^• \*\*Zoom:\*\* hold C to zoom in, like OptiFine does\.\n• Composters take items\./);
-  assert.match(e.description, /Alpha\*\* channel/);
-  assert.match(e.description, /\[Release notes\]\(https:\/\/github\.com\/ludovic111\/horizon\/releases\/tag\/v0\.2\.5\)/);
-  assert.doesNotMatch(JSON.stringify(m), /<@|@everyone|@here/);
-  const bare = rel.alphaMessage('horizon', beta(2, 'v0.2.6', '2026-10-23T10:10:00Z', { name: '', body: 'Just a build.' }));
-  assert.equal(bare.embeds[0].title, 'v0.2.6');
-  assert.match(bare.embeds[0].description, /^Just a build\./);
-  // the stable post keeps today's format: no flags, the role pinged
-  const stable = rel.releaseMessage('horizon', { ...beta(1, 'v0.2.5', '2026-10-23T10:00:00Z'), prerelease: false }, ROLE);
-  assert.equal(stable.flags, undefined);
-  assert.match(stable.content, new RegExp(`^<@&${ROLE}> \\*\\*Horizon 0\\.2\\.5\\*\\* is out`));
 });
 
-test('Alpha then Stable: each id is posted once per channel, across restarts and a promotion in place', () => {
+test('no channel words and no dates in any post', () => {
+  const at = '2026-10-24T20:05:00Z';
+  const posts = [rel.releaseMessage('horizon', game(1, 'v0.2.20', at), ROLE, ['**0.2.19** Beds']),
+    rel.releaseMessage('horizon', game(2, 'v0.2.21', at, { prerelease: true }), null),
+    rel.releaseMessage('horizon', { ...game(3, 'launcher@0.2.4', at), body: '### Fixed\n- A fix.' }, null),
+    ...horizon.map((r) => rel.releaseMessage('horizon', r, null))];
+  for (const m of posts) {
+    const text = JSON.stringify(m);
+    assert.doesNotMatch(text, /\balpha\b|\bstable\b|nightly|\bbeta\b|about once a day/i, text);
+    assert.equal(m.embeds[0].timestamp, undefined);
+    assert.doesNotMatch(m.content + m.embeds[0].description, /2026-10-/);
+  }
+});
+
+test('@Releases is pinged once a day: the first game release after 20:00 UTC, with what came out since', () => {
+  const at = (day, h, m = 0) => Date.parse(`2026-10-${day}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`);
+  const iso = (t) => new Date(t).toISOString();
+  assert.equal(rel.pingWindow(at(24, 20)), at(24, 20));
+  assert.equal(rel.pingWindow(at(24, 19, 59)), at(23, 20));
+  assert.equal(rel.pingWindow(at(25, 3)), at(24, 20));
+  let pings = { lastAt: at(23, 20, 30), since: [] };
+  const post = (id, tag, t, extra) => {
+    const plan = rel.pingDecision('horizon', game(id, tag, iso(t), extra), pings);
+    pings = plan.pings;
+    return plan;
+  };
+  // the day: every release is silent and joins the list
+  assert.equal(post(1, 'v0.2.20', at(24, 9)).ping, false);
+  assert.equal(post(2, 'v0.2.21', at(24, 14), { name: 'Horizon 0.2.21: Beds, mobs and 3 more fixes' }).ping, false);
+  assert.deepEqual(pings.since, ['**0.2.20** Zoom', '**0.2.21** Beds, mobs and 3 more fixes']);
+  // the first release after 20:00 UTC pings, with that list, and starts a new one
+  const evening = post(3, 'v0.2.22', at(24, 20, 7));
+  assert.equal(evening.ping, true);
+  assert.deepEqual(evening.since, ['**0.2.20** Zoom', '**0.2.21** Beds, mobs and 3 more fixes']);
+  assert.deepEqual(pings, { lastAt: at(24, 20, 7), since: [] });
+  // the rest of that window (until 20:00 UTC the next day) is silent, overnight too
+  assert.equal(post(4, 'v0.2.23', at(24, 20, 30)).ping, false);
+  assert.equal(post(5, 'v0.2.24', at(25, 19, 59)).ping, false);
+  assert.equal(post(6, 'v0.2.25', at(25, 20)).ping, true);
+  // a window with no release before 20:00: the first one in it pings, even the next morning
+  assert.equal(post(7, 'v0.2.26', at(27, 6)).ping, true);
+  assert.equal(post(8, 'v0.2.27', at(27, 7)).ping, false);
+  // pre-releases, launcher releases and other repos never ping and leave the state as it is
+  const before = pings;
+  for (const [repo, r] of [['horizon', game(9, 'v0.2.28', iso(at(27, 21)), { prerelease: true })],
+    ['horizon', game(10, 'launcher@0.2.5', iso(at(27, 21)))], ['kimchi', game(11, 'v1.0.0', iso(at(27, 21)))]]) {
+    const plan = rel.pingDecision(repo, r, pings);
+    assert.equal(plan.ping, false);
+    assert.equal(plan.pings, before);
+  }
+  // no state yet: the first game release pings; the list stays short
+  assert.equal(rel.pingDecision('horizon', game(12, 'v0.2.29', iso(at(28, 10))), {}).ping, true);
+  const many = Array.from({ length: 60 }, (_, i) => `**0.2.${i}** Something`);
+  assert.equal(rel.pingDecision('horizon', game(13, 'v0.2.99', iso(at(28, 10))), { lastAt: at(28, 9), since: many }).pings.since.length, 40);
+  // the ping's post lists them
+  const m = rel.releaseMessage('horizon', game(3, 'v0.2.22', iso(at(24, 20, 7))), ROLE, evening.since);
+  const field = m.embeds[0].fields.find((f) => f.name === 'Out since the last ping');
+  assert.equal(field.value, '• **0.2.20** Zoom\n• **0.2.21** Beds, mobs and 3 more fixes');
+  assert.equal(rel.sinceLine({ tag_name: 'v0.2.30', name: '' }), '**0.2.30**');
+});
+
+test('one post per release id, across restarts; the old Alpha posts are never posted again', () => {
   const at = (h, m) => `2026-10-23T${h}:${m}:00Z`;
-  const a = beta(11, 'v0.2.5', at('10', '00'));
-  const b = beta(12, 'v0.2.6', at('10', '10'));
-  const launcher = { ...beta(13, 'launcher@0.2.1', at('10', '05')), prerelease: false };
-  const tags = (list, stable, nights) => rel.fresh(list, stable, SINCE, nights).map((r) => `${r.prerelease ? 'alpha' : 'stable'} ${r.tag_name}`);
-  // without an Alpha list (other repos), pre-releases stay unposted
-  assert.deepEqual(tags([a, b, launcher], [], null), ['stable launcher@0.2.1']);
-  // new pre-releases: Alpha, oldest first; the launcher (not a pre-release) is stable as today
-  assert.deepEqual(tags([b, launcher, a], [], []), ['alpha v0.2.5', 'stable launcher@0.2.1', 'alpha v0.2.6']);
-  // after posting them, a restart (same state) posts nothing
-  let nights = [11, 12].reduce((ids, id) => rel.rememberAlpha(ids, id), []);
-  let stable = rel.remember([], 13);
-  assert.deepEqual(tags([a, b, launcher], stable, nights), []);
-  // v0.2.5 is promoted in place: same id, no longer a pre-release, notes rewritten: posted once as Stable
-  const promoted = { ...a, prerelease: false, body: '### New\n- **Zoom:** rewritten.' };
-  assert.deepEqual(tags([b, promoted, launcher], stable, nights), ['stable v0.2.5']);
-  stable = rel.remember(stable, 11);
-  assert.deepEqual(tags([b, promoted, launcher], stable, nights), []); // never twice, even though the Alpha list still has it
-  // an Alpha id forgotten from the list (never) would repost; 400 ids are kept
-  assert.equal(Array.from({ length: 500 }, (_, i) => i).reduce((ids, id) => rel.rememberAlpha(ids, id), []).length, 400);
-  // drafts, old releases and non-game pre-releases are never Alpha posts
-  const odd = [beta(21, 'v0.2.7', at('11', '00'), { draft: true, published_at: null }), beta(22, 'v0.2.8', '2026-10-01T00:00:00Z'),
-    beta(23, 'launcher@0.2.2', at('11', '30')), beta(24, 'archive/wip', at('11', '40'))];
-  assert.deepEqual(tags(odd, [], []), []);
-  assert.equal(rel.isAlpha('horizon', a), true);
-  assert.equal(rel.isAlpha('kimchi', a), false);
-  assert.equal(rel.isAlpha('horizon', promoted), false);
+  const oldAlpha = game(11, 'v0.2.5', at('10', '00'), { prerelease: true });
+  const newer = game(12, 'v0.2.13', at('12', '10'));
+  const launcher = game(13, 'launcher@0.2.2', at('12', '05'));
+  const earlier = [11]; // state.nightlies: posted as Alpha before the single channel
+  const tags = (list, posted) => rel.fresh(list, posted, SINCE, earlier).map((r) => r.tag_name);
+  assert.deepEqual(tags([newer, launcher, oldAlpha], []), ['launcher@0.2.2', 'v0.2.13']);
+  let posted = [13, 12].reduce(rel.remember, []);
+  assert.deepEqual(tags([newer, launcher, oldAlpha], posted), []);
+  // an old Alpha edited into a release (same id) is not posted a second time
+  assert.deepEqual(tags([{ ...oldAlpha, prerelease: false, body: '### New\n- rewritten' }, newer], posted), []);
+  // a game pre-release made after the switch (by hand) is posted once, silently (pingDecision never pings it)
+  const pre = game(14, 'v0.3.0-rc.1', at('13', '00'), { prerelease: true });
+  assert.deepEqual(tags([pre, newer], posted), ['v0.3.0-rc.1']);
+  posted = rel.remember(posted, 14);
+  assert.deepEqual(tags([{ ...pre, prerelease: false }, newer], posted), []);
 });
 
-test('newReleases reads a second page when the first is full, and passes the Alpha list', async () => {
-  const mk = (n, off) => Array.from({ length: n }, (_, i) => beta(1000 + off + i, `v0.2.${off + i}`, `2026-10-23T10:${String(i % 60).padStart(2, '0')}:00Z`));
+test('newReleases reads a second page when the first is full, and skips the old Alpha ids', async () => {
+  const mk = (n, off) => Array.from({ length: n }, (_, i) => game(1000 + off + i, `v0.2.${off + i}`, `2026-10-23T10:${String(i % 60).padStart(2, '0')}:00Z`, { prerelease: true }));
   const urls = [];
   const fetchImpl = async (url) => {
     urls.push(url);
@@ -281,7 +287,8 @@ test('newReleases reads a second page when the first is full, and passes the Alp
   assert.equal(got.length, 101);
   assert.equal(got.filter((r) => !r.prerelease).length, 1);
   urls.length = 0;
-  assert.equal((await newReleases(gh, 'horizon', [], null)).length, 1); // other repos: no Alpha
+  assert.equal((await newReleases(gh, 'horizon', [], [1000, 1001])).length, 99);
+  assert.equal((await newReleases(gh, 'horizon', [])).length, 101);
   assert.equal((await newReleases(gh, 'kimchi', [], [])).filter((r) => r.prerelease).length, 0);
 });
 
