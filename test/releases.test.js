@@ -18,7 +18,9 @@ test('drafts, prereleases and releases from before the switch are never announce
   const pre = { ...byTag('v2026.10.13.1'), id: 2, prerelease: true };
   const tags = rel.fresh([draft, pre, ...horizon], [], SINCE).map((r) => r.tag_name);
   assert.deepEqual(tags, ['v2026.10.13', 'launcher-v0.1.1', 'v2026.10.13.1']); // oldest first; 2026.10.12 is older than SINCE
-  assert.deepEqual(rel.fresh(horizon, []).map((r) => r.tag_name), ['v2026.10.13.1']); // the real cut-over
+  // The real cut-over (since 2026-10-23): every release in the fixture is older, so none is posted again.
+  assert.deepEqual(rel.fresh(horizon, []).map((r) => r.tag_name), []);
+  assert.deepEqual(rel.fresh(horizon, [], '2026-10-13T18:00:00Z').map((r) => r.tag_name), ['v2026.10.13.1']);
 });
 
 test('once per release id: a draft that gets published is announced once', () => {
@@ -32,7 +34,9 @@ test('once per release id: a draft that gets published is announced once', () =>
   assert.equal(rel.fresh([published], announced, SINCE).length, 0);
   assert.equal(rel.fresh([{ ...published, name: 'renamed', body: 'edited notes' }], announced, SINCE).length, 0);
   assert.deepEqual(rel.remember(rel.remember([], 1), 1), [1]);
-  assert.equal(Array.from({ length: 150 }, (_, i) => i).reduce(rel.remember, []).length, 100);
+  assert.equal(Array.from({ length: 500 }, (_, i) => i).reduce(rel.remember, []).length, rel.KEEP);
+  // More ids kept than releases listed (feeds.js: two pages of 100), or a listed release falls out and is posted again.
+  assert.ok(rel.KEEP > 200 && rel.KEEP_ALPHA > 200);
 });
 
 test('newReleases reads the REST API, with or without a token', async () => {
@@ -42,7 +46,7 @@ test('newReleases reads the REST API, with or without a token', async () => {
     return new Response(JSON.stringify(horizon), { status: 200 });
   };
   const got = await newReleases(makeGitHub({ fetchImpl }), 'horizon', []);
-  assert.deepEqual(got.map((r) => r.tag_name), ['v2026.10.13.1']);
+  assert.deepEqual(got.map((r) => r.tag_name), []); // all older than SINCE
   assert.match(calls[0].url, /^https:\/\/api\.github\.com\/repos\/ludovic111\/horizon\/releases/);
   assert.equal(calls[0].auth, undefined);
   await newReleases(makeGitHub({ token: 't', fetchImpl }), 'horizon', []);
@@ -279,4 +283,18 @@ test('newReleases reads a second page when the first is full, and passes the Alp
   urls.length = 0;
   assert.equal((await newReleases(gh, 'horizon', [], null)).length, 1); // other repos: no Alpha
   assert.equal((await newReleases(gh, 'kimchi', [], [])).filter((r) => r.prerelease).length, 0);
+});
+
+test('no repost cascade: a listed stable release stays announced while newer ones are posted', () => {
+  // 200 stable releases listed (two pages), all after SINCE, then 150 new ones posted one by one.
+  const at = (i) => new Date(Date.parse(rel.SINCE) + (i + 1) * 60_000).toISOString();
+  const listed = Array.from({ length: 200 }, (_, i) => ({ id: i + 1, tag_name: `v0.2.${i}`, prerelease: false, draft: false, published_at: at(i) }));
+  let announced = listed.map((r) => r.id).reduce(rel.remember, []);
+  for (let i = 200; i < 350; i++) {
+    const list = [{ id: i + 1, tag_name: `v0.2.${i}`, prerelease: false, draft: false, published_at: at(i) }, ...listed.slice(i - 199)];
+    const now = rel.fresh(list, announced);
+    assert.deepEqual(now.map((r) => r.id), [i + 1]);
+    announced = rel.remember(announced, i + 1);
+    listed.push(list[0]);
+  }
 });
