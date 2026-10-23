@@ -9,9 +9,13 @@ import { COLOR, LINKS, GITHUB } from './config.js';
 
 const RELEASE_BLUE = 0x5aa9ff; // the 📦 Releases role's colour, for the other repos
 
-// Releases published before this were announced by the old Atom feed: never posted again.
-export const SINCE = '2026-10-13T18:00:00Z';
-const KEEP = 100; // stable ids remembered per repo
+// Releases published before this are never posted (again). It moved from 2026-10-13T18:00Z (the old Atom feed)
+// on 2026-10-23, after the repost cascade below: everything before is in #releases already, and 0.2.0 came after.
+export const SINCE = '2026-10-23T00:00:00Z';
+// Stable ids remembered per repo. It must stay above the releases listed (feeds.js: up to 200): with 100,
+// each new post pushed the oldest id out while that release was still listed, so it was posted again,
+// which pushed the next one out (2026-10-23: about 130 old releases reposted in #releases).
+export const KEEP = 400;
 export const KEEP_ALPHA = 400; // Alpha ids: more than the releases listed (feeds.js), so none is posted twice
 export const SUPPRESS_NOTIFICATIONS = 1 << 12; // Discord's @silent message flag (4096): no push for anyone
 
