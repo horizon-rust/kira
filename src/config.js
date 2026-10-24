@@ -56,6 +56,9 @@ export const agentSnippets = (url, token) => [
 export const ROLES = [
   { key: 'releases', name: '📦 Releases', color: 0x5aa9ff, self: true, label: 'Every release' },
   { key: 'horizon', name: '📣 Big news', color: COLOR, self: true, label: 'Big news' },
+  // Not key 'videos': that is the old role of the all-projects server (🔔 Videos), in RETIRED_ROLES, which setup
+  // deletes by key when nobody holds it. Pinged by every post of src/videos.js.
+  { key: 'newvideos', name: '🎬 Videos', color: 0xff4d4d, self: true, label: 'New videos' },
   { key: 'contributor', was: 'ai', name: '🛠️ Contributor', color: 0x9b7bff, self: true, label: 'Contributor' },
   { key: 'modder', name: '🧩 Modder', color: 0x4cc38a, self: true, label: 'Modder' },
   { key: 'lvl5', name: 'lvl 5', color: 0x95a5a6, level: 5 },

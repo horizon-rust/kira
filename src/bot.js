@@ -74,12 +74,12 @@ async function checkReleases() {
   }
 }
 
-// Ludovic's new YouTube videos → #ludovic-videos, each once (state.videos; src/videos.js). Until setup has made
+// Ludovic's new YouTube videos → #ludovic-videos, each once (state.videos; src/videos.js), pinging the 🎬 Videos role. Until setup has made
 // the channel nothing is fetched or recorded, so the first poll after setup is the one that records what is out.
 async function checkVideos() {
   const target = channel('ludovicvideos');
   if (!target) return console.log('videos: no #ludovic-videos yet (run setup, then restart)');
-  await videos.poll({ state, save, send: (msg) => target.send(msg) });
+  await videos.poll({ state, save, role: state.roles.newvideos, send: (msg) => target.send(msg) });
 }
 
 // Hand-written announcements (ONE_OFFS in config.js), each posted once (its id in state.oneOffs). `when`:

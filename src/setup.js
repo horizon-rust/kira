@@ -375,6 +375,7 @@ async function onboarding(guild) {
           options: [
             option('📣', 'Big news', 'Major Horizon announcements', [r.horizon], []),
             option('📦', 'Every release', 'Each new Horizon version and launcher', [r.releases], []),
+            option('🎬', 'New videos', "Ludovic's new YouTube videos", [r.newvideos], []),
           ],
         },
       ],
@@ -397,7 +398,7 @@ async function serverGuide(guild) {
     new_member_actions: [
       action('rules', 0, 'Read the rules', 'Kira enforces them, day and night', '📜'),
       action('horizoninfo', 0, 'Get Horizon', 'Download the launcher, see what it is', '🌅'),
-      action('welcome', 0, 'Pick your roles', 'Pings for news and releases, contributor', '🎭'),
+      action('welcome', 0, 'Pick your roles', 'Pings for news, releases and videos, contributor', '🎭'),
       action('introductions', 1, 'Introduce yourself', 'One message, with the template', '👋'),
       action('horizonchat', 1, 'Say hi in #horizon-chat', 'Talk about Horizon', '💬'),
     ],

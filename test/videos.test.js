@@ -31,12 +31,12 @@ test('the feed: video id, title (entities decoded) and date of every entry, the 
 test('the post: one line with the title, then the watch link alone on its line, no mentions', () => {
   const m = videos.message(entry('cykDpzoYMSA', '2026-10-16T11:30:11.000Z', "this isn't minecraft (it's 5x faster)"));
   assert.equal(m.content, "🎬 New video: **this isn't minecraft (it's 5x faster)**\nhttps://www.youtube.com/watch?v=cykDpzoYMSA");
-  assert.deepEqual(m.allowedMentions, { parse: [] });
+  assert.deepEqual(m.allowedMentions, { parse: [], roles: [] }); // no role known: nobody is pinged
   // Markdown in a title is plain text; so are masked links and mentions
   const odd = videos.message(entry('abcdefghijk', '2026-10-16T00:00:00Z', '**bold** [x](https://evil.example) @everyone _a_'));
   assert.equal(odd.content.split('\n').length, 2);
   assert.equal(odd.content, '🎬 New video: **\\*\\*bold\\*\\* \\[x\\](https://evil.example) @everyone \\_a\\_**\nhttps://www.youtube.com/watch?v=abcdefghijk');
-  assert.deepEqual(odd.allowedMentions, { parse: [] });
+  assert.deepEqual(odd.allowedMentions, { parse: [], roles: [] });
 });
 
 test('fresh: not posted yet, not older than the first run, oldest first', () => {
@@ -136,4 +136,38 @@ test('#ludovic-videos: read-only, in "start here" right after #announcements, wi
   assert.equal(spec.type, 'text');
   assert.equal(spec.readonly, true);
   assert.equal(spec.topic, "Ludovic's new YouTube videos, posted by Kira as they come out.");
+});
+
+test('the post pings the 🎬 Videos role and only that role', async () => {
+  const ROLE = '1559242159775940999';
+  const m = videos.message(entry('cykDpzoYMSA', '2026-10-16T11:30:11.000Z', 'hello @everyone <@&123456789012345678>'), ROLE);
+  assert.equal(m.content, `<@&${ROLE}> 🎬 New video: **hello @everyone <@&123456789012345678\\>**\nhttps://www.youtube.com/watch?v=cykDpzoYMSA`);
+  assert.deepEqual(m.allowedMentions, { parse: [], roles: [ROLE] }); // a mention inside the title cannot fire
+  assert.deepEqual(videos.message(entry('cykDpzoYMSA', '2026-10-16T11:30:11.000Z'), null).allowedMentions, { parse: [], roles: [] });
+  // poll hands the role to every post
+  const state = { videos: { since: '2026-10-25T00:00:00.000Z', ids: [] } };
+  const sent = [];
+  await videos.poll({ state, role: ROLE, send: async (x) => sent.push(x), fetchImpl: serving(feedOf([entry('video000001', '2026-10-25T13:00:00Z', 'new')])), log: quiet });
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].content, new RegExp(`^<@&${ROLE}> 🎬 New video: \\*\\*new\\*\\*\\n`));
+  assert.deepEqual(sent[0].allowedMentions, { parse: [], roles: [ROLE] });
+});
+
+test('🎬 Videos: a role people pick (buttons, Onboarding), not the retired "videos" role', async () => {
+  const { ROLES, RETIRED_ROLES } = await import('../src/config.js');
+  const { rolesMessage } = await import('../src/texts.js');
+  const spec = ROLES.find((r) => r.key === 'newvideos');
+  assert.equal(spec.name, '🎬 Videos');
+  assert.equal(spec.self, true);
+  assert.ok(!RETIRED_ROLES.includes('newvideos')); // setup deletes retired roles by key; 'videos' is the old 🔔 Videos
+  assert.ok(RETIRED_ROLES.includes('videos'));
+  assert.notEqual(spec.name, '🔔 Videos');
+  assert.equal(new Set(ROLES.map((r) => r.key)).size, ROLES.length);
+  assert.equal(new Set(ROLES.map((r) => r.name)).size, ROLES.length);
+  const keys = ROLES.map((r) => r.key);
+  assert.ok(Math.abs(keys.indexOf('newvideos') - keys.indexOf('releases')) <= 2); // next to the other ping roles
+  const ids = rolesMessage({ channels: {} }).components.flatMap((row) => row.components.map((b) => b.data.custom_id));
+  assert.ok(ids.includes('role:newvideos'));
+  assert.ok(ids.every((id) => ROLES.some((r) => `role:${r.key}` === id && r.self)));
+  assert.match(rolesMessage({ channels: {} }).embeds[0].data.description, /🎬 every new video/);
 });

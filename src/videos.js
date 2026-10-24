@@ -44,11 +44,13 @@ export const remember = (posted = [], id) => [id, ...posted.filter((x) => x !== 
 
 export const watchUrl = (id) => `https://www.youtube.com/watch?v=${id}`;
 
-// The message for one video: a line, then the bare link on its own line so Discord shows the player.
-// The title is plain text (Markdown and mentions in it do nothing); nobody is pinged.
-export function message(video) {
+// The message for one video: the 🎬 Videos role (when its id is known), a line, then the bare link on its own
+// line so Discord shows the player. The title is plain text (Markdown and mentions in it do nothing): the only
+// mention that can fire is that one role, the only one `allowedMentions` lets through.
+export function message(video, role = null) {
   const title = video.title.replace(/([\\*_~`|>[\]])/g, '\\$1');
-  return { content: `🎬 New video: **${title.length > 300 ? title.slice(0, 299) + '…' : title}**\n${watchUrl(video.id)}`, allowedMentions: { parse: [] } };
+  const ping = role ? `<@&${role}> ` : '';
+  return { content: `${ping}🎬 New video: **${title.length > 300 ? title.slice(0, 299) + '…' : title}**\n${watchUrl(video.id)}`, allowedMentions: { parse: [], roles: role ? [role] : [] } };
 }
 
 export async function fetchFeed(fetchImpl = fetch, channelId = VIDEOS.channelId) {
@@ -60,8 +62,8 @@ export async function fetchFeed(fetchImpl = fetch, channelId = VIDEOS.channelId)
 // One poll. `state.videos` = { since, ids }. The first successful fetch only records what is already out
 // (nothing is posted) and sets `since`: nothing published before that is ever posted. Then each new video is
 // sent oldest first and remembered right after its send, so a failure half-way posts the rest next time and
-// never a video twice. Returns the videos posted. Feed errors are logged and retried at the next poll.
-export async function poll({ state, send, save = () => {}, fetchImpl, log = console, now = Date.now() }) {
+// never a video twice. `role`: the id of the role to ping. Returns the videos posted. Feed errors are logged and retried at the next poll.
+export async function poll({ state, send, role = null, save = () => {}, fetchImpl, log = console, now = Date.now() }) {
   let entries;
   try {
     entries = await fetchFeed(fetchImpl);
@@ -78,7 +80,7 @@ export async function poll({ state, send, save = () => {}, fetchImpl, log = cons
   const posted = [];
   for (const video of fresh(entries, state.videos.ids, state.videos.since)) {
     try {
-      const msg = await send(message(video));
+      const msg = await send(message(video, role));
       state.videos.ids = remember(state.videos.ids, video.id);
       save();
       posted.push(video);

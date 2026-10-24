@@ -18,7 +18,7 @@ projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no pai
   ONE locked, pinned **📌 How to post here: read me first** post (guide, template, rules). It is Kira's own
   post: never checked against the template, no reactions, never a GitHub issue, `/done` refuses it.
 - **Roles** (top to bottom): kira · 👑 ludovic · 🛡️ Mod · 🧪 Horizon Tester · 💎 Booster · lvl 50 → lvl 5 ·
-  🛠️ Contributor · 🧩 Modder · 📣 Big news · 📦 Releases.
+  🛠️ Contributor · 🧩 Modder · 🎬 Videos · 📣 Big news · 📦 Releases.
 - **Onboarding** (2 questions when you join: what brings you to Horizon, which pings; the default
   channels, `DEFAULT_CHANNELS` in `config.js`, include #new-members) and the
   **Server Guide** (Discord's newcomer home; bots get "Bots cannot use this endpoint", so Ludovic applies it
@@ -50,7 +50,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | Forums | Each new post is checked against its template; Kira lists what's missing and closes it after an hour if it's still missing. `/done` closes your post with its tag (solved, taken, found, filled, done) |
 | Community | Welcome in `#new-members` (grouped when many people arrive), role buttons, 👍/👎 on ideas, 🔥 in #showcase, ⭐ hall of fame (5 stars), `/remind` |
 | GitHub issues | Posts in `#horizon-bugs` and `#horizon-ideas` that pass their template become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `/issue` (staff). Off until its token exists: see below |
-| Ludovic's videos | His YouTube channel (@lu4ovic) → `#ludovic-videos`, a read-only channel: every new video, Short or live stream, once, as `🎬 New video: **title**` and its link (Discord shows the player), no pings. The channel's public Atom feed every 10 minutes ([`src/videos.js`](src/videos.js), channel id in `VIDEOS` in `config.js`); the ids posted are in `state.videos`. The first run only records the videos already out and sets the date before which nothing is ever posted; a feed error is logged and retried 10 minutes later |
+| Ludovic's videos | His YouTube channel (@lu4ovic) → `#ludovic-videos`, a read-only channel: every new video, Short or live stream, once, as `<@&🎬 Videos> 🎬 New video: **title**` and its link (Discord shows the player). Pings only the opt-in **🎬 Videos** role (picked in Onboarding's "Want to be pinged?" or with the buttons in `#welcome`; `allowedMentions: { parse: [], roles: [that role] }`, so nothing in a title can ping; the role's key is `newvideos`, not the retired `videos` of the old server). The channel's public Atom feed every 10 minutes ([`src/videos.js`](src/videos.js), channel id in `VIDEOS` in `config.js`); the ids posted are in `state.videos`. The first run only records the videos already out and sets the date before which nothing is ever posted; a feed error is logged and retried 10 minutes later. Giving the role to the members already on the server is a one-off: `scripts/grant-videos-role.js` (below) |
 | Releases | Releases of ludovic111/horizon → `#releases`: the game (`vX.Y.Z` tags, a summary of New and Fixed) and the launcher (`launcher@X.Y.Z`; before 0.2 `launcher-v…`), nothing else (REST API every 3 minutes, newest 200; [`src/releases.js`](src/releases.js)). **Alpha**: every game pre-release gets a short silent post (`🧪 Alpha <tag>`, notes, link; no role, `allowedMentions: { parse: [] }`, Discord's `SUPPRESS_NOTIFICATIONS` flag 4096), once by release id (`state.nightlies`, the stored name from when the channel was called Nightly). **Stable**: when a game release is promoted in place (same id, no longer a pre-release) it is posted again, once (`state.releases`), as before: the 📦 Releases role is pinged only for a game release with a **New** section, at most once every 6 hours (a New release in between posts quietly and the next ping lists what it added, "Also new since the last ping"); launcher releases post quietly. The first run with Alpha posts only records the pre-releases already out. Drafts never. Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
 | Work board | The kanban in `#work-board`, `#dev-log`, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/status`, `/goodfirst`, `/notify`: see below |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
@@ -162,6 +162,17 @@ the staff channel `#agent-log` (grouped every 30 s) and the service log.
 | The host is compromised | Kira runs on Railway, not on Ludovic's machines, as the unprivileged `node` user (the entrypoint only chowns `/data` as root); it holds only the Discord bot token and the fine-grained GitHub token (Issues: write on horizon). Nothing on the internet talks to the ThinkPad |
 | The admin routes (`/admin/backup`, `/admin/restore`: Kira's files, for moving hosts) | **Off**: `KIRA_ADMIN_TOKEN_SHA256` is empty on Railway, so the routes don't exist. Turned on only for a move (below), with a separate random token whose secret is only in 1Password; constant-time check; failures rate-limited like logins; a restore must have a well-formed agents.json. A backup holds token hashes, never tokens |
 | Secrets in transit to the host | Sealed: `op read … \| node scripts/seal.mjs <host>/seal-key` encrypts with a key generated on the host's volume; only ciphertext (`FOO_SEALED`) is in Railway's variables and anyone's terminal |
+
+## One-off: the 🎬 Videos role for everyone already here
+
+After setup made the role and Kira is deployed with the ping, give it to the members already on the server
+(bots skipped; from then on it is opt-in). Sequential, honours Discord's 429 `retry_after`, safe to run again
+(members who have it are skipped), prints counts only:
+
+    ~/fleet/op run --env-file .env.op -- node scripts/grant-videos-role.js --dry-run
+    ~/fleet/op run --env-file .env.op -- node scripts/grant-videos-role.js
+
+`--role <id>` skips the lookup by name. The code is [`src/grant.js`](src/grant.js).
 
 ## Hosting (Railway)
 
