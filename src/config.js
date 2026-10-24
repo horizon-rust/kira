@@ -98,6 +98,7 @@ export const LAYOUT = [
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'Big Horizon news. Pick the 📣 Big news role to get pinged.' },
+      { key: 'ludovicvideos', name: 'ludovic-videos', type: 'text', readonly: true, topic: 'Ludovic\'s new YouTube videos, posted by Kira as they come out.' },
     ],
   },
   {
@@ -186,6 +187,14 @@ export const PINS = {
 // Releases announced in #releases: Horizon's game (`v…` tags) and launcher (`launcher-v…` tags) only.
 export const RELEASE_REPOS = ['horizon'];
 export const RELEASE_EVERY_MS = 3 * 60 * 1000; // one GitHub API request each time
+
+// Ludovic's YouTube videos → #ludovic-videos (src/videos.js): the channel's public Atom feed, polled every 10 minutes.
+// His channel is @lu4ovic (LINKS.youtube).
+export const VIDEOS = {
+  channelId: 'UCNpwCgIK6O6oct9ra9ohZ7w',
+  feedUrl: 'https://www.youtube.com/feeds/videos.xml',
+  everyMs: 10 * 60 * 1000,
+};
 
 // One-off announcements Kira posts once (the key is remembered in state.oneOffs), for big releases.
 // `role`: the only role pinged (none if absent). Posted when Kira starts; written by hand.

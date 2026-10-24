@@ -2,11 +2,12 @@
 // KIRA_DISCORD=off: no Discord connection at all, only the board (from GitHub) and the MCP server, to test a
 // new host. PORT (Railway) or KIRA_HTTP_PORT: where the MCP server listens; none, no server.
 import { MessageFlags, MessageType } from 'discord.js';
-import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS } from './config.js';
+import { GUILD_ID, RELEASE_EVERY_MS, VIDEOS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS } from './config.js';
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
 import { releaseMessage, alphaMessage, remember, rememberAlpha, announced, pingDecision } from './releases.js';
 import { makeGitHub } from './github.js';
+import * as videos from './videos.js';
 import { linkify } from './texts.js';
 import * as moderation from './features/moderation.js';
 import * as levels from './features/levels.js';
@@ -73,6 +74,14 @@ async function checkReleases() {
   }
 }
 
+// Ludovic's new YouTube videos → #ludovic-videos, each once (state.videos; src/videos.js). Until setup has made
+// the channel nothing is fetched or recorded, so the first poll after setup is the one that records what is out.
+async function checkVideos() {
+  const target = channel('ludovicvideos');
+  if (!target) return console.log('videos: no #ludovic-videos yet (run setup, then restart)');
+  await videos.poll({ state, save, send: (msg) => target.send(msg) });
+}
+
 // Hand-written announcements (ONE_OFFS in config.js), each posted once (its id in state.oneOffs). `when`:
 // posted only once that is on ('agents': /agent connect open). `editable`: edited in place at every start.
 const ON = { agents: () => AGENTS.issuance };
@@ -133,6 +142,8 @@ client.once('clientReady', async () => {
   console.log(`Kira ready as ${client.user.tag}, ${commands.length} commands`);
   await checkReleases();
   setInterval(checkReleases, RELEASE_EVERY_MS);
+  checkVideos().catch((e) => console.error('videos', e.message));
+  setInterval(() => checkVideos().catch((e) => console.error('videos', e.message)), VIDEOS.everyMs);
   await postOneOffs();
 });
 
