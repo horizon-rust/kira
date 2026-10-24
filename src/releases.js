@@ -1,10 +1,10 @@
 // GitHub releases → #releases. The source is the REST API (`GET /repos/<owner>/<repo>/releases`), not
 // the Atom feed: the feed lists bare tags and drafts, so Kira once announced a launcher still being built.
-// Published releases are posted by release id (a draft keeps its id when it is published). Horizon's game
-// releases are pre-releases first (Alpha, many a day) and are promoted in place to stable about once a day:
-// each pre-release is posted once as a silent Alpha, and the same id once more, with the ping, when it
-// becomes stable. Ids are tracked separately per channel. This file is pure (no Discord, no network) so it
-// can be tested; bot.js sends.
+// Published releases are posted by release id (a draft keeps its id when it is published), each one once.
+// Horizon has one release channel since 2026-10-23 (Ludovic: no more Alpha and Stable): every game release is
+// the release, published many times a day. One post per release; @Releases is pinged at most once a day, by the
+// first game release published after 20:00 UTC, and that post lists what came out since the last ping. Every
+// other post is @silent. This file is pure (no Discord, no network) so it can be tested; bot.js sends.
 import { COLOR, LINKS, GITHUB } from './config.js';
 
 const RELEASE_BLUE = 0x5aa9ff; // the 📦 Releases role's colour, for the other repos
@@ -12,34 +12,25 @@ const RELEASE_BLUE = 0x5aa9ff; // the 📦 Releases role's colour, for the other
 // Releases published before this are never posted (again). It moved from 2026-10-13T18:00Z (the old Atom feed)
 // on 2026-10-23, after the repost cascade below: everything before is in #releases already, and 0.2.0 came after.
 export const SINCE = '2026-10-23T00:00:00Z';
-// Stable ids remembered per repo. It must stay above the releases listed (feeds.js: up to 200): with 100,
+// Posted ids remembered per repo. It must stay above the releases listed (feeds.js: up to 200): with 100,
 // each new post pushed the oldest id out while that release was still listed, so it was posted again,
 // which pushed the next one out (2026-10-23: about 130 old releases reposted in #releases).
 export const KEEP = 400;
-export const KEEP_ALPHA = 400; // Alpha ids: more than the releases listed (feeds.js), so none is posted twice
 export const SUPPRESS_NOTIFICATIONS = 1 << 12; // Discord's @silent message flag (4096): no push for anyone
 
-// Whether this is an Alpha: a pre-release of Horizon's game (v0.2.N, v2026.10.22.N).
-export const isAlpha = (repo, release) => !!release.prerelease && kind(repo, release.tag_name) === 'game';
-
-// The releases of `list` to announce now, oldest first. `announced` is the list of ids already posted as
-// stable; `alphas` the ids already posted as Alpha, or null for a repo with no Alpha posts (its
-// pre-releases are never posted). A promoted release is in `alphas` but not in `announced`: it is posted again.
-export function fresh(list, announced = [], since = SINCE, alphas = null, repo = 'horizon') {
-  const done = new Set(announced);
-  const quiet = new Set(alphas ?? []);
+// The releases of `list` to post now, oldest first. `announced`: the ids already posted. `earlier`: ids posted
+// before the single channel as Alpha posts (state.nightlies), never posted again either, whatever happens to
+// them (a pre-release edited into a release keeps its id). Pre-releases are posted only for Horizon's game.
+export function fresh(list, announced = [], since = SINCE, earlier = [], repo = 'horizon') {
+  const done = new Set([...(announced ?? []), ...(earlier ?? [])]);
   return (list ?? [])
-    .filter((r) => {
-      if (r.draft || !r.published_at || Date.parse(r.published_at) < Date.parse(since) || done.has(r.id)) return false;
-      if (!r.prerelease) return true;
-      return alphas != null && isAlpha(repo, r) && !quiet.has(r.id);
-    })
+    .filter((r) => !r.draft && r.published_at && Date.parse(r.published_at) >= Date.parse(since) && !done.has(r.id)
+      && (!r.prerelease || kind(repo, r.tag_name) === 'game'))
     .sort((a, b) => Date.parse(a.published_at) - Date.parse(b.published_at));
 }
 
 // Records a posted release; returns the new list of ids.
 export const remember = (announced = [], id) => [id, ...announced.filter((x) => x !== id)].slice(0, KEEP);
-export const rememberAlpha = (announced = [], id) => [id, ...announced.filter((x) => x !== id)].slice(0, KEEP_ALPHA);
 
 // Horizon's tags: `v0.2.5` (before 0.2: `v2026.10.13.1`) is the game, `launcher@0.2.5` (before: `launcher-v0.1.2`) the launcher.
 export function kind(repo, tag) {
@@ -101,54 +92,46 @@ export function firstLines(body, max = 600, lines = 6) {
 
 const launcherVersion = (tag) => tag.replace(/^launcher(?:@|-v)/, '');
 
-// The message announcing one release: { content, embeds, allowedMentions }. `role` is the 📦 Releases role id.
-// Horizon releases ship automatically and often (Ludovic, 2026-10-14): the role is pinged only for a game
-// release with a "New" section (a new feature), never for fix-only game releases or launcher releases.
-// Horizon releases as often as changes land, so @Releases is pinged at most once every PING_EVERY_MS: a game release
-// with new features posted sooner goes out without a ping, and the next ping lists what those added (`earlier`).
-export const PING_EVERY_MS = 6 * 60 * 60 * 1000;
-const MAX_PENDING = 40;
+// The daily ping. Horizon releases as often as changes land, so @Releases is pinged once per day window, which
+// starts at PING_HOUR UTC (20:00, the evening in Europe): the first Horizon game release published in a window
+// pings, with a short list of the game releases posted since the last ping. Every other post is silent.
+export const PING_HOUR = 20;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_SINCE = 40;
 
-// Whether this release pings, what earlier unpinged releases added, and the ping state to keep (state.releasePings:
-// { lastAt, pending }). Releases without new features (and other repos) leave the state as it is: `applies` false.
-export function pingDecision(repo, release, pings = {}, now = Date.now()) {
-  const added = repo === 'horizon' && kind(repo, release.tag_name) === 'game' ? bullets(release.body, 'New') : [];
-  if (!added.length) return { applies: false, ping: false, earlier: [], pings };
-  if (pings.lastAt == null || now - pings.lastAt >= PING_EVERY_MS) {
-    return { applies: true, ping: true, earlier: pings.pending ?? [], pings: { lastAt: now, pending: [] } };
-  }
-  const pending = [...(pings.pending ?? []), ...added].slice(-MAX_PENDING);
-  return { applies: true, ping: false, earlier: [], pings: { ...pings, pending } };
+// The start of the day window holding `t` (ms): the last PING_HOUR:00 UTC at or before it.
+export function pingWindow(t) {
+  const d = new Date(t);
+  const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), PING_HOUR);
+  return start > t ? start - DAY_MS : start;
 }
 
-// The Alpha post of a game pre-release: short, no role, no mention at all, and sent @silent, so it can come
-// every few minutes without a notification for anyone. It is only for players on the launcher's Alpha channel.
-export function alphaMessage(repo, release) {
-  const tag = release.tag_name;
-  const name = (release.name || tag).trim();
-  const notes = [...bullets(release.body, 'New'), ...bullets(release.body, 'Fixed')];
-  const what = notes.length ? bulletField(notes, 700) : firstLines(release.body, 500);
-  return {
-    content: `🧪 Alpha ${tag}`,
-    embeds: [{
-      color: COLOR, title: clipTo(name, 256), url: release.html_url,
-      description: [what, 'For players on the **Alpha** channel (launcher Settings, Updates): it can break. The Stable post comes about once a day.',
-        `[Release notes](${release.html_url})`].filter(Boolean).join('\n\n'),
-      footer: { text: `${GITHUB.owner}/${repo} · ${tag}` }, timestamp: release.published_at,
-    }],
-    allowedMentions: { parse: [] },
-    flags: SUPPRESS_NOTIFICATIONS,
-  };
+// A game release in the ping's list: "**0.2.13** Beds, mobs and 3 more fixes".
+export function sinceLine(release) {
+  const version = release.tag_name.replace(/^v/, '');
+  const name = (release.name || '').trim();
+  const line = name.includes(': ') ? name.slice(name.indexOf(': ') + 2) : '';
+  return clipTo(line ? `**${version}** ${line}` : `**${version}**`, 110);
 }
 
-export function releaseMessage(repo, release, role, earlier = []) {
-  if (role && (kind(repo, release.tag_name) === 'launcher'
-    || (kind(repo, release.tag_name) === 'game' && !bullets(release.body, 'New').length))) role = null;
+// Whether this post pings, the releases to list since the last ping, and the state to keep (state.releasePings:
+// { lastAt, since }). Only Horizon's game releases count; pre-releases, launcher and other releases never ping
+// and leave the state as it is. `at`: when the release was published, so a catch-up after a restart decides alike.
+export function pingDecision(repo, release, pings = {}, at = Date.parse(release.published_at) || Date.now()) {
+  if (repo !== 'horizon' || kind(repo, release.tag_name) !== 'game' || release.prerelease) return { ping: false, since: [], pings };
+  const since = pings.since ?? [];
+  if (pings.lastAt == null || pings.lastAt < pingWindow(at)) return { ping: true, since, pings: { lastAt: at, since: [] } };
+  return { ping: false, since: [], pings: { lastAt: pings.lastAt, since: [...since, sinceLine(release)].slice(-MAX_SINCE) } };
+}
+
+// The message announcing one release: { content, embeds, allowedMentions, flags? }. `role`: the 📦 Releases role id
+// when this post pings (pingDecision), else nothing and the post is @silent. `since`: the ping's list.
+export function releaseMessage(repo, release, role, since = []) {
   const ping = role ? `<@&${role}> ` : '';
+  const quiet = role ? {} : { flags: SUPPRESS_NOTIFICATIONS };
   const allowedMentions = { parse: [], roles: role ? [role] : [] };
   const tag = release.tag_name;
   const name = (release.name || tag).trim();
-  const when = release.published_at;
   const footer = { text: `${GITHUB.owner}/${repo} · ${tag}` };
 
   switch (kind(repo, tag)) {
@@ -158,7 +141,7 @@ export function releaseMessage(repo, release, role, earlier = []) {
       const fields = [];
       if (added.length) fields.push({ name: 'New', value: bulletField(added) });
       if (fixed.length) fields.push({ name: 'Fixed', value: bulletField(fixed) });
-      if (earlier.length) fields.push({ name: 'Also new since the last ping', value: bulletField(earlier) });
+      if (since.length) fields.push({ name: 'Out since the last ping', value: bulletField(since, 700) });
       const summary = fields.length ? '' : firstLines(release.body, 1200) + '\n\n';
       fields.push({ name: 'Links', value: `[Release notes](${release.html_url}) · [playhorizon.dev](${LINKS.horizonSite}) · [Download the launcher](${LINKS.horizonLauncher})` });
       return {
@@ -166,9 +149,9 @@ export function releaseMessage(repo, release, role, earlier = []) {
         embeds: [{
           color: COLOR, title: clipTo(name, 256), url: release.html_url,
           description: `${summary}Update from the Horizon launcher: it installs new versions by itself.`,
-          fields, footer, timestamp: when,
+          fields, footer,
         }],
-        allowedMentions,
+        allowedMentions, ...quiet,
       };
     }
     case 'launcher': {
@@ -180,9 +163,9 @@ export function releaseMessage(repo, release, role, earlier = []) {
         embeds: [{
           color: COLOR, title, url: release.html_url,
           description: [what, `Your launcher updates itself; new here? [Download it](${LINKS.horizonLauncher}).`].filter(Boolean).join('\n\n'),
-          footer, timestamp: when,
+          footer,
         }],
-        allowedMentions,
+        allowedMentions, ...quiet,
       };
     }
     default: {
@@ -193,9 +176,9 @@ export function releaseMessage(repo, release, role, earlier = []) {
         content: `${ping}**${title}**`,
         embeds: [{
           color: RELEASE_BLUE, title: clipTo(title, 256), url: release.html_url,
-          description: notes || undefined, footer, timestamp: when,
+          description: notes || undefined, footer,
         }],
-        allowedMentions,
+        allowedMentions, ...quiet,
       };
     }
   }

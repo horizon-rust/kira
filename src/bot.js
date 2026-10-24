@@ -5,7 +5,7 @@ import { MessageFlags, MessageType } from 'discord.js';
 import { GUILD_ID, RELEASE_EVERY_MS, VIDEOS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS } from './config.js';
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
-import { releaseMessage, alphaMessage, remember, rememberAlpha, announced, pingDecision } from './releases.js';
+import { releaseMessage, remember, announced, pingDecision } from './releases.js';
 import { makeGitHub } from './github.js';
 import * as videos from './videos.js';
 import { linkify } from './texts.js';
@@ -29,9 +29,9 @@ const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
 
-// New Horizon releases → #releases, each once by release id: game pre-releases as silent Alpha posts
-// (state.nightlies, its stored name since the channel was first called Nightly; kept so no id is posted twice), then the same id again with the ping when it is promoted to stable (state.releases),
-// and the launcher's and other stable releases once.
+// New Horizon releases → #releases, each once by release id (state.releases). One channel since 2026-10-23: every
+// release gets one post, @silent except the day's ping (pingDecision, state.releasePings). state.nightlies holds the
+// ids posted as Alpha before that; it no longer grows, and those ids are never posted again.
 const releasesGh = makeGitHub({ token: process.env.GITHUB_TOKEN });
 async function checkReleases() {
   state.releases ??= {};
@@ -40,33 +40,18 @@ async function checkReleases() {
   for (const repo of RELEASE_REPOS) {
     try {
       const list = await newReleases(releasesGh, repo, state.releases[repo], state.nightlies[repo] ?? []);
-      // The first run with Alpha posts: the pre-releases already out are the baseline, never posted.
-      const baseline = state.nightlies[repo] === undefined;
-      if (baseline) {
-        state.nightlies[repo] = list.filter((r) => r.prerelease).reduce((ids, r) => rememberAlpha(ids, r.id), []);
-        save();
-      }
       for (const release of list) {
-        if (release.prerelease) {
-          if (baseline) continue;
-          const msg = await channel('releases').send(alphaMessage(repo, release));
-          state.nightlies[repo] = rememberAlpha(state.nightlies[repo], release.id);
-          save();
-          console.log(`alpha posted: ${repo} ${release.tag_name} (${release.id}) → message ${msg.id}`);
-          continue;
-        }
         if (!announced(repo, release)) { // another kind of tag (a test, a tool): remembered, never posted
           state.releases[repo] = remember(state.releases[repo], release.id);
           save();
           continue;
         }
         const plan = pingDecision(repo, release, state.releasePings);
-        const role = plan.applies && !plan.ping ? null : state.roles.releases;
-        const msg = await channel('releases').send(releaseMessage(repo, release, role, plan.earlier));
+        const msg = await channel('releases').send(releaseMessage(repo, release, plan.ping ? state.roles.releases : null, plan.since));
         state.releasePings = plan.pings;
         state.releases[repo] = remember(state.releases[repo], release.id);
         save();
-        console.log(`release posted: ${repo} ${release.tag_name} (${release.id}) → message ${msg.id}`);
+        console.log(`release posted: ${repo} ${release.tag_name} (${release.id})${plan.ping ? ' with the ping' : ''} → message ${msg.id}`);
       }
     } catch (e) {
       console.error('releases', repo, e.message);
