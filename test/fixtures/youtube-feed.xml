@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <link rel="self" href="http://www.youtube.com/feeds/videos.xml?channel_id=UCNpwCgIK6O6oct9ra9ohZ7w"/>
+ <id>yt:channel:NpwCgIK6O6oct9ra9ohZ7w</id>
+ <yt:channelId>NpwCgIK6O6oct9ra9ohZ7w</yt:channelId>
+ <title>ludovic</title>
+ <author>
+  <name>ludovic</name>
+  <uri>https://www.youtube.com/channel/UCNpwCgIK6O6oct9ra9ohZ7w</uri>
+ </author>
+ <published>2019-11-26T06:34:56+00:00</published>
+ <entry>
+  <id>yt:video:SHORTshort1</id>
+  <yt:videoId>SHORTshort1</yt:videoId>
+  <yt:channelId>UCNpwCgIK6O6oct9ra9ohZ7w</yt:channelId>
+  <title>Rust &amp; wgpu: 5x &quot;faster&quot; &lt;3 #shorts</title>
+  <link rel="alternate" href="https://www.youtube.com/shorts/SHORTshort1"/>
+  <author><name>ludovic</name></author>
+  <published>2026-10-25T09:00:00+00:00</published>
+  <updated>2026-10-25T09:05:00+00:00</updated>
+  <media:group>
+   <media:title>Rust &amp; wgpu: 5x &quot;faster&quot; &lt;3 #shorts</media:title>
+   <media:description>a Short</media:description>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:cykDpzoYMSA</id>
+  <yt:videoId>cykDpzoYMSA</yt:videoId>
+  <yt:channelId>UCNpwCgIK6O6oct9ra9ohZ7w</yt:channelId>
+  <title>this isn&#39;t minecraft (it&apos;s 5x faster)</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=cykDpzoYMSA"/>
+  <author><name>ludovic</name></author>
+  <published>2026-10-16T11:30:11+00:00</published>
+  <updated>2026-10-20T02:36:45+00:00</updated>
+  <media:group>
+   <media:title>this isn't minecraft (it's 5x faster)</media:title>
+   <media:description>4 days ago I rewrote Minecraft in Rust.
+
+Download Horizon (free, open source): https://playhorizon.dev</media:description>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:OeQl91EckYI</id>
+  <yt:videoId>OeQl91EckYI</yt:videoId>
+  <yt:channelId>UCNpwCgIK6O6oct9ra9ohZ7w</yt:channelId>
+  <title>LIVE: building Horizon, chat with me</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=OeQl91EckYI"/>
+  <author><name>ludovic</name></author>
+  <published>2026-10-13T18:00:00+00:00</published>
+  <updated>2026-10-13T22:00:00+00:00</updated>
+ </entry>
+</feed>

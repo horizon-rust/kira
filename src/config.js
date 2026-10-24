@@ -56,6 +56,9 @@ export const agentSnippets = (url, token) => [
 export const ROLES = [
   { key: 'releases', name: '📦 Releases', color: 0x5aa9ff, self: true, label: 'Every release' },
   { key: 'horizon', name: '📣 Big news', color: COLOR, self: true, label: 'Big news' },
+  // Not key 'videos': that is the old role of the all-projects server (🔔 Videos), in RETIRED_ROLES, which setup
+  // deletes by key when nobody holds it. Pinged by every post of src/videos.js.
+  { key: 'newvideos', name: '🎬 Videos', color: 0xff4d4d, self: true, label: 'New videos' },
   { key: 'contributor', was: 'ai', name: '🛠️ Contributor', color: 0x9b7bff, self: true, label: 'Contributor' },
   { key: 'modder', name: '🧩 Modder', color: 0x4cc38a, self: true, label: 'Modder' },
   { key: 'lvl5', name: 'lvl 5', color: 0x95a5a6, level: 5 },
@@ -98,6 +101,7 @@ export const LAYOUT = [
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'Big Horizon news. Pick the 📣 Big news role to get pinged.' },
+      { key: 'ludovicvideos', name: 'ludovic-videos', type: 'text', readonly: true, topic: 'Ludovic\'s new YouTube videos, posted by Kira as they come out.' },
     ],
   },
   {
@@ -173,7 +177,7 @@ export const LAYOUT = [
 export const HOWTO = { name: '📌 How to post here: read me first', tag: ['📌', 'read me', true], mention: 'the 📌 **How to post here** post' };
 
 // What everyone sees in the channel list from the start; the Onboarding answers add the rest.
-export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'horizoninfo', 'horizonchat', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'workboard', 'general', 'introductions', 'offtopic', 'memes', 'halloffame', 'botcommands'];
+export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'horizonchat', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'workboard', 'general', 'introductions', 'offtopic', 'memes', 'halloffame', 'botcommands'];
 
 // Deleted by setup when no member ever wrote in them (empty channels of the old scope).
 export const RETIRED = ['tracks', 'chill', 'aicoding', 'rewrites', 'coding', 'creatorschat', 'editing', 'musicchat', 'studio'];
@@ -186,6 +190,14 @@ export const PINS = {
 // Releases announced in #releases: Horizon's game (`v…` tags) and launcher (`launcher-v…` tags) only.
 export const RELEASE_REPOS = ['horizon'];
 export const RELEASE_EVERY_MS = 3 * 60 * 1000; // one GitHub API request each time
+
+// Ludovic's YouTube videos → #ludovic-videos (src/videos.js): the channel's public Atom feed, polled every 10 minutes.
+// His channel is @lu4ovic (LINKS.youtube).
+export const VIDEOS = {
+  channelId: 'UCNpwCgIK6O6oct9ra9ohZ7w',
+  feedUrl: 'https://www.youtube.com/feeds/videos.xml',
+  everyMs: 10 * 60 * 1000,
+};
 
 // One-off announcements Kira posts once (the key is remembered in state.oneOffs), for big releases.
 // `role`: the only role pinged (none if absent). Posted when Kira starts; written by hand.
