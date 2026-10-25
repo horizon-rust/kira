@@ -28,18 +28,21 @@ export const commands = [
 ];
 
 const linksEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horizon').setDescription([
-  `🌐 Website: ${LINKS.horizonSite}`, `⬇️ Launcher: ${LINKS.horizonLauncher}`, `💻 Code: ${LINKS.horizon}`,
+  `🌐 Website: ${LINKS.horizonSite}`, `🧭 The hub (roadmap, kanban, journal, how to help): ${LINKS.hub}`, `⬇️ Launcher: ${LINKS.horizonLauncher}`, `💻 Code: ${LINKS.horizon}`,
   `🐛 Issues: ${LINKS.horizonIssues}`, `🔀 Pull requests: ${LINKS.horizonPulls}`,
   state.invite ? `💬 This server: https://discord.gg/${state.invite}` : null,
 ].filter(Boolean).join('\n'));
 
 // /help: what Kira does, by topic (only the asker sees it).
-const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Kira, Horizon's helper").setDescription([
-  `**Horizon**: \`/horizon\` what it is and where to get it · \`/links\``,
-  `**Bugs and ideas**: post in <#${state.channels.horizonbugs}> or <#${state.channels.horizonideas}> with the template; I send each post to GitHub and tell you here when it's answered or fixed.`,
-  `**Contributing**: <#${state.channels.workboard}> is the board. \`/claim <issue>\` before you start, \`/unclaim\`, \`/working\`, \`/board\`, \`/link-github\`. Maintainers: \`/move\`.`,
-  '**Your work**: `/mytasks` your cards · `/goodfirst` good first tasks · `/notify` DMs when CI fails on your pull requests · `/status` say what you are on · `/agent connect` lets your AI coding agent read the board and work on your cards (personal token, `/agent tokens`, `/agent revoke`; setup in #horizon-info).',
-  `**Releases**: every new Horizon version and launcher in <#${state.channels.releases}>.`,
+const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Kira, Horizon's front desk").setDescription([
+  `**The hub**: ${LINKS.hub} has the roadmap, the kanban, the journal and how to help. I do the same things here, as commands or as \`@Kira <verb>\`:`,
+  '• `/report`: a bug, as a form; it becomes a post in <#' + state.channels.horizonbugs + '> and a GitHub issue, and you are pinged there when it is answered or fixed',
+  '• `/suggest`: an idea, for the suggestion queue the maintainers read (posts in <#' + state.channels.horizonideas + '> go there too)',
+  '• `/roadmap` (`area:` for one area): what is being built now and next',
+  '• `/claim <issue>` before you start, `/unclaim` · `/status`: your claims and reports, an issue, a roadmap item, or set what you are on',
+  `**What changed**: <#${state.channels.updates}> (merged work, the week, the board at a glance) · releases in <#${state.channels.releases}>`,
+  '**Contributing**: `/goodfirst` · `/working` · `/board` · `/mytasks` · `/link-github` (`credit:True` lists you on the hub) · `/notify` DMs when CI fails · `/agent connect` gives your AI coding agent the board (setup in #horizon-info). Maintainers: `/move`.',
+  '**Horizon**: `/horizon` what it is and where to get it · `/links`',
   '**You**: `/rank`, `/leaderboard`, `/remind`, `/userinfo`, `/avatar`, `/room` (your own voice channel: join ➕ create your room).',
   '**The mods**: DM me to reach them privately, `/report-member` or right-click a message → Apps → Report to mods. `/modmail`.',
 ].join('\n\n'));

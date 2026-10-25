@@ -22,7 +22,7 @@ export function rolesMessage(state = { channels: {} }) {
       'Click a button to add the role, click it again to remove it. Only you see the answer.',
       '',
       '**Pings**: 📣 big Horizon news · 📦 every new version and launcher · 🎬 every new video from Ludovic',
-      '**What you do**: 🛠️ you contribute code (see #work-board) · 🧩 you mod, or want to once modding lands',
+      '**What you do**: 🛠️ you contribute code (see #updates and the hub) · 🧩 you mod, or want to once modding lands',
       '',
       'Level roles (lvl 5, 10, 20, 30, 50) come by themselves: talk, and hang out in voice. `/rank` shows yours.',
     ].join('\n'), state))],
