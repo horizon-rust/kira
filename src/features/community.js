@@ -38,7 +38,7 @@ const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Ki
   `**The hub**: ${LINKS.hub} has the roadmap, the kanban, the journal and how to help. I do the same things here, as commands or as \`@Kira <verb>\`:`,
   '• `/report`: a bug, as a form; it becomes a post in <#' + state.channels.horizonbugs + '> and a GitHub issue, and you are pinged there when it is answered or fixed',
   '• `/suggest`: an idea, for the suggestion queue the maintainers read (posts in <#' + state.channels.horizonideas + '> go there too)',
-  '• `/roadmap` (`area:` for one area): what is being built now and next',
+  '• `/roadmap` (`area:` for one area in full): the whole roadmap, what is being built, what is next',
   '• `/claim <issue>` before you start, `/unclaim` · `/status`: your claims and reports, an issue, a roadmap item, or set what you are on',
   `**What changed**: <#${state.channels.updates}> (merged work, the week, the board at a glance) · releases in <#${state.channels.releases}>`,
   '**Contributing**: `/goodfirst` · `/working` · `/board` · `/mytasks` · `/link-github` (`credit:True` lists you on the hub) · `/notify` DMs when CI fails · `/agent connect` gives your AI coding agent the board (setup in #horizon-info). Maintainers: `/move`.',

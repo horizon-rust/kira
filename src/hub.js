@@ -2,6 +2,8 @@
 // (the horizon repo's roadmap/README.md documents both), and the texts of the verbs Kira shares with the site
 // (report, suggest, roadmap, claim, status). No Discord here: src/features/hub.js does the talking.
 
+import { COLOR } from './config.js';
+
 export const VERBS = ['report', 'suggest', 'roadmap', 'claim', 'status'];
 export const STATUS = { now: 'Now', next: 'Next', later: 'Later', 'help-wanted': 'Help wanted', shipped: 'Shipped' };
 
@@ -44,32 +46,103 @@ export function findArea(roadmap, text) {
     ?? null;
 }
 
-const line = (item, hubUrl) => `• **[${plainText(item.title, 100)}](<${itemUrl(hubUrl, item.id)}>)**: ${plainText(item.plain, 240)}`;
+// Text from the roadmap's JSON, shown in an embed: data, never markup. One line; every character Discord's markdown
+// reads is escaped (so a title can't bold, link, quote or spoil), `<` too (mentions, channels, custom emoji), and
+// @everyone / @here can't ping (allowedMentions is { parse: [] } on every send as well).
+export function mdEscape(s, n = 1000) {
+  const text = String(s ?? '').replace(/\s+/g, ' ').trim();
+  return (text.length > n ? `${text.slice(0, n - 1)}…` : text)
+    .replace(/@(everyone|here)/gi, '@\u200b$1')
+    .replace(/[\\*_~`|[\]()<>]/g, '\\$&');
+}
 
-// `@Kira roadmap` and `/roadmap`: Now and Next in players' words, with the link. With an area: that area's
-// Now, Next and Help wanted. No dates, ever: the roadmap has none.
-export function roadmapText(roadmap, hubUrl, areaText = '') {
-  if (!isRoadmap(roadmap)) return `The roadmap is at ${hubUrl}: what's being done now, what's next, and how to help.`;
-  const items = roadmap.items;
+// Discord's limits for one message: 10 embeds, 6000 characters over all of them (title, description, footer…), 4096 in a
+// description. Kept a little under, because Discord counts what it rendered.
+export const LIMITS = { embeds: 10, total: 5800, description: 3900, content: 1900 };
+const HEADINGS = [['now', '🔨 Now'], ['next', '⏭️ Next'], ['later', '🕰️ Later'], ['help-wanted', '🙋 Help wanted']];
+const itemLink = (item, hubUrl) => `[${mdEscape(item.title, 100)}](${itemUrl(hubUrl, item.id).replace(/[()]/g, encodeURIComponent)})`;
+
+// An area's lines, in order: the heading of each status that has items, then one line per item. `full`: also each
+// item's one-line plain text, and the shipped items with the release (the whole roadmap shows Shipped as a count).
+function areaLines(items, hubUrl, full) {
+  const lines = [];
+  for (const [status, heading] of [...HEADINGS, ...(full ? [['shipped', '✅ Shipped']] : [])]) {
+    const list = items.filter((i) => i.status === status);
+    if (!list.length) continue;
+    if (lines.length) lines.push('');
+    lines.push(`**${heading}**`);
+    for (const i of list) {
+      const plain = full && i.plain ? `: ${mdEscape(i.plain, 300)}` : '';
+      const release = full && status === 'shipped' && i.shipped_in ? ` (${mdEscape(i.shipped_in, 40)})` : '';
+      const text = `• ${itemLink(i, hubUrl)}${release}${plain}`;
+      lines.push(text.length <= 1500 ? text : `• ${itemLink(i, hubUrl)}`);
+    }
+  }
+  const shipped = items.filter((i) => i.status === 'shipped').length;
+  if (!full && shipped) lines.push(...(lines.length ? [''] : []), `✅ ${shipped} shipped`);
+  return lines;
+}
+
+// Lines → descriptions of at most `max` characters, cut between lines; a heading never ends a description.
+function pack(lines, max) {
+  const out = [];
+  let cur = [];
+  const len = (l) => l.join('\n').length;
+  for (let k = 0; k < lines.length; k++) {
+    const line = lines[k];
+    if (cur.length && len([...cur, line]) > max) {
+      const orphan = cur.length > 1 && /^\*\*[^*]+\*\*$/.test(cur[cur.length - 1]) ? cur.pop() : null;
+      while (cur.length && cur[cur.length - 1] === '') cur.pop();
+      out.push(cur.join('\n'));
+      cur = orphan ? [orphan] : [];
+    }
+    if (cur.length || line !== '') cur.push(line);
+  }
+  while (cur.length && cur[cur.length - 1] === '') cur.pop();
+  if (cur.length) out.push(cur.join('\n'));
+  return out;
+}
+
+const embedSize = (e) => (e.title?.length ?? 0) + (e.description?.length ?? 0) + (e.footer?.text?.length ?? 0);
+
+// The roadmap for Discord, as messages to send in order (the first one is the reply, the others follow it):
+// `@Kira roadmap` and `/roadmap` → every area in the roadmap's order, one embed each (more when an area is long), its
+// items by Now, Next, Later and Help wanted as titles linked to `<hub>#<id>`, Shipped as a count. With an area
+// (`@Kira roadmap servers`): that area alone, every item with its plain words, and the shipped ones. No dates,
+// ever: the roadmap has none. Every payload is { content?, embeds?, allowedMentions: { parse: [] } }.
+export function roadmapMessages(roadmap, hubUrl, areaText = '') {
+  const send = (content, embeds = []) => ({ content, ...(embeds.length ? { embeds } : {}), allowedMentions: { parse: [] } });
+  if (!isRoadmap(roadmap)) return [send(`The roadmap is at ${hubUrl}: what's being done now, what's next, and how to help.`)];
   const area = areaText ? findArea(roadmap, areaText) : null;
   if (areaText && !area) {
     const names = (roadmap.areas ?? []).map((a) => `\`${a.id}\``).join(', ');
-    return `No area called "${plainText(areaText, 40)}". Areas: ${names || 'none yet'}. The whole roadmap: ${hubUrl}`;
+    return [send(`No area called "${plainText(areaText, 40)}". Areas: ${names || 'none yet'}. The whole roadmap: \`/roadmap\` or ${hubUrl}`)];
   }
-  const pick = (status, max) => items.filter((i) => i.status === status && (!area || i.area === area.id)).slice(0, max);
-  const now = area ? pick('now', 6) : (() => {
-    const focus = items.filter((i) => i.status === 'now' && i.focus);
-    return (focus.length ? focus : pick('now', 5)).slice(0, 5);
-  })();
-  const sections = [
-    [area ? `🔨 Now in ${area.name ?? area.id}` : '🔨 Now', now],
-    ['⏭️ Next', pick('next', area ? 5 : 4)],
-    ...(area ? [['🙋 Help wanted', pick('help-wanted', 4)]] : []),
-  ].filter(([, list]) => list.length);
-  const body = sections.map(([title, list]) => `**${title}**\n${list.map((i) => line(i, hubUrl)).join('\n')}`).join('\n\n');
-  const tail = `Everything, in simple or technical words, and how to help: <${hubUrl}>${area ? '' : '\nOne area: `/roadmap area:<name>`.'}`;
-  const text = `${body || 'Nothing planned in this area yet.'}\n\n${tail}`;
-  return text.length <= 1990 ? text : `${body.slice(0, 1990 - tail.length - 4)}…\n\n${tail}`;
+  const known = new Set((roadmap.areas ?? []).map((a) => a.id));
+  const areas = [...(roadmap.areas ?? []).filter((a) => a && typeof a.id === 'string')];
+  if (!area && roadmap.items.some((i) => !known.has(i.area))) areas.push({ id: '', name: 'Other' });
+  const embeds = [];
+  for (const a of area ? [area] : areas) {
+    const items = roadmap.items.filter((i) => (a.id ? i.area === a.id : !known.has(i.area)));
+    if (!items.length) continue;
+    const title = mdEscape(a.name ?? a.id, 200) || 'Other';
+    const parts = pack(areaLines(items, hubUrl, !!area), LIMITS.description);
+    parts.forEach((description, k) => embeds.push({ color: COLOR, title: parts.length > 1 ? `${title} (${k + 1}/${parts.length})` : title, description }));
+  }
+  const content = area
+    ? `Everything in simple words, and how to help: <${hubUrl}> · the whole roadmap: \`/roadmap\``
+    : `**Horizon's roadmap**: ${roadmap.items.filter((i) => i.status !== 'shipped').length} things planned or under way, ${roadmap.items.filter((i) => i.status === 'shipped').length} shipped. Each title opens it on the hub, in simple or technical words: <${hubUrl}> · one area in full: \`/roadmap area:<name>\``;
+  if (!embeds.length) return [send(`Nothing planned in this area yet. The roadmap: <${hubUrl}>`)];
+  const messages = [];
+  let cur = [];
+  let size = 0;
+  for (const e of embeds) {
+    if (cur.length && (cur.length >= LIMITS.embeds || size + embedSize(e) > LIMITS.total)) { messages.push(cur); cur = []; size = 0; }
+    cur.push(e);
+    size += embedSize(e);
+  }
+  messages.push(cur);
+  return messages.map((list, k) => send(k === 0 ? content.slice(0, LIMITS.content) : '', list));
 }
 
 // One roadmap item by id ("status smooth-frames").
@@ -124,7 +197,7 @@ export function helpText(hubUrl) {
     "I'm Kira, Horizon's front desk. The same things you can do on the hub:",
     '• `@Kira report` (or `/report`): a bug, which becomes a GitHub issue; you hear back in its post',
     '• `@Kira suggest <your idea>` (or `/suggest`): an idea, which goes to the suggestion queue',
-    '• `@Kira roadmap` (or `/roadmap`), `@Kira roadmap <area>`: what is being done now and next',
+    '• `@Kira roadmap` (or `/roadmap`), `@Kira roadmap <area>`: the whole roadmap, or one area in full',
     '• `@Kira claim <issue>` (or `/claim`): tell everyone you are working on an issue',
     '• `@Kira status` (or `/status`): your claims and reports; `@Kira status #123` or `@Kira status <roadmap item>`',
     `The hub: <${hubUrl}> · everything else: \`/help\``,
