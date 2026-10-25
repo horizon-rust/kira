@@ -43,13 +43,14 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | --- | --- |
 | Moderation | Floods / copy-paste → messages deleted, timeout of 10 min, then 1 h, then 1 day the same day. All-caps, emoji walls and executables removed. Accounts under 3 days can't post links. Raids (15 accounts younger than 7 days in 2 minutes) → raid mode for an hour: verified phone, DMs between members paused. No slowmode (none set, none automatic; `MOD.autoSlowmode` turns the automatic one back on). Verification level high (10 minutes on the server before talking); @everyone can't ping everyone, open threads or use outside apps. `/warn` (3 in 30 days → 1 h timeout), `/warnings`, `/clearwarnings`, `/timeout`, `/untimeout`, `/kick`, `/ban`, `/unban`, `/purge`, `/slowmode`, `/lock`, `/unlock`, `/raidmode` |
 | Logs (`#mod-log`) | Joins (account age, **which invite**) and leaves grouped every minute, deleted and edited messages, nicknames, bans, timeouts, AutoMod |
-| Reports | `/report` and "Report to mods" (right-click a message → Apps) → `#reports` |
+| Reports | `/report-member` and "Report to mods" (right-click a message → Apps) → `#reports` (`/report` is the bug form: below) |
 | Mod-mail | DM kira → a thread in `#mod-mail`; mods answer in the thread (`//` for notes, `//close`) |
 | Levels | XP for messages (once a minute) and for voice time with others; lvl 5/10/20/30/50 roles; `/rank`, `/leaderboard`, `/givexp` |
 | Voice rooms | Join **➕ create your room** → your own channel; `/room lock / unlock / private / public / invite / kick / limit / rename / claim / transfer`; deleted when empty. **🎙️ ludovic** is locked: people wait in **⏳ waiting room** and Ludovic or a mod `/pull`s them in |
 | Forums | Each new post is checked against its template; Kira lists what's missing and closes it after an hour if it's still missing. `/done` closes your post with its tag (solved, taken, found, filled, done) |
 | Community | Welcome in `#new-members` (grouped when many people arrive), role buttons, 👍/👎 on ideas, 🔥 in #showcase, ⭐ hall of fame (5 stars), `/remind` |
-| GitHub issues | Posts in `#horizon-bugs` and `#horizon-ideas` that pass their template become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `/issue` (staff). Off until its token exists: see below |
+| The hub's verbs | Kira is the front desk of [playhorizon.dev/hub](https://playhorizon.dev/hub) with the same verbs, as slash commands and as `@Kira <verb>`: `report` (a bug form → a post in `#horizon-bugs` and a GitHub issue), `suggest` (→ the private suggestion queue), `roadmap` / `roadmap <area>` (Now and Next in plain words), `claim`, `status`: see [The hub](#the-hub) |
+| GitHub issues | Posts in `#horizon-bugs` that pass their template, and `/report`, become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `#horizon-ideas` posts go to the suggestion queue instead. `/issue` (staff). Off until its token exists: see below |
 | Ludovic's videos | His YouTube channel (@lu4ovic) → `#ludovic-videos`, a read-only channel: every new video, Short or live stream, once, as `<@&🎬 Videos> 🎬 New video: **title**` and its link (Discord shows the player). Pings only the opt-in **🎬 Videos** role (picked in Onboarding's "Want to be pinged?" or with the buttons in `#welcome`; `allowedMentions: { parse: [], roles: [that role] }`, so nothing in a title can ping; the role's key is `newvideos`, not the retired `videos` of the old server). The channel's public Atom feed every 10 minutes ([`src/videos.js`](src/videos.js), channel id in `VIDEOS` in `config.js`); the ids posted are in `state.videos`. The first run only records the videos already out and sets the date before which nothing is ever posted; a feed error is logged and retried 10 minutes later. Giving the role to the members already on the server is a one-off: `scripts/grant-videos-role.js` (below) |
 | Releases | Releases of ludovic111/horizon → `#releases`: the game (`vX.Y.Z` tags, a summary of New and Fixed) and the launcher (`launcher@X.Y.Z`; before 0.2 `launcher-v…`), nothing else (REST API every 3 minutes, newest 200; [`src/releases.js`](src/releases.js)). One channel since 2026-10-23: every release gets one post, once by release id (`state.releases`; ids posted as Alpha before that, `state.nightlies`, are never posted again). Every post is silent (no role, Discord's `SUPPRESS_NOTIFICATIONS` flag 4096) except one a day: the first game release published after 20:00 UTC pings the 📦 Releases role and lists the game releases since the last ping ("Out since the last ping"; `state.releasePings`). Launcher releases never ping. No dates in the posts. Drafts never. Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
 | Work board | The kanban in `#work-board`, `#dev-log`, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/status`, `/goodfirst`, `/notify`: see below |
@@ -195,9 +196,42 @@ MCP server only) and `KIRA_GITHUB_DRY_RUN=1`. Health: `GET /health`.
   service), put the backup's `state` and `agents` in `~/code/kira/data/state.json` and `data/agents.json`,
   `systemctl --user enable --now kira`. The unit stays installed there, disabled.
 
+## The hub
+
+One place where the work is written (the horizon repo: `roadmap/roadmap.toml`, issues for bugs only, pull requests
+labelled `roadmap:<id>`, a generated journal), one public entry point (<https://playhorizon.dev/hub>), one intake:
+a bug becomes a GitHub issue wherever it comes from, an idea goes to the suggestion queue (never an issue), and the
+answer goes back where the request came from. Kira is that intake on Discord ([`src/hub.js`](src/hub.js) has no
+Discord, [`src/features/hub.js`](src/features/hub.js) does the talking):
+
+| Verb | Slash command | `@Kira …` | What happens |
+| --- | --- | --- | --- |
+| report | `/report` (a form: title, steps, what happened and what you expected, version, OS/CPU/GPU) | `@Kira report` (a button that opens the form) | Kira makes a post in `#horizon-bugs` in the member's name (staff tag `via /report`, no ping) and sends it to GitHub like any other post: the member owns it, their replies become comments and the answers ping them there. 3 an hour per member, then the GitHub limits |
+| suggest | `/suggest idea:` | `@Kira suggest <idea>` | an embed in the private queue `#roadmap-suggestions` with who and where (a link back to the message), 3 an hour per member. Nothing is published; the maintainers turn good ones into roadmap items |
+| roadmap | `/roadmap [area:]` | `@Kira roadmap [area]` | the focus Now items and Next in players' words (`plain`), or one area's Now, Next and Help wanted, with the link. No dates |
+| claim | `/claim issue:` | `@Kira claim 123` | the work board's claim (below) |
+| status | `/status [of:] [text:] [clear:]` | `@Kira status [#123 \| item]` | yours (status text, claims, reports and their state), a card of the board, or a roadmap item; `text:` sets what you are on (agents and `/working` show it) |
+
+A post in `#horizon-ideas` that follows its template goes to the queue once (`state.suggestions`), and Kira says so in
+the post with the roadmap's link; ideas sent to GitHub before keep their issue, votes line and answers. A mod's
+`/issue` in an idea post still opens an issue by hand.
+
+**What Kira reads.** The website publishes the roadmap as JSON at `HUB_ROADMAP_URL` (default
+`https://playhorizon.dev/data/roadmap.json`): `{ "areas": [{ "id", "name" }], "items": [{ "id", "title", "status",
+"area", "plain", "dev", "links", "shipped_in"?, "focus"? }] }`, the fields of `roadmap.toml`. Fetched at most every 5
+minutes; a failed fetch keeps the last good one, and with none Kira answers with the hub's link. Item links are
+`<hub>#<id>`.
+
+**Variables**: `ROADMAP_SUGGESTIONS_CHANNEL_ID` (the queue; unset: `/suggest` says the queue is closed and
+`#horizon-ideas` posts stay in the forum), `HUB_URL`, `HUB_ROADMAP_URL`.
+
+**Open idea issues** (the one-off move to the roadmap): `node scripts/idea-issues.mjs [--json]` lists them (number,
+👍 on Discord, age, from Discord or GitHub, title, link). It only reads; each one is moved to the roadmap or closed
+with a link to it by hand.
+
 ## GitHub issues
 
-When a post in `#horizon-bugs` or `#horizon-ideas` passes its template (at once, or after an edit),
+When a post in `#horizon-bugs` passes its template (at once, or after an edit), or a member sends `/report`,
 Kira opens an issue in `ludovic111/horizon`. The mapping is in `GITHUB` in [`src/config.js`](src/config.js);
 the code is [`src/features/github.js`](src/features/github.js) and [`src/issuekit.js`](src/issuekit.js).
 

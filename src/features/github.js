@@ -1,6 +1,5 @@
-// Forum posts → GitHub issues, and answers back. A post in #horizon-bugs, #horizon-ideas or
-// #project-feedback (project + bug / idea tags) that passes its template becomes an issue; the
-// reporter's later replies become comments; Kira polls the issues and tells the reporter, in their
+// Forum posts → GitHub issues, and answers back. A post in #horizon-bugs that passes its template, or a bug
+// reported with /report, becomes an issue; the reporter's later replies become comments; Kira polls the issues and tells the reporter, in their
 // post, when the issue is closed or a maintainer comments. Off unless GITHUB_TOKEN is set.
 import { SlashCommandBuilder, PermissionFlagsBits as P, MessageFlags, ChannelType } from 'discord.js';
 import { GITHUB, GUILD_ID } from '../config.js';
@@ -44,30 +43,47 @@ async function ensureLabels(repo) {
   if (!DRY) store.labels[repo] = true;
 }
 
-// Opens the issue for a post (once: the mapping is checked first and kept in the state).
+// Opens the issue for a post (once: the mapping is checked first and kept in the state). Ideas no longer
+// become issues (they go to the suggestion queue, src/features/hub.js): a forum with `queue` opens none unless
+// a mod sends it with /issue.
 async function openIssue(thread, starter, { manual = false, target = null } = {}) {
-  if (store.issues[thread.id] || busy.has(thread.id)) return store.issues[thread.id] ?? null;
   if (isOwnPost(thread, client.user?.id)) return null; // the forum guides are not reports
+  if (!manual && GITHUB.forums[forumKey(thread)]?.queue) return null;
   target ??= kit.targetFor(GITHUB.forums[forumKey(thread)], tagNames(thread));
   if (!target) return null;
-  if (!manual && !kit.allow(store.created, starter.author.id, Date.now(), GITHUB.rate)) {
-    await modlog('🐙 Not sent to GitHub (rate limit)', `<#${thread.id}> by <@${starter.author.id}>. A mod can send it with \`/issue\`.`);
+  return fileIssue(thread, {
+    authorId: starter.author.id,
+    author: starter.member?.displayName ?? starter.author.globalName ?? starter.author.username,
+    text: starter.content,
+    attachments: [...starter.attachments.values()].map((a) => ({ name: a.name, url: a.url })),
+    votes: target.kind === 'idea' ? upvotes(starter) : null,
+  }, { manual, target });
+}
+
+// The issue for a bug reported with /report: Kira made the post, the member who reported it owns it (their
+// replies become comments, the answers ping them).
+export function reportIssue(thread, { authorId, author, text }) {
+  return fileIssue(thread, { authorId, author, text, attachments: [], votes: null }, { target: { repo: GITHUB.forums.horizonbugs.repo, kind: 'bug' } });
+}
+
+async function fileIssue(thread, src, { manual = false, target }) {
+  if (store.issues[thread.id] || busy.has(thread.id)) return store.issues[thread.id] ?? null;
+  if (!manual && !kit.allow(store.created, src.authorId, Date.now(), GITHUB.rate)) {
+    await modlog('🐙 Not sent to GitHub (rate limit)', `<#${thread.id}> by <@${src.authorId}>. A mod can send it with \`/issue\`.`);
     return null;
   }
   busy.add(thread.id);
   try {
     await ensureLabels(target.repo);
-    const author = starter.member?.displayName ?? starter.author.globalName ?? starter.author.username;
-    const votes = target.kind === 'idea' ? upvotes(starter) : null;
     const body = kit.issueBody({
-      text: starter.content, author, forum: thread.parent?.name ?? 'forum', threadUrl: threadUrl(thread), tags: tagNames(thread),
-      attachments: [...starter.attachments.values()].map((a) => ({ name: a.name, url: a.url })), votes,
+      text: src.text, author: src.author, forum: thread.parent?.name ?? 'forum', threadUrl: threadUrl(thread), tags: tagNames(thread),
+      attachments: src.attachments, votes: src.votes,
     });
     const issue = await gh.write('POST', `/repos/${full(target.repo)}/issues`, { title: kit.safeTitle(thread.name), body, labels: [GITHUB.labels[target.kind], GITHUB.labels.from] });
     if (!issue) return null; // dry run: logged
     const entry = store.issues[thread.id] = {
-      repo: target.repo, number: issue.number, url: issue.html_url, kind: target.kind, owner: starter.author.id, author,
-      state: 'open', lastCommentId: 0, votes, createdAt: Date.now(),
+      repo: target.repo, number: issue.number, url: issue.html_url, kind: target.kind, owner: src.authorId, author: src.author,
+      state: 'open', lastCommentId: 0, votes: src.votes, createdAt: Date.now(),
     };
     save();
     await say(thread, `📌 Sent to GitHub as ${ref(entry)}. You'll be pinged here when there's an answer.`).catch(console.error);
@@ -76,6 +92,10 @@ async function openIssue(thread, starter, { manual = false, target = null } = {}
     busy.delete(thread.id);
   }
 }
+
+// A member's reports (for `/status`): their posts that became issues, newest first.
+export const reportsOf = (userId) => Object.entries(store.issues).filter(([, e]) => e.owner === userId)
+  .map(([thread, e]) => ({ thread, ...e })).sort((a, b) => b.createdAt - a.createdAt);
 
 // A reply from the reporter in their post: queued, and sent as a comment if it adds something.
 export async function onMessage(msg) {
