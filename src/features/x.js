@@ -40,6 +40,9 @@ export async function onNewJournal(journal, now = Date.now()) {
   save();
 }
 
+export const commands = []; // bot.js gathers every feature's commands and handlers
+export const handlers = {};
+
 export const _test = { setPoster: (p) => { poster = p; } };
 
 export function setup() {
