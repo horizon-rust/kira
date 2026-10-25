@@ -373,7 +373,7 @@ export const commands = enabled ? [
 export const handlers = {
   goodfirst(i) {
     const picks = snapshot ? board.goodFirst(snapshot, 10) : [];
-    if (!picks.length) return i.reply(ephemeral(`No good first tasks labelled right now. See what is being built with `/roadmap`, or the kanban on <${HUB.url}>, or ask in #horizon-chat.`));
+    if (!picks.length) return i.reply(ephemeral(`No good first tasks labelled right now. See what is being built with \`/roadmap\`, or the kanban on <${HUB.url}>, or ask in #horizon-chat.`));
     return i.reply(ephemeral(`🌱 **Good first tasks** (open, nobody on them):\n${picks.map((c) => `• [#${c.number} ${c.title.replace(/[[\]]/g, '')}](<${c.url}>)`).join('\n')}\n\n\`/claim <number>\` before you start.`));
   },
   notify(i) {
