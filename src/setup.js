@@ -7,12 +7,14 @@ import {
   ForumLayoutType, SortOrderType, ChannelFlags,
   AutoModerationRuleTriggerType as T, AutoModerationRuleEventType, AutoModerationActionType as A, AutoModerationRuleKeywordPresetType as Preset,
 } from 'discord.js';
-import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, HORIZON, HOWTO, DEFAULT_CHANNELS, WORK } from './config.js';
+import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, HORIZON, HOWTO, DEFAULT_CHANNELS } from './config.js';
 import { screeningBody, screeningUpToDate } from './screening.js';
 import { load, save, claim } from './store.js';
 import { unique, isCopy, ensureThread } from './adopt.js';
 import { linkify, rolesMessage, howToPost } from './texts.js';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { exportChannel } from './archive.js';
 import { createHash } from 'node:crypto';
 
 const TYPES = { text: ChannelType.GuildText, voice: ChannelType.GuildVoice, forum: ChannelType.GuildForum, announcement: ChannelType.GuildAnnouncement };
@@ -86,6 +88,24 @@ function overwrites(guild, spec, staffCategory) {
     ow.push({ id: everyone, type: OverwriteType.Role, deny: [P.Speak, P.SendMessages] });
   }
   return ow;
+}
+
+// Channels another one replaced (REPLACED): every message exported to scratch/replaced-channels-<date>/ (not
+// committed), then the channel deleted. A failed export keeps the channel (setup stops, nothing is lost).
+async function replaced(guild) {
+  const dir = fileURLToPath(new URL(`../scratch/replaced-channels-${new Date().toISOString().slice(0, 10)}/`, import.meta.url));
+  for (const { key, name, by } of REPLACED) {
+    const ch = guild.channels.cache.get(state.channels[key]) ?? unique([...guild.channels.cache.filter((c) => c.name === name && c.isTextBased() && !c.isVoiceBased()).values()], `channel #${name}`);
+    if (ch) {
+      const n = await exportChannel(ch, name, dir);
+      log('exported', `#${name}:`, n, 'messages →', dir);
+      await ch.delete(`Replaced by #${by}`);
+      log('removed', name, `(replaced by #${by})`);
+    }
+    delete state.channels[key];
+    save();
+  }
+  if (state.messages.workguide) { delete state.messages.workguide; save(); } // the guide of #work-board
 }
 
 async function ensureChannels(guild, community) {
@@ -295,21 +315,6 @@ async function posts(guild) {
     ],
     components: linkRows([['playhorizon.dev', LINKS.horizonSite], ['Download the launcher', LINKS.horizonLauncher], ['GitHub', LINKS.horizon]]),
   });
-  await upsert(guild, 'workguide', 'workboard', {
-    embeds: [new EmbedBuilder().setColor(COLOR).setTitle('🧭 How the work board works').setDescription(L([
-      'Horizon is built by Ludovic (with his AI agents) and contributors. Below is the board: one message per column, kept in sync with GitHub every 10 minutes.',
-      '',
-      '🗃️ **Backlog**: parked for later · 📥 **To do**: open and free · 🔨 **In progress**: claimed, assigned, a branch or a draft pull request · 👀 **Review**: a pull request is ready · ✅ **Done**: closed or merged this week',
-      '',
-      `1. Pick a card in **To do** (or an issue on [GitHub](${LINKS.horizonIssues})).`,
-      '2. **`/claim <number>` before you start.** Kira puts the **in progress** label on it with a comment, and the card moves to In progress with your name.',
-      '3. Open your pull request with **"Fixes #<number>"** in its description: it shows on your card, and the card goes to Review when the pull request is ready.',
-      '4. Stopping? `/unclaim <number>`. A claim lapses after ' + WORK.expireDays + ' days without activity (a comment, a pull request or a commit mentioning the issue); Kira DMs you a few days before.',
-      '',
-      '`/board` shows the board (or a column, or one person\'s cards) just for you; `/working` lists who is on what; `/link-github <username>` shows your Discord name on your pull requests. Maintainers place cards by hand with `/move`. Every pull request opened or merged, every claim and every move gets a line in #dev-log.',
-    ].join('\n')))],
-  });
-
   // The old catalogue of Ludovic's projects (#projects) was deleted with the server's old scope.
   for (const key of Object.keys(state.messages)) if (key.startsWith('project:')) delete state.messages[key];
   save();
@@ -365,7 +370,7 @@ async function onboarding(guild) {
             option('🎮', 'Playing it', 'Download, help, chat, share your creations', [], [c.horizoninfo, c.horizonchat, c.showcase]),
             option('🐛', 'Testing and bug reports', 'Find bugs and report them', [], [c.horizonbugs, c.releases]),
             option('💡', 'Ideas', 'Suggest and vote on what comes next', [], [c.horizonideas]),
-            option('🛠️', 'Contributing code', 'Claim an issue, see who is on what, connect your AI agent', [r.contributor], [c.workboard, c.devlog, c.horizoninfo]),
+            option('🛠️', 'Contributing code', 'Claim an issue, follow what gets merged, connect your AI agent', [r.contributor], [c.updates, c.horizoninfo]),
             option('🧩', 'Modding', 'Mods for Horizon, when modding support lands', [r.modder], [c.horizonideas]),
             option('👀', 'Just following', 'News and hanging out', [], [c.general, c.announcements]),
           ],
@@ -407,7 +412,7 @@ async function serverGuide(guild) {
       res('horizoninfo', 'Horizon', 'What it is, the download, the disclaimer', '🌅'),
       res('faq', 'FAQ', 'Downloading, bug reports, contributing, the mods', '❓'),
       res('releases', 'Releases', 'Every new version and launcher', '📦'),
-      res('workboard', 'Work board', "Who's working on what, and how to /claim", '🛠️'),
+      res('updates', 'Updates', 'What got merged, releases, the week, the board at a glance', '🗞️'),
     ],
   };
   try {
@@ -457,6 +462,7 @@ client.once('clientReady', async () => {
     await enableCommunity(guild);
     await guild.fetch();
     await ensureChannels(guild, true); // forums and the announcement channel, now that Community is on
+    await replaced(guild); // after the channels that replace them exist
     await onboarding(guild);
     await serverGuide(guild);
     await order(guild);

@@ -18,6 +18,7 @@ import * as github from './features/github.js';
 import * as workboard from './features/workboard.js';
 import * as agents from './features/agents.js';
 import * as hub from './features/hub.js';
+import * as updates from './features/updates.js';
 import { startServer } from './mcp.js';
 import { adminRoutes } from './admin.js';
 import { rateLimiter } from './agents.js';
@@ -25,7 +26,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, agents, hub];
+const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, agents, hub, updates];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);

@@ -86,7 +86,7 @@ export const WELCOME_CHANNEL = 'newmembers';
 // The welcome for the people who just joined: up to 5 are named, beyond that a single "welcome everyone".
 export function welcomeMessage(people, memberCount, state) {
   const c = state.channels;
-  const guide = `Start with <#${c.welcome}> (roles), <#${c.rules}> and <#${c.faq}>. Get Horizon in <#${c.horizoninfo}>, then say hi in <#${c.introductions}>. Found a bug? <#${c.horizonbugs}>. Want to help build it? <#${c.workboard}>.`;
+  const guide = `Start with <#${c.welcome}> (roles), <#${c.rules}> and <#${c.faq}>. Get Horizon in <#${c.horizoninfo}>, then say hi in <#${c.introductions}>. Found a bug? <#${c.horizonbugs}>. What changed lately? <#${c.updates}>.`;
   const few = people.length <= 5;
   const count = memberCount ?? '?';
   return {

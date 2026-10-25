@@ -24,7 +24,7 @@ const colName = (key) => board.COLUMNS.find((c) => c.key === key)?.name ?? key;
 export const clean = (s, n) => oneLine(s).slice(0, n)
   .replace(/@(everyone|here)/gi, '@\u200b$1').replace(/<[@#][!&]?\d+>/g, '')
   .replace(/\\/g, '\\\\').replace(/[[\]]/g, (c) => `\\${c}`);
-const link = (c) => `[#${c.number}](<${c.url ?? `https://discord.com/channels/${GUILD_ID}/${state.channels.workboard}`}>)`;
+const link = (c) => (c.url ? `[#${c.number}](<${c.url}>)` : `#${c.number}`);
 
 // Whether a token's owner is still an active member: on the server and not timed out. Asked from Discord's
 // API (works with or without the gateway), remembered 5 seconds at most (H2).
@@ -70,33 +70,6 @@ async function audit(p, tool, args, outcome) {
   pending.push(line);
   timer ??= setTimeout(flushAudit, 30_000);
   timer.unref?.();
-}
-
-// ── #dev-log lines from agents (N2) ───────────────────────────────────────────
-// At most AGENTS.devlogPerHour new lines per member; a note on the same card by the same member within 15
-// minutes is added to their last line (an edit) instead of a new one. Over the limit, the note or move still
-// happens on the board, just without a line.
-const devlog = rateLimiter({ devlog: [AGENTS.devlogPerHour, 3_600_000] });
-const noteLines = new Map(); // `${cardId} ${user}` → { msg, head, parts, at }
-let post = (line) => wb.log(line);
-async function agentLine(p, line) {
-  if (!devlog.take(p.user, 'devlog')) return false;
-  return (await post(line)) ?? false;
-}
-async function noteLine(p, card, text, now = Date.now()) {
-  const key = `${card.id} ${p.user}`;
-  const prev = noteLines.get(key);
-  if (prev?.msg && now - prev.at < 15 * 60_000) {
-    prev.parts.push(clean(text, 400));
-    prev.at = now;
-    const content = `${prev.head}${prev.parts.join(' · ')}`;
-    if (content.length <= 1900) { await prev.msg.edit({ content, allowedMentions: { parse: [] } }).catch(() => {}); return true; }
-  }
-  const head = `📝 **${clean(agentName(p), 60)}** on ${link(card)}: `;
-  const msg = await agentLine(p, `${head}${clean(text, 400)}`);
-  if (msg) noteLines.set(key, { msg, head, parts: [clean(text, 400)], at: now });
-  if (noteLines.size > 500) for (const [k, v] of noteLines) if (now - v.at > 15 * 60_000) noteLines.delete(k);
-  return !!msg;
 }
 
 // ── What the MCP tools do (src/mcp.js decides who may) ───────────────────────
@@ -145,21 +118,17 @@ export const api = {
   async move(p, card, column) {
     const r = board.move(wb.workState(), wb.current(), card.id, column, agentName(p));
     await wb.changed();
-    if (r.from !== r.to) await agentLine(p, `📌 **${clean(agentName(p), 60)}** moved ${link(card)} ${clean(card.title, 80)} to ${colName(r.to)}`);
     return `${card.id} → ${colName(r.to)}`;
   },
   async note(p, card, text) {
     const line = oneLine(text);
     board.addNote(wb.workState(), wb.current(), card.id, { by: agentName(p), text: line });
     await wb.changed();
-    const shown = await noteLine(p, card, line);
-    return `Note added to ${card.id}; it shows on the card${shown ? ' and in #dev-log' : ' (not in #dev-log: your agents reached their lines for this hour)'}.`;
+    return `Note added to ${card.id}; it shows on the card.`;
   },
   async addCard(p, { title, column, url, labels }) {
     const id = board.addCard(wb.workState(), { title, column, url, labels, owner: { discordId: p.user, name: p.name } }, Date.now(), { maxOpen: AGENTS.maxOpenCards });
     await wb.changed();
-    const c = board.find(wb.current(), id);
-    await agentLine(p, `🆕 **${clean(agentName(p), 60)}** added ${link(c)} ${clean(oneLine(title), 120)} (${colName(column)})`);
     return `${id} added in ${colName(column)}.`;
   },
   async ask(p, question, card) {
@@ -254,4 +223,4 @@ export function setup() {
   client.on('guildMemberRemove', (m) => { if (m.guild.id === GUILD_ID) dropTokens(m.user, 'left the server').catch((e) => console.error('agent tokens', e.message)); });
   client.on('guildBanAdd', (ban) => { if (ban.guild.id === GUILD_ID) dropTokens(ban.user, 'banned').catch((e) => console.error('agent tokens', e.message)); });
 }
-export const _test = { dropTokens, memberCache, setPoster: (fn) => { post = fn; }, noteLines, agentLine, noteLine };
+export const _test = { dropTokens, memberCache };

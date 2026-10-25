@@ -134,8 +134,7 @@ export const LAYOUT = [
         check: { media: true, needs: [['What it is', /what it is|\bwhat\b|\bthis\b/i]] },
       },
       { key: 'releases', name: 'releases', type: 'text', readonly: true, topic: 'Every new Horizon version and launcher, posted by Kira. Pick the 📦 Releases role to get pinged.' },
-      { key: 'workboard', name: 'work-board', type: 'text', readonly: true, topic: 'Horizon\'s kanban: Backlog, To do, In progress, Review, Done. Kira keeps it in sync with GitHub every 10 minutes. Contributing? /claim <issue> before you start. /board, /working.' },
-      { key: 'devlog', name: 'dev-log', type: 'text', readonly: true, topic: 'One line per pull request opened or merged and per issue claimed, posted by Kira. Talk about it in #horizon-chat.' },
+      { key: 'updates', name: 'updates', type: 'text', readonly: true, topic: 'What changed in Horizon: merged work grouped by roadmap item, releases, the weekly summary, and the board at a glance. The full kanban and roadmap: playhorizon.dev/hub. Talk about it in #horizon-chat.' },
     ],
   },
   {
@@ -177,7 +176,11 @@ export const LAYOUT = [
 export const HOWTO = { name: '📌 How to post here: read me first', tag: ['📌', 'read me', true], mention: 'the 📌 **How to post here** post' };
 
 // What everyone sees in the channel list from the start; the Onboarding answers add the rest.
-export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'horizonchat', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'workboard', 'general', 'introductions', 'offtopic', 'memes', 'halloffame', 'botcommands'];
+export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'horizonchat', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'offtopic', 'memes', 'halloffame', 'botcommands'];
+
+// Replaced by another channel (2026-10-25: #updates replaces #work-board and #dev-log). Setup exports every message of
+// each one to scratch/ (not committed), then deletes it; if the export fails, the channel stays.
+export const REPLACED = [{ key: 'workboard', name: 'work-board', by: 'updates' }, { key: 'devlog', name: 'dev-log', by: 'updates' }];
 
 // Deleted by setup when no member ever wrote in them (empty channels of the old scope).
 export const RETIRED = ['tracks', 'chill', 'aicoding', 'rewrites', 'coding', 'creatorschat', 'editing', 'musicchat', 'studio'];
@@ -287,6 +290,7 @@ export const HUB = {
   journalJson: process.env.HUB_JOURNAL_URL || 'https://playhorizon.dev/data/journal.json',
   suggestionsChannel: process.env.ROADMAP_SUGGESTIONS_CHANNEL_ID?.trim() || null,
   cacheMs: 5 * 60_000, // the roadmap is fetched again at most every 5 minutes
+  journalEveryMs: 10 * 60_000, // the journal, for #updates
   suggestPerHour: 3, // suggestions per member an hour (/suggest, @Kira suggest)
   reportPerHour: 3, // bugs per member an hour (/report); the GitHub limits of GITHUB.rate apply too
 };
@@ -308,8 +312,8 @@ export const GITHUB = {
   notifyByDm: false, // also DM the poster when their post gets an answer (the thread mention is the main channel)
 };
 
-// The work board (src/board.js, src/features/workboard.js): the kanban in #work-board, #dev-log, /claim, /unclaim,
-// /working, /board, /move (maintainers), /link-github.
+// The work board (src/board.js, src/features/workboard.js): the board's summary at the top of #updates (the kanban
+// itself is on the hub), /claim, /unclaim, /working, /board, /move (maintainers), /link-github.
 // `github`: Discord user → GitHub login known from the start; /link-github adds and overrides.
 export const WORK = {
   repo: 'horizon',
@@ -319,8 +323,6 @@ export const WORK = {
   maxClaims: 8, // issues a member may hold at once (maintainers: no limit)
   memberCooldownMs: 2 * 60 * 1000, // between two claims or unclaims by the same member, any issues
   expireDays: 14, remindDays: 3,  // a claim lapses after 14 days without activity; a DM 3 days before
-  reviewWaitMs: 2 * 86_400_000, // a ready pull request with no review: a line in #dev-log after 2 days, then every 2 days
-  digest: { weekday: 1, hour: 9 }, // the weekly digest in #dev-log: Mondays at 09:00 UTC
   mergedDays: 7,                  // "merged in the last 7 days"
   github: {
     '622720516779802630': 'ludovic111', // Ludovic
@@ -428,6 +430,5 @@ export const AGENTS = {
   issuance: process.env.KIRA_AGENT_ISSUANCE === 'on',
   defaultDays: 90, maxDays: 365, maxPerUser: 5, maxPerDay: 3, // tokens: live at once, issued per 24 h (revoked ones count)
   maxOpenCards: 10, // Kira cards a member may have open
-  devlogPerHour: 10, // #dev-log lines from a member's agents (notes on the same card within 15 min merge into one line)
   ludovicLogin: 'ludovic111',
 };

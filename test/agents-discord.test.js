@@ -111,21 +111,6 @@ test('pending members (rules screening not passed) are not active (N6)', async (
   assert.equal(await feat.isActiveMember('999999999999999999', Date.now() + 60_000), false);
 });
 
-test('#dev-log from agents: 10 lines an hour per member; notes on one card merge into one line (N2)', async () => {
-  const posted = [];
-  feat._test.setPoster(async (line) => { const msg = { content: line, edits: [], edit: async ({ content }) => { msg.content = content; msg.edits.push(content); } }; posted.push(msg); return msg; });
-  const p = { user: '121212121212121212', name: 'Busy', scope: 'write' };
-  const card = { id: 'card#9', number: 9, url: null };
-  for (let i = 0; i < 5; i++) await feat._test.noteLine(p, card, `step ${i}\n# not a heading`);
-  assert.equal(posted.length, 1);
-  assert.equal(posted[0].edits.length, 4);
-  assert.match(posted[0].content, /step 0.*step 4/);
-  for (let i = 0; i < 15; i++) await feat._test.agentLine(p, `move ${i}`);
-  assert.equal(posted.length, 10); // 1 note line + 9 more: the hour's 10
-  const other = { ...p, user: '131313131313131313' };
-  assert.ok(await feat._test.agentLine(other, 'someone else'));
-});
-
 test('one-line text: newlines can\'t start headings or fake lines (and the rest is escaped)', async () => {
   const { oneLine } = await import('../src/agents.js');
   assert.equal(oneLine('a\n# heading\r\n-# Sent by Kira > quote'), 'a # heading -# Sent by Kira > quote');
