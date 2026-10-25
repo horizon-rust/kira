@@ -214,7 +214,7 @@ const AGENT_GUIDE = {
     agentSnippets(MCP_URL, '<your token>'),
     '',
     '**Your key** is personal: shown once, everything your agent does is in your name and logged, it expires in 90 days. `/agent tokens` lists yours, `/agent revoke` stops one at once.',
-    '**Limits:** 3 claimed issues at a time, 6 claims an hour, 10 open cards of your own, 20 changes a minute.',
+    '**Limits:** 8 claimed issues at a time, 6 claims an hour, 10 open cards of your own, 20 changes a minute.',
   ].join('\n'),
   footer: { text: `Endpoint: ${MCP_URL}` },
 };
@@ -301,7 +301,7 @@ export const WORK = {
   label: 'in progress', labelColor: 'fbca04',
   refreshMs: 10 * 60 * 1000,
   claimCooldownMs: 10 * 60 * 1000, // between a claim and an unclaim of the same issue (each writes to GitHub)
-  maxClaims: 3, // issues a member may hold at once (maintainers: no limit)
+  maxClaims: 8, // issues a member may hold at once (maintainers: no limit)
   memberCooldownMs: 2 * 60 * 1000, // between two claims or unclaims by the same member, any issues
   expireDays: 14, remindDays: 3,  // a claim lapses after 14 days without activity; a DM 3 days before
   reviewWaitMs: 2 * 86_400_000, // a ready pull request with no review: a line in #dev-log after 2 days, then every 2 days
