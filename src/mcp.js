@@ -142,7 +142,7 @@ export function buildServer(principal, api, limiter) {
 
   tool('card_note', {
     scope: 'write', bucket: 'write',
-    description: "Post a short progress note on one of the token owner's own cards. It shows on the card and in Discord's #dev-log. Plain text, no mentions.",
+    description: "Post a short progress note on one of the token owner's own cards. It shows on the card (task_get, board_list). Plain text, no mentions.",
     input: { ref: REF, text: z.string().trim().min(3).max(500) },
   }, async ({ ref, text }) => {
     const c = await own(ref);

@@ -1,18 +1,17 @@
-// The work board: Horizon's kanban in #work-board. One pinned message per column (Backlog, To do, In
-// progress, Review, Done), each card an issue or pull request with who, labels and status; Kira edits
-// them after each refresh from GitHub (every 10 minutes, after each command, and when a GitHub link is
-// posted). The board itself is data, in src/board.js; its JSON snapshot is also written to data/board.json
-// for whatever reads it next. #dev-log gets one line per pull request opened or merged, per claim and per
-// move, with no pings. /claim marks an issue as taken (the "in progress" label and a comment on GitHub); a
-// claim lapses after 14 days without activity, with a DM a few days before. /move: maintainers place a card.
-import { SlashCommandBuilder, EmbedBuilder, MessageFlags, MessageType } from 'discord.js';
+// The work board: Horizon's kanban, built from GitHub (every 10 minutes, after each command, and when a GitHub
+// link is posted). The board itself is data, in src/board.js, written to data/board.json; the kanban people see is
+// on the hub (playhorizon.dev/hub), and Discord gets its summary, one message at the top of #updates edited after
+// each refresh. /claim marks an issue as taken (the "in progress" label and a comment on GitHub); a claim lapses
+// after 14 days without activity, with a DM a few days before. /move: maintainers place a card.
+import { SlashCommandBuilder, MessageFlags, MessageType } from 'discord.js';
 import { rateLimiter } from '../agents.js';
-import { WORK, GITHUB, COLOR } from '../config.js';
+import { WORK, GITHUB, HUB } from '../config.js';
 import { client, state, save, channel, isStaff } from '../core.js';
 import { dataFile } from '../store.js';
 import { makeGitHub } from '../github.js';
 import * as board from '../board.js';
 import * as wk from '../workkit.js';
+import { summaryText } from '../journal.js';
 import { writeFileSync, renameSync, readFileSync } from 'node:fs';
 
 const TOKEN = process.env.GITHUB_TOKEN?.trim();
@@ -24,15 +23,13 @@ const LABEL = encodeURIComponent(WORK.label);
 export const BOARD_FILE = dataFile('board.json');
 
 // claims: issue number → { user, who, title, url, since, activity, reminded }; links: Discord id → GitHub login;
-// moves: card id → { column, by, at, auto } (src/board.js); columns: column key → its message in #work-board;
-// logged: PR numbers already in #dev-log; seeded: false until the first look.
+// moves: card id → { column, by, at, auto } (src/board.js); summary: the board's message in #updates.
 const work = (state.work ??= {});
 work.claims ??= {};
 work.links ??= {};
 work.moves ??= {};
-work.columns ??= {};
-work.logged ??= { opened: [], merged: [] };
-work.seeded ??= false;
+// Gone with #work-board and #dev-log (2026-10-25): the column messages, the logged pull requests, the digest.
+for (const key of ['columns', 'board', 'logged', 'seeded', 'digestAt', 'reviewPinged']) delete work[key];
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
 
 // Discord ↔ GitHub: links set with /link-github, then the known ones from config.js.
@@ -50,12 +47,6 @@ const person = (login) => {
 };
 const whoIs = (login) => person(login).name;
 const nameOf = (member, user) => member?.displayName ?? user.globalName ?? user.username;
-
-export async function log(line) {
-  const ch = channel('devlog');
-  if (!ch) return null;
-  return ch.send({ content: line, allowedMentions: { parse: [] } }).catch((e) => { console.error('dev-log', e.message); return null; });
-}
 
 let labelReady = false;
 async function ensureLabel() {
@@ -111,9 +102,8 @@ export async function claim(user, member, n) {
     throw e;
   }
   save();
-  await log(wk.logLine.claimed({ ...work.claims[n], number: n }));
   refreshSoon();
-  return `🔨 #${n} **${issue.title}** is yours: it's in **In progress** on <#${state.channels.workboard}>, with the **${WORK.label}** label and a comment on GitHub. Open your pull request with "Fixes #${n}" in its description so it shows on your card. \`/unclaim ${n}\` if you stop; it lapses after ${WORK.expireDays} days without activity.`;
+  return `🔨 #${n} **${issue.title}** is yours: it's in **In progress** on the board (\`/board\`, and the kanban on <${HUB.url}>), with the **${WORK.label}** label and a comment on GitHub. Open your pull request with "Fixes #${n}" in its description so it shows on your card. \`/unclaim ${n}\` if you stop; it lapses after ${WORK.expireDays} days without activity.`;
 }
 
 // Releases a claim (`why`: 'unclaimed', 'expired' or 'closed'). Removes the label; comments unless the issue closed.
@@ -124,8 +114,6 @@ async function release(n, why) {
   if (why !== 'closed') await gh.write('POST', `${REPO}/issues/${n}/comments`, { body: wk.unclaimComment(entry.who, why) }).catch((e) => console.error('unclaim comment', n, e.message));
   board.unassign(work, n);
   save();
-  if (why === 'unclaimed') await log(wk.logLine.unclaimed({ ...entry, number: n }));
-  if (why === 'expired') await log(wk.logLine.expired({ ...entry, number: n }, WORK.expireDays));
 }
 
 export async function unclaim(user, member, n) {
@@ -190,7 +178,7 @@ async function fetchAll() {
   };
 }
 
-// The pull requests as #dev-log and the claims see them.
+// The pull requests as the claims see them.
 const brief = (p) => ({ number: p.number, title: p.title, url: p.html_url, login: p.user?.login, fixes: board.fixesIn(`${p.title}\n${p.body ?? ''}`), updated: Date.parse(p.updated_at) });
 
 // Each claim: closed issues release it; activity (comments, commits, linked PRs) pushes the deadline;
@@ -223,30 +211,6 @@ async function checkClaims(prs) {
     }
   }
   save();
-}
-
-// Opened and merged pull requests → #dev-log, each once. The first look only records what's there.
-async function logPulls(open, merged) {
-  const L = work.logged;
-  if (!work.seeded) {
-    for (const p of [...open, ...merged]) L.opened = wk.remember(L.opened, p.number);
-    for (const p of merged) L.merged = wk.remember(L.merged, p.number);
-    work.seeded = true;
-    return save();
-  }
-  for (const p of [...open].sort((a, b) => a.number - b.number)) {
-    if (L.opened.includes(p.number)) continue;
-    L.opened = wk.remember(L.opened, p.number);
-    save();
-    await log(wk.logLine.opened({ ...p, who: whoIs(p.login) }));
-  }
-  for (const p of [...merged].sort((a, b) => a.number - b.number)) {
-    if (L.merged.includes(p.number)) continue;
-    L.merged = wk.remember(L.merged, p.number);
-    L.opened = wk.remember(L.opened, p.number);
-    save();
-    await log(wk.logLine.merged({ ...p, who: whoIs(p.login) }));
-  }
 }
 
 // ── The board ────────────────────────────────────────────────────────────────
@@ -290,46 +254,26 @@ function rebuild() {
   return s;
 }
 
-function columnPayload(column) {
-  const t = wk.columnText(column);
-  const embed = new EmbedBuilder().setColor(t.color).setTitle(t.title).setDescription(t.description).setTimestamp(Date.parse(snapshot.generatedAt));
-  if (t.footer) embed.setFooter({ text: t.footer });
-  return { embeds: [embed], allowedMentions: { parse: [] } };
-}
-
-// One pinned message per column, in order. Edited in place; if one is gone, all five are posted again
-// (so the order stays right) and the old ones are deleted.
+// The board's summary: one message at the top of #updates, pinned, edited in place after each refresh (posted
+// again if it was deleted).
 async function render() {
-  const ch = channel('workboard');
+  const ch = channel('updates');
   if (!ch || !snapshot) return;
-  if (work.board) { // the single message of the first version of the board
-    await ch.messages.fetch(work.board).then((m) => m.delete()).catch(() => {});
-    delete work.board;
-    save();
-  }
-  const found = {};
-  for (const col of board.COLUMNS) found[col.key] = work.columns[col.key] && await ch.messages.fetch(work.columns[col.key]).catch(() => null);
-  if (board.COLUMNS.every((c) => found[c.key])) {
-    for (const column of snapshot.columns) await found[column.key].edit(columnPayload(column));
-    return;
-  }
-  for (const msg of Object.values(found)) await msg?.delete().catch(() => {});
-  for (const column of snapshot.columns) {
-    const msg = await ch.send(columnPayload(column));
-    work.columns[column.key] = msg.id;
-    save();
-    await msg.pin().catch((e) => console.error('pin column', e.message));
-  }
-  // Discord's "Kira pinned a message" lines: not needed in a read-only channel.
-  const notices = (await ch.messages.fetch({ limit: 20 })).filter((m) => m.type === MessageType.ChannelPinnedMessage && m.author.id === client.user.id);
+  const payload = summaryText(snapshot, board.goodFirst(snapshot, 3), HUB.url);
+  const old = work.summary && await ch.messages.fetch(work.summary).catch(() => null);
+  if (old) return void await old.edit(payload);
+  const msg = await ch.send(payload);
+  work.summary = msg.id;
+  save();
+  await msg.pin().catch((e) => console.error('pin summary', e.message));
+  // Discord's "Kira pinned a message" line: not needed in a read-only channel.
+  const notices = (await ch.messages.fetch({ limit: 5 })).filter((m) => m.type === MessageType.ChannelPinnedMessage && m.author.id === client.user.id);
   for (const m of notices.values()) await m.delete().catch(() => {});
-  console.log('work board columns posted');
 }
 
-// ── Notices: CI failures, reviews waiting, the weekly digest ──────────────────
-// Lines in #dev-log (no pings). A pull request's author also gets a DM about a failing CI if their GitHub
-// login is linked and they turned it on with /notify (at most 5 DMs an hour each). Nothing is reported for
-// what was already there when Kira first looked (ciChanges/reviewsDue seed themselves).
+// ── CI failures ──────────────────────────────────────────────────────────────
+// A pull request's author gets a DM when CI starts failing on its commit, if their GitHub login is linked and they
+// turned it on with /notify (at most 5 DMs an hour each). Nothing for what was already failing at the first look.
 const dms = rateLimiter({ dm: [5, 3_600_000] });
 async function dmAuthor(login, text) {
   const id = userOf(login);
@@ -338,46 +282,15 @@ async function dmAuthor(login, text) {
   await u?.send({ content: text, allowedMentions: { parse: [] } }).catch(() => {});
 }
 
-async function notices(now = Date.now()) {
-  const open = raw.pulls.filter((p) => p.state === 'open').map((p) => ({
-    number: p.number, title: p.title, url: p.html_url, login: p.user?.login, who: whoIs(p.user?.login),
-    sha: p.head?.sha, ci: p.ci, reviews: p.reviews ?? 0, draft: !!p.draft, createdAt: Date.parse(p.created_at ?? p.updated_at),
-  }));
+async function notices() {
+  const open = raw.pulls.filter((p) => p.state === 'open').map((p) => ({ number: p.number, title: p.title, url: p.html_url, login: p.user?.login, sha: p.head?.sha, ci: p.ci }));
   const ci = wk.ciChanges(open, work.ciSeen);
   work.ciSeen = ci.seen;
-  const rv = wk.reviewsDue(open, work.reviewPinged, now, WORK.reviewWaitMs);
-  work.reviewPinged = rv.pinged;
   save();
   for (const p of ci.report) {
-    await log(wk.noticeLine.ciFailing(p));
     await dmAuthor(p.login, `❌ CI is failing on your Horizon pull request #${p.number} (${p.title}): ${p.url}
 -# You get these because you turned them on with /notify. /notify off stops them.`);
   }
-  for (const p of rv.due) await log(wk.noticeLine.reviewWaiting(p, Math.floor((now - p.createdAt) / wk.DAY)));
-  await digest(now);
-}
-
-// The weekly digest in #dev-log (WORK.digest: the day and hour, UTC). Marked as sent before it's posted,
-// so a crash can never post it twice; the first time, only the current week is marked.
-async function digest(now) {
-  const slot = wk.digestSlot(now, WORK.digest);
-  if (work.digestAt === undefined) { work.digestAt = slot; return save(); }
-  if (work.digestAt >= slot) return;
-  work.digestAt = slot;
-  save();
-  const since = slot - 7 * wk.DAY;
-  const ch = channel('devlog');
-  if (!ch) return;
-  const [releases, readme] = await Promise.all([gh.get(`${REPO}/releases?per_page=20`).catch(() => []), gh.get(`${REPO}/readme`).catch(() => null)]);
-  const text = wk.digestText({
-    merged: raw.pulls.filter((p) => p.merged_at && Date.parse(p.merged_at) >= since).map((p) => ({ number: p.number, title: p.title, url: p.html_url, who: whoIs(p.user?.login) })),
-    opened: raw.issues.filter((i) => Date.parse(i.created_at) >= since).map((i) => ({ number: i.number, title: i.title, url: i.html_url })),
-    releases: (releases ?? []).filter((r) => !r.draft && Date.parse(r.published_at) >= since).map((r) => ({ name: r.name, tag: r.tag_name, url: r.html_url })),
-    parity: wk.parityFrom(readme?.content ? Buffer.from(readme.content, 'base64').toString('utf8') : ''),
-    goodFirst: snapshot ? board.goodFirst(snapshot) : [],
-  });
-  await ch.send({ embeds: [new EmbedBuilder().setColor(COLOR).setTitle(text.title).setDescription(text.description)], allowedMentions: { parse: [] } });
-  console.log('weekly digest posted');
 }
 
 let running = null;
@@ -388,7 +301,6 @@ export function refresh() {
       const open = raw.pulls.filter((p) => p.state === 'open').map(brief);
       const merged = raw.pulls.filter((p) => p.merged_at).map(brief);
       await checkClaims([...open, ...merged]);
-      await logPulls(open, merged);
       rebuild();
       await render();
       await notices().catch((e) => console.error('notices', e.message));
@@ -423,7 +335,7 @@ function workingText() {
   }
   if (!people.size) return 'Nobody is working on an issue or has a pull request open right now. Pick one on GitHub and `/claim` it.';
   const lines = [...people].map(([who, items]) => `**${who}**\n${items.map((l) => `• ${l}`).join('\n')}`);
-  return `${lines.join('\n\n')}\n\nThe live board is in <#${state.channels.workboard}>.`.slice(0, 1990);
+  return `${lines.join('\n\n')}\n\nThe kanban: <${HUB.url}>`.slice(0, 1990);
 }
 
 function boardText(column, member) {
@@ -460,7 +372,7 @@ export const commands = enabled ? [
 export const handlers = {
   goodfirst(i) {
     const picks = snapshot ? board.goodFirst(snapshot, 10) : [];
-    if (!picks.length) return i.reply(ephemeral(`No good first tasks labelled right now. Look at **To do** in <#${state.channels.workboard}>, or ask in #horizon-chat.`));
+    if (!picks.length) return i.reply(ephemeral(`No good first tasks labelled right now. See what is being built with \`/roadmap\`, or the kanban on <${HUB.url}>, or ask in #horizon-chat.`));
     return i.reply(ephemeral(`🌱 **Good first tasks** (open, nobody on them):\n${picks.map((c) => `• [#${c.number} ${c.title.replace(/[[\]]/g, '')}](<${c.url}>)`).join('\n')}\n\n\`/claim <number>\` before you start.`));
   },
   notify(i) {
@@ -499,7 +411,6 @@ export const handlers = {
     rebuild();
     await render().catch((e) => console.error('work board', e.message));
     const name = (key) => board.COLUMNS.find((c) => c.key === key).name;
-    if (result.from !== result.to) await log(wk.logLine.moved({ who: nameOf(i.member, i.user), number: card.number, title: card.title, url: card.url, to: name(result.to) }));
     const back = result.to === card.auto ? ' (where GitHub puts it, so no manual move is kept)' : `. It stays there until its state on GitHub changes (GitHub would put it in ${name(card.auto)}).`;
     return i.reply(ephemeral(`📌 #${card.number} → **${name(result.to)}**${back}`));
   },

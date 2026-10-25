@@ -10,9 +10,12 @@ projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no pai
 
 - **Categories**: 👋 start here (welcome, #new-members, rules, FAQ, announcements, #ludovic-videos) · 🌅 horizon (#horizon-info,
   #horizon-chat, #horizon-bugs, #horizon-ideas, #showcase for videos/clips/screenshots/builds made in Horizon,
-  #releases, #work-board, #dev-log) · 💬 general (#general, #introductions, #off-topic, #memes, #hall-of-fame,
+  #releases, #updates) · 💬 general (#general, #introductions, #off-topic, #memes, #hall-of-fame,
   #bot-commands) · 🔊 voice · 🛡️ staff. The old channels (#projects, #resources, #help, #beats, …) were deleted
   on 2026-10-14 after their messages were exported (`scratch/deleted-channels-2026-10-14/`, not committed).
+  #work-board and #dev-log are replaced by #updates (`REPLACED` in `config.js`): setup exports every message of
+  each to `scratch/replaced-channels-<date>/<name>.json` and `.md` (not committed), then deletes the channel; a
+  failed export stops setup with the channel still there.
 - **Forums** each have post guidelines, a template, required tags (some only mods set), a minimum time
   between posts. Kira checks every new post against the template. Each forum with a template also has
   ONE locked, pinned **📌 How to post here: read me first** post (guide, template, rules). It is Kira's own
@@ -53,7 +56,8 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | GitHub issues | Posts in `#horizon-bugs` that pass their template, and `/report`, become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `#horizon-ideas` posts go to the suggestion queue instead. `/issue` (staff). Off until its token exists: see below |
 | Ludovic's videos | His YouTube channel (@lu4ovic) → `#ludovic-videos`, a read-only channel: every new video, Short or live stream, once, as `<@&🎬 Videos> 🎬 New video: **title**` and its link (Discord shows the player). Pings only the opt-in **🎬 Videos** role (picked in Onboarding's "Want to be pinged?" or with the buttons in `#welcome`; `allowedMentions: { parse: [], roles: [that role] }`, so nothing in a title can ping; the role's key is `newvideos`, not the retired `videos` of the old server). The channel's public Atom feed every 10 minutes ([`src/videos.js`](src/videos.js), channel id in `VIDEOS` in `config.js`); the ids posted are in `state.videos`. The first run only records the videos already out and sets the date before which nothing is ever posted; a feed error is logged and retried 10 minutes later. Giving the role to the members already on the server is a one-off: `scripts/grant-videos-role.js` (below) |
 | Releases | Releases of ludovic111/horizon → `#releases`: the game (`vX.Y.Z` tags, a summary of New and Fixed) and the launcher (`launcher@X.Y.Z`; before 0.2 `launcher-v…`), nothing else (REST API every 3 minutes, newest 200; [`src/releases.js`](src/releases.js)). One channel since 2026-10-23: every release gets one post, once by release id (`state.releases`; ids posted as Alpha before that, `state.nightlies`, are never posted again). Every post is silent (no role, Discord's `SUPPRESS_NOTIFICATIONS` flag 4096) except one a day: the first game release published after 20:00 UTC pings the 📦 Releases role and lists the game releases since the last ping ("Out since the last ping"; `state.releasePings`). Launcher releases never ping. No dates in the posts. Drafts never. Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
-| Work board | The kanban in `#work-board`, `#dev-log`, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/status`, `/goodfirst`, `/notify`: see below |
+| `#updates` | One feed generated from the hub's journal: merged work grouped by roadmap item, releases (pointing to `#releases`), shipped items, the weekly summary; the board's summary on top: see below |
+| Work board | The board behind the hub's kanban, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/goodfirst`, `/notify`: see below |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
 | Info | `/help` (what Kira does, its commands), `/links`, `/horizon`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
@@ -69,13 +73,34 @@ Content intents), owned by Ludovic's account. Token: `op://Agents/Discord bot Ki
 
 Install the unit with `ln -s ~/code/kira/deploy/kira.service ~/.config/systemd/user/`.
 
+## #updates
+
+[`src/features/updates.js`](src/features/updates.js) reads the hub's journal (`HUB_JOURNAL_URL`, default
+`https://playhorizon.dev/data/journal.json`, every 10 minutes) and posts each new entry once (`state.updates.seen`),
+silently and with no pings ([`src/journal.js`](src/journal.js)):
+
+- merged pull requests, **grouped by roadmap item** (their `roadmap:<id>` label): one post per item, its name
+  linked to `<hub>#<id>`, one line per pull request in plain words; merges with no item under "Other changes";
+- each **release**: one line with its link, pointing to `#releases` for the notes (Kira still posts those there);
+- each roadmap item that **shipped**, with its `post` (or `plain`) text and the release;
+- the **weekly summary** (written by the maintainers into the horizon repo's `roadmap/journal/`), as an embed.
+
+The first look only records what is already there; until setup has made `#updates` nothing is fetched or recorded.
+At the top of the channel, one pinned message is the **board's summary** (the columns' counts, three good first
+tasks, the hub's link), edited in place after every board refresh.
+
+**journal.json** (generated in the horizon repo): `{ "entries": [ { "id", "kind", "date", "title", "plain"?,
+"dev"?, "url"?, "item"?, "item_title"?, "number"?, "tag"?, "shipped_in"?, "post"?, "announce"? } ] }`. `kind` is
+`merge`, `release`, `weekly` or `shipped` (others are skipped); `id` never changes (it is what "posted once" keys
+on); `item` is a roadmap id; links outside github.com and playhorizon.dev are not shown.
+
 ## Work board
 
-`#work-board` is Horizon's kanban: Kira's guide (posted by setup), then **one pinned message per column**,
-Backlog · To do · In progress · Review · Done, edited in place after every refresh (every 10 minutes, after
-each command, and 30 s after someone posts a link to a Horizon issue or pull request). Each card is one line:
-the issue or pull request (link), who is on it (🔨 = claimed on Discord), its labels, its pull requests and
-their status (draft, CI, review), and when.
+The board is built from GitHub every 10 minutes, after each command, and 30 s after someone posts a link to a
+Horizon issue or pull request; people see it as the kanban on the hub (built from the same public GitHub data), and
+on Discord through `/board`, `/working`, `/mytasks` and the summary in `#updates`. Each card is the issue or pull
+request (link), who is on it (🔨 = claimed on Discord), its labels, its pull requests and their status (draft, CI,
+review), and when.
 
 - **Where GitHub puts a card** (`autoColumn` in [`src/board.js`](src/board.js)): an open issue → To do; claimed,
   assigned, a branch named for it (`40-…`, `issue-40`) or a draft pull request that fixes it → In progress; a
@@ -88,21 +113,16 @@ their status (draft, CI, review), and when.
   the claim; `/unclaim`. A claim lapses after 14 days without activity (a comment, a commit or a pull request
   mentioning the issue), with a DM 3 days before. `/link-github <username>` shows Discord names on pull requests
   (Ludovic and Cosmic are in `WORK.github`).
-- **`#dev-log`**: one line, no pings, per pull request opened or merged, per claim, unclaim, lapse and move;
-  a line when CI starts failing on a pull request's commit, and when a ready pull request has waited 2 days with
-  no review (then every 2 days). The author also gets a DM about CI if they linked GitHub and turned on
-  `/notify dm:on` (5 DMs an hour at most). Nothing is reported for what was already there at Kira's first look.
-- **Weekly digest** in `#dev-log`, Mondays 09:00 UTC (`WORK.digest`): vanilla parity from the README badge,
-  pull requests merged, issues opened and releases published in the week, and good first tasks. Marked as sent
-  before it's posted, so never twice.
+- **CI**: a pull request's author gets a DM when CI starts failing on its commit, if they linked GitHub and turned on
+  `/notify dm:on` (5 DMs an hour at most). Nothing for what was already failing at Kira's first look.
 - **Good first tasks**: open, unclaimed issues in To do labelled `good first issue` or `help wanted`
-  (`board.goodFirst`); `/goodfirst` lists them, the digest shows five.
+  (`board.goodFirst`); `/goodfirst` lists them, the summary in `#updates` shows three.
 - **For other programs** (the coming agent/MCP feature): [`src/board.js`](src/board.js) has no Discord and no
   network: `build(github, work)` → `{ snapshot, stale }`, `list(snapshot, { column, person, kind })`,
   `find(snapshot, ref)`, `move(work, snapshot, ref, column, by)`, `assign` / `unassign` (claims). Each refresh
   writes the snapshot to `data/board.json` (`version`, `repo`, `generatedAt`, `columns[].cards[]` with `id`,
   `kind`, `number`, `title`, `url`, `state`, `column`, `auto`, `moved`, `people`, `claim`, `labels`, `prs`,
-  `branches`). The claims and moves live in `state.work`.
+  `branches`). The claims, moves and the summary's message id live in `state.work`.
 
 The token needs **Issues: Read and write** on horizon (labels and comments). Pull requests, checks and
 branches are read without a permission because the repo is public; if it ever goes private, add **Pull
@@ -157,7 +177,7 @@ the staff channel `#agent-log` (grouped every 30 s) and the service log.
 | A contributor's agent does what the contributor may not | Scopes, then ownership: write tokens only move or note issues their owner **claimed** and Kira cards they own (a GitHub login linked with `/link-github` is not proof, so it never counts for writes); Done is for maintainers; maintainer actions check the scope **and** the Discord role at each call; actions run in the owner's name |
 | Prompt injection through issues, comments, notes, names, branches | All text people wrote comes wrapped in `<untrusted source=…>` (titles, bodies, comments, notes and their authors, Discord names, Kira cards' labels and links, pull request branch names, statuses), with `&`, `<`, `>` and their lookalikes (＜ ＞ ‹ › ⟨ ⟩ 〈 〉 …) escaped inside, so nothing in it can open or close a tag; every answer says to treat it as data. No tool can do anything an injected agent could abuse beyond its owner's own cards |
 | An agent reads what it shouldn't | No tool reads files, runs code, sees tokens (others' or its own), DMs, mod-mail, private channels or the server's members. `ludovic_now` uses only public GitHub data and the `/status` Ludovic sets |
-| Spam and abuse through agents | Limits per member, not per token; at most 3 tokens issued a day (revoked ones count) and 5 live; at most 10 open Kira cards per member. Claims (agents and `/claim` alike): 3 held at once per member, 2 minutes between two claims or unclaims by a member, 10 minutes between a claim and an unclaim of one issue; agents' claims also spend the GitHub budget above (maintainers are exempt from the per-member caps only through the maintain scope). An agent without maintain unclaims only its owner's claims. #dev-log: 10 lines an hour from a member's agents; notes on one card within 15 minutes merge into one edited line. Agent text in Discord is one line (no headings, lists, quotes or fake `-#` lines), never pings (no mentions parsed, `@everyone` broken), can't make masked links (brackets escaped), and says it comes from an agent. Card links: https on github.com or playhorizon.dev only, exactly as parsed, with no spaces, `< > ( )`; labels: `a-z 0-9`, space, dash. Cards stored before these rules are re-checked at start |
+| Spam and abuse through agents | Limits per member, not per token; at most 3 tokens issued a day (revoked ones count) and 5 live; at most 10 open Kira cards per member. Claims (agents and `/claim` alike): 3 held at once per member, 2 minutes between two claims or unclaims by a member, 10 minutes between a claim and an unclaim of one issue; agents' claims also spend the GitHub budget above (maintainers are exempt from the per-member caps only through the maintain scope). An agent without maintain unclaims only its owner's claims.  Agents' notes and moves stay on the cards: nothing they do is posted in a public channel except `ask`. Agent text in Discord is one line (no headings, lists, quotes or fake `-#` lines), never pings (no mentions parsed, `@everyone` broken), can't make masked links (brackets escaped), and says it comes from an agent. Card links: https on github.com or playhorizon.dev only, exactly as parsed, with no spaces, `< > ( )`; labels: `a-z 0-9`, space, dash. Cards stored before these rules are re-checked at start |
 | Names in GitHub comments | Discord names go in a code span: no @mention, link or Markdown |
 | Malformed or oversized input, and errors | zod schemas on every argument (numbers, refs, columns, lengths, card links), 64 KB bodies, POST only, 15/30 s timeouts. Agents see refusals; any other error is logged and shown as "Internal error." |
 | The host is compromised | Kira runs on Railway, not on Ludovic's machines, as the unprivileged `node` user (the entrypoint only chowns `/data` as root); it holds only the Discord bot token and the fine-grained GitHub token (Issues: write on horizon). Nothing on the internet talks to the ThinkPad |

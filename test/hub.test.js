@@ -142,7 +142,8 @@ test('#horizon-ideas: a post that follows the template goes to the queue once, a
 });
 
 test('every slash command name is used once (Discord refuses the whole list otherwise); /report is the bug form', async () => {
-  const mods = await Promise.all(['moderation', 'levels', 'rooms', 'community', 'forums', 'github', 'workboard', 'agents', 'hub'].map((f) => import(`../src/features/${f}.js`)));
+  const mods = await Promise.all(['moderation', 'levels', 'rooms', 'community', 'forums', 'github', 'workboard', 'agents', 'hub', 'updates'].map((f) => import(`../src/features/${f}.js`)));
+  for (const m of mods) assert.ok(Array.isArray(m.commands) && m.handlers, 'every feature exports commands and handlers (bot.js reads them)');
   const names = mods.flatMap((m) => m.commands).map((c) => c.toJSON().name);
   assert.equal(new Set(names).size, names.length, names.filter((n, i) => names.indexOf(n) !== i).join());
   for (const n of ['report', 'suggest', 'roadmap', 'claim', 'status', 'report-member', 'link-github']) assert.ok(names.includes(n), n);
