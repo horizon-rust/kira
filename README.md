@@ -56,6 +56,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | GitHub issues | Posts in `#horizon-bugs` that pass their template, and `/report`, become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `#horizon-ideas` posts go to the suggestion queue instead. `/issue` (staff). Off until its token exists: see below |
 | Ludovic's videos | His YouTube channel (@lu4ovic) → `#ludovic-videos`, a read-only channel: every new video, Short or live stream, once, as `<@&🎬 Videos> 🎬 New video: **title**` and its link (Discord shows the player). Pings only the opt-in **🎬 Videos** role (picked in Onboarding's "Want to be pinged?" or with the buttons in `#welcome`; `allowedMentions: { parse: [], roles: [that role] }`, so nothing in a title can ping; the role's key is `newvideos`, not the retired `videos` of the old server). The channel's public Atom feed every 10 minutes ([`src/videos.js`](src/videos.js), channel id in `VIDEOS` in `config.js`); the ids posted are in `state.videos`. The first run only records the videos already out and sets the date before which nothing is ever posted; a feed error is logged and retried 10 minutes later. Giving the role to the members already on the server is a one-off: `scripts/grant-videos-role.js` (below) |
 | Releases | Releases of ludovic111/horizon → `#releases`: the game (`vX.Y.Z` tags, a summary of New and Fixed) and the launcher (`launcher@X.Y.Z`; before 0.2 `launcher-v…`), nothing else (REST API every 3 minutes, newest 200; [`src/releases.js`](src/releases.js)). One channel since 2026-10-23: every release gets one post, once by release id (`state.releases`; ids posted as Alpha before that, `state.nightlies`, are never posted again). Every post is silent (no role, Discord's `SUPPRESS_NOTIFICATIONS` flag 4096) except one a day: the first game release published after 20:00 UTC pings the 📦 Releases role and lists the game releases since the last ping ("Out since the last ping"; `state.releasePings`). Launcher releases never ping. No dates in the posts. Drafts never. Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
+| X | Releases, the weekly summary and announced shipped items, from the same journal, ≤ 240 characters; off without credentials, `X_DRY_RUN=1` prints: see below |
 | `#updates` | One feed generated from the hub's journal: merged work grouped by roadmap item, releases (pointing to `#releases`), shipped items, the weekly summary; the board's summary on top: see below |
 | Work board | The board behind the hub's kanban, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/goodfirst`, `/notify`: see below |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
@@ -93,6 +94,23 @@ tasks, the hub's link), edited in place after every board refresh.
 "dev"?, "url"?, "item"?, "item_title"?, "number"?, "tag"?, "shipped_in"?, "post"?, "announce"? } ] }`. `kind` is
 `merge`, `release`, `weekly` or `shipped` (others are skipped); `id` never changes (it is what "posted once" keys
 on); `item` is a roadmap id; links outside github.com and playhorizon.dev are not shown.
+
+## X (broadcast only)
+
+X only broadcasts: [`src/xposter.js`](src/xposter.js) and [`src/features/x.js`](src/features/x.js) post, from each
+journal fetch of #updates, every new **release**, **weekly summary** and **shipped** item flagged `announce: true`,
+once each (`state.x.seen`; the first look only records), at most 3 a round and 10 a day. Each post is at most 240
+characters: the entry's `post` (or `plain`) cut at a word, then its link (github.com or playhorizon.dev, else the
+hub); `@` names are broken so nobody is mentioned. Nothing is read or answered on X.
+
+- **Off** unless credentials are set: `X_ACCESS_TOKEN` and/or `X_REFRESH_TOKEN` (OAuth 2.0 user context of the
+  Horizon account's own X app, scopes `tweet.write users.read tweet.read offline.access`), `X_CLIENT_ID`, and
+  `X_CLIENT_SECRET` for a confidential client. Access tokens last two hours: on a 401 Kira refreshes once and keeps
+  the new pair (X rotates the refresh token) in `x-tokens.json` next to the state (mode 600), which wins over the
+  variables from then on. Errors never include X's answer to a refresh.
+- **`X_DRY_RUN=1`**: every post is printed in the log instead (`x dry-run: "…"`), with or without credentials.
+- **Preview** without Kira: `node scripts/x-preview.mjs [journal.json]` prints every text it would post, with its
+  length.
 
 ## Work board
 
