@@ -9,7 +9,7 @@ export const SERVER = {
   name: 'Horizon',
   description: 'Minecraft Java Edition rewritten in Rust. Bugs, ideas, releases. playhorizon.dev · Not affiliated with Mojang/Microsoft.', // 120 max
   // Kira's About me (the application's description, 400 max).
-  about: "Kira, Horizon's helper 🌅 I keep the work board in sync with GitHub, track who's on which task, post every Horizon release, send your bug reports and ideas to GitHub, and help the mods keep things friendly. Type /help to see what I can do, or DM me to reach the mods. playhorizon.dev",
+  about: "Kira, Horizon's front desk 🌅 /report a bug (it becomes a GitHub issue), /suggest an idea, ask /roadmap what's being built, /claim a task. I post every release and what changed in #updates, and help the mods keep things friendly. /help for the rest, or DM me to reach the mods. playhorizon.dev/hub",
   // Horizon's mark (horizon repo, docs/media/brand/social): the server icon and Kira's own avatar, on violet so
   // Kira reads apart from the project. src/brand.js applies them when they change.
   icon: 'assets/horizon-icon.png', // Horizon's avatar.svg at 512 px (README: Discord brand assets)
@@ -20,6 +20,7 @@ export const LINKS = {
   github: 'https://github.com/ludovic111',
   horizon: 'https://github.com/ludovic111/horizon',
   horizonSite: 'https://playhorizon.dev',
+  hub: 'https://playhorizon.dev/hub', // the roadmap, the kanban, the journal and how to help
   horizonLauncher: 'https://github.com/ludovic111/horizon/releases?q=launcher&expanded=true',
   horizonIssues: 'https://github.com/ludovic111/horizon/issues',
   horizonPulls: 'https://github.com/ludovic111/horizon/pulls',
@@ -113,15 +114,15 @@ export const LAYOUT = [
         key: 'horizonbugs', name: 'horizon-bugs', type: 'forum',
         topic: 'One bug per post, with the template. Search first: if it\'s already reported, add your details in that post.',
         tags: [['💥', 'crash'], ['🖼️', 'rendering'], ['🎮', 'gameplay'], ['🌍', 'world gen'], ['⚡', 'performance'], ['🔊', 'sound'], ['🖥️', 'install / launch'], ['🔍', 'confirmed', true], ['🔁', 'duplicate', true], ['✅', 'fixed', true], ['📝', 'via /report', true]],
-        guide: 'One bug per post. **Search first**: if someone already reported it, reply in their post instead. Title: what\'s broken, in a few words ("Water renders black on AMD"). Pick a tag. Kira checks that the template is filled in; posts without it are closed after an hour. Each post becomes a GitHub issue, and you are pinged here when it is answered or fixed.',
+        guide: 'One bug per post. **Search first**: if someone already reported it, reply in their post instead. Title: what\'s broken, in a few words ("Water renders black on AMD"). Pick a tag. Kira checks that the template is filled in; posts without it are closed after an hour. Each post becomes a GitHub issue, and you are pinged here when it is answered or fixed. `/report` (anywhere) opens a form that makes the post for you.',
         template: '**What I did:** the steps, one per line\n**What happened:**\n**What I expected:**\n**Horizon version:** release or commit\n**OS, CPU, GPU:**\n+ a screenshot, a video or the log file if you have one',
         check: { min: 80, needs: [['What I did', /what i did|steps/i], ['What happened', /what happened|happen/i], ['What I expected', /expect/i], ['OS, CPU, GPU', /\b(os|windows|linux|mac|macos|gpu|nvidia|amd|intel|radeon|geforce)\b/i]] },
       },
       {
         key: 'horizonideas', name: 'horizon-ideas', type: 'forum', react: ['👍', '👎'],
-        topic: 'One idea per post, with the template. Vote with 👍 and 👎: the most wanted ones get built.',
+        topic: 'One idea per post, with the template. Vote with 👍 and 👎. Kira sends each idea to the suggestion queue; picked ones become roadmap items (playhorizon.dev/hub).',
         tags: [['⚡', 'performance'], ['🧩', 'modding'], ['🌐', 'multiplayer'], ['🤖', 'mcp / agents'], ['🎬', 'video studio'], ['🎮', 'gameplay'], ['🚀', 'launcher'], ['💡', 'other'], ['📌', 'planned', true], ['✅', 'done', true], ['❌', "won't do", true]],
-        guide: 'One idea per post. **Search first** and vote 👍 on the existing post rather than making a new one. Title: the idea in a few words. Horizon aims at 100% vanilla behaviour first: ideas that change gameplay come after that. Kira closes posts without the template after an hour. Each post becomes a GitHub issue.',
+        guide: 'One idea per post. **Search first** and vote 👍 on the existing post rather than making a new one. Title: the idea in a few words. Horizon aims at 100% vanilla behaviour first: ideas that change gameplay come after that. Kira closes posts without the template after an hour. Each post goes to the suggestion queue the maintainers read (`/suggest` does the same from any channel); the ones they pick become items on the roadmap at playhorizon.dev/hub. Ideas are not GitHub issues.',
         template: '**The idea:**\n**Why:** what it makes better\n**How it could work:** (optional)',
         check: { min: 40, needs: [['The idea', /the idea|idea/i], ['Why', /why/i]] },
       },
@@ -285,7 +286,7 @@ export const ONE_OFFS = [
 // the roadmap and the journal as JSON (the horizon repo's roadmap/README.md). Suggestions, from Discord and from
 // the site, go to one private queue: #roadmap-suggestions, whose ID is ROADMAP_SUGGESTIONS_CHANNEL_ID (unset: off).
 export const HUB = {
-  url: process.env.HUB_URL || 'https://playhorizon.dev/hub',
+  url: process.env.HUB_URL || LINKS.hub,
   roadmapJson: process.env.HUB_ROADMAP_URL || 'https://playhorizon.dev/data/roadmap.json',
   journalJson: process.env.HUB_JOURNAL_URL || 'https://playhorizon.dev/data/journal.json',
   suggestionsChannel: process.env.ROADMAP_SUGGESTIONS_CHANNEL_ID?.trim() || null,
@@ -367,20 +368,21 @@ export const WELCOME = {
     '**Horizon** is Minecraft: Java Edition rewritten from scratch in Rust, checked against the real game so it plays exactly like vanilla, and faster. This is its server: players, testers and the people building it.',
     '',
     '**Where things are**',
-    '🌅 **horizon**: #horizon-info (what it is, the download), #horizon-chat, #horizon-bugs, #horizon-ideas, #showcase (your videos, screenshots, builds), #releases, #work-board and #dev-log',
+    '🌅 **horizon**: #horizon-info (what it is, the download), #horizon-chat, #horizon-bugs, #horizon-ideas, #showcase (your videos, screenshots, builds), #releases, #updates (what changed)',
     '💬 **general**: chat, introductions, memes, the #hall-of-fame. Anything that isn\'t Horizon (other games, music, AI coding, Ludovic\'s other projects) goes in #off-topic.',
     '🔊 **voice**: join **➕ create your room** for your own voice channel',
     '',
     '**How it works**',
     `• Get Horizon at ${LINKS.horizonSite}: download the launcher; you need your own copy of Minecraft: Java Edition.`,
-    '• Bugs and ideas are forums with a template: read the 📌 **How to post here** post at the top first. Each post becomes a GitHub issue, and you hear back in your post.',
-    '• Want to contribute? Pick a card in **To do** on #work-board, `/claim` it, and it moves to **In progress**. Coding with an AI agent? `/agent connect` gives it the board (how-to in #horizon-info).',
+    `• Everything that is happening, in one place: the roadmap, the kanban and the journal at ${LINKS.hub}. Here, \`/roadmap\` sums it up.`,
+    '• Found a bug? `/report`, or post in #horizon-bugs (read its 📌 **How to post here** post first): it becomes a GitHub issue, and you hear back in your post. An idea? `/suggest`, or post in #horizon-ideas: it goes to the suggestion queue.',
+    '• Want to contribute? Pick a good first task on the hub, `/claim` it before you start, and open your pull request with "Fixes #<number>". Coding with an AI agent? `/agent connect` gives it the board (how-to in #horizon-info).',
     '• Questions? Everything is in #faq. Need a mod? Send Kira a DM.',
     '',
     'Horizon is an unofficial fan project, not affiliated with Mojang or Microsoft. Read #rules, then pick your roles with the buttons below.',
   ].join('\n'),
   links: [
-    ['playhorizon.dev', LINKS.horizonSite], ['Download the launcher', LINKS.horizonLauncher], ['GitHub', LINKS.horizon], ['Issues', LINKS.horizonIssues],
+    ['playhorizon.dev', LINKS.horizonSite], ['The hub', LINKS.hub], ['Download the launcher', LINKS.horizonLauncher], ['GitHub', LINKS.horizon],
   ],
 };
 
@@ -402,9 +404,12 @@ export const FAQ = [
   ['What is Horizon?', 'Minecraft: Java Edition rewritten from scratch in Rust, with AI agents, and checked against the real game with differential tests so it behaves exactly like vanilla. It uses the textures and sounds of your own copy of the game. More in #horizon-info.'],
   ['Where do I download it?', `Get the launcher from ${LINKS.horizonSite} (or the [launcher releases](${LINKS.horizonLauncher})). It installs Horizon and keeps it up to date. You need your own copy of Minecraft: Java Edition.`],
   ['Is it official?', 'No. Horizon is an unofficial fan project, not affiliated with, endorsed by or connected to Mojang Studios or Microsoft. It contains none of their code or files.'],
-  ['Where do I post…?', '• a bug → #horizon-bugs · an idea → #horizon-ideas (search first, both have a template)\n• a video, clip, screenshot or build made in Horizon → #showcase\n• a question or just talking → #horizon-chat\n• anything that isn\'t Horizon (other games, music, AI coding, Ludovic\'s other projects) → #off-topic\n• new versions → #releases · who\'s building what → #work-board'],
-  ['What happens to my bug report?', 'Kira sends it to GitHub as an issue and pings you in your post when a maintainer answers, and when it is fixed (with the release it ships in).'],
-  ['How do I contribute?', `Pick an open issue on [GitHub](${LINKS.horizonIssues}), then \`/claim <number>\` here **before you start**, so nobody does the same work twice. Open your pull request with "Fixes #<number>" in its description. \`/link-github <username>\` shows your Discord name next to your pull requests on #work-board; \`/working\` lists who is on what. Done or stuck? \`/unclaim <number>\`. Claims lapse after 14 days without activity.`],
+  ['Where do I post…?', '• a bug → `/report` or #horizon-bugs · an idea → `/suggest` or #horizon-ideas (search first)\n• a video, clip, screenshot or build made in Horizon → #showcase\n• a question or just talking → #horizon-chat\n• anything that isn\'t Horizon (other games, music, AI coding, Ludovic\'s other projects) → #off-topic\n• new versions → #releases · what changed → #updates'],
+  ['What is being worked on?', `The hub, ${LINKS.hub}: what is being done now, what comes next, the kanban and the journal, in simple or technical words. \`/roadmap\` (or \`@Kira roadmap\`) sums it up here.`],
+  ['What happens to my bug report?', 'Kira sends it to GitHub as an issue and pings you in your post when a maintainer answers, and when it is fixed (with the release it ships in). `/status` lists your reports.'],
+  ['What happens to my idea?', 'It goes to the suggestion queue the maintainers read. Good ones become items on the roadmap; nothing is published by itself. Ideas are not GitHub issues.'],
+  ['How do I contribute?', `Pick a good first task on the hub (or \`/goodfirst\`), then \`/claim <number>\` **before you start**, so nobody does the same work twice. Open your pull request with "Fixes #<number>". \`/link-github <username>\` shows your Discord name on your pull requests (\`credit:True\` also lists you on the hub's contributors page). Done or stuck? \`/unclaim <number>\`. Claims lapse after 14 days without activity.`],
+  ['Microsoft sign-in? CurseForge?', 'Both are coming soon.'],
   ['Why was my post closed?', 'Forum posts must follow the template in the forum\'s 📌 How to post here post (pinned at the top; the post guidelines have it too). Kira tells you in your post what\'s missing. Edit your first message (⋯ → Edit) within an hour and the post stays; otherwise it\'s closed, and you can post again with the template.'],
   ['How do I get roles?', 'With the buttons in #welcome (click again to remove), or in **Channels & Roles** at the top of the channel list. Level roles come by themselves.'],
   ['What are levels?', 'You earn XP by talking (once a minute) and by hanging out in voice with other people. lvl 5, 10, 20, 30 and 50 give a role. `/rank` shows yours, `/leaderboard` the top 10. #memes and #bot-commands give no XP.'],

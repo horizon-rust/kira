@@ -309,11 +309,12 @@ async function posts(guild) {
       new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horizon').setURL(LINKS.horizon).setDescription(HORIZON.description)
         .addFields(
           { name: 'Get it', value: HORIZON.get },
-          { name: 'Talk about it', value: L('#horizon-chat · ideas in #horizon-ideas · bugs in #horizon-bugs') },
+          { name: 'Talk about it', value: L('#horizon-chat · bugs: `/report` or #horizon-bugs · ideas: `/suggest` or #horizon-ideas') },
+          { name: "What's happening", value: L(`${LINKS.hub}: the roadmap, the kanban, the journal and how to help · what changed: #updates · \`/roadmap\``) },
         ),
       new EmbedBuilder().setColor(0x555555).setTitle('⚠️ Disclaimer').setDescription(HORIZON.disclaimer),
     ],
-    components: linkRows([['playhorizon.dev', LINKS.horizonSite], ['Download the launcher', LINKS.horizonLauncher], ['GitHub', LINKS.horizon]]),
+    components: linkRows([['playhorizon.dev', LINKS.horizonSite], ['The hub', LINKS.hub], ['Download the launcher', LINKS.horizonLauncher], ['GitHub', LINKS.horizon]]),
   });
   // The old catalogue of Ludovic's projects (#projects) was deleted with the server's old scope.
   for (const key of Object.keys(state.messages)) if (key.startsWith('project:')) delete state.messages[key];
@@ -398,7 +399,7 @@ async function serverGuide(guild) {
     enabled: true,
     welcome_message: {
       author_ids: [OWNER_ID],
-      message: "Welcome to Horizon! I'm Ludovic: Horizon is Minecraft Java Edition rewritten in Rust, built with AI agents and contributors. Grab it at playhorizon.dev, report what breaks, share ideas, and if you code, claim an issue and send a pull request. Not affiliated with Mojang or Microsoft.",
+      message: "Welcome to Horizon! I'm Ludovic: Horizon is Minecraft Java Edition rewritten in Rust, built with AI agents and contributors. Get it at playhorizon.dev, /report what breaks, /suggest ideas, and follow the work at playhorizon.dev/hub. Not affiliated with Mojang or Microsoft.",
     },
     new_member_actions: [
       action('rules', 0, 'Read the rules', 'Kira enforces them, day and night', '📜'),
