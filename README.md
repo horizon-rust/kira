@@ -131,6 +131,11 @@ review), and when.
   the claim; `/unclaim`. A claim lapses after 14 days without activity (a comment, a commit or a pull request
   mentioning the issue), with a DM 3 days before. `/link-github <username>` shows Discord names on pull requests
   (Ludovic and Cosmic are in `WORK.github`).
+- **One identity per contributor**: `/link-github <username> credit:True` also puts the pair on the hub's contributors
+  page, which reads `GET /contributors.json` on Kira's HTTP server (the MCP host without `/mcp`, public, CORS open,
+  cached 5 minutes): `{ "contributors": [{ "github", "discord" }] }`, the GitHub login and the Discord display name of
+  each member who said yes and is still on the server, nothing else. `credit:False` hides it; a mod linking someone
+  else never shows them (they choose by running it themselves).
 - **CI**: a pull request's author gets a DM when CI starts failing on its commit, if they linked GitHub and turned on
   `/notify dm:on` (5 DMs an hour at most). Nothing for what was already failing at Kira's first look.
 - **Good first tasks**: open, unclaimed issues in To do labelled `good first issue` or `help wanted`
