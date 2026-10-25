@@ -2,7 +2,7 @@
 // suggestion queue, the bug form. No Discord connection, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -39,35 +39,113 @@ test('"@Kira <verb>": only a message that starts with the mention; unknown verbs
   for (const v of ['report', 'suggest', 'roadmap', 'claim', 'status']) assert.ok(hub.VERBS.includes(v));
 });
 
-test('roadmap: the focus Now items and Next, in plain words, with the link; no roadmap yet → the link alone', () => {
-  const text = hub.roadmapText(ROADMAP, URL_);
-  assert.match(text, /\*\*🔨 Now\*\*/);
-  assert.match(text, /Steady frames/);
-  assert.match(text, /Server dialogs/);
-  assert.doesNotMatch(text, /Faster block lookups/, 'only the focus items when some are marked');
-  assert.match(text, /⏭️ Next[\s\S]*Modpacks/);
-  assert.doesNotMatch(text, /Shipped thing|Frame pacing/, 'shipped items and dev text stay out');
-  assert.match(text, /<https:\/\/playhorizon\.dev\/hub>/);
-  assert.match(text, /playhorizon\.dev\/hub#smooth-frames/);
-  assert.match(hub.roadmapText(null, URL_), /The roadmap is at https:\/\/playhorizon\.dev\/hub/);
-  assert.match(hub.roadmapText({ items: 'nope' }, URL_), /The roadmap is at/);
+const embedsOf = (messages) => messages.flatMap((m) => m.embeds ?? []);
+// What Discord enforces on one message: 10 embeds, 6000 characters over all of them, 4096 in a description, 2000 in the content.
+function assertDiscordLimits(messages) {
+  for (const m of messages) {
+    assert.deepEqual(m.allowedMentions, { parse: [] });
+    assert.ok((m.content ?? '').length <= 2000, `content ${m.content.length}`);
+    assert.ok((m.embeds ?? []).length <= 10, `${m.embeds.length} embeds`);
+    let total = 0;
+    for (const e of m.embeds ?? []) {
+      assert.ok(e.description.length <= 4096 && e.title.length <= 256);
+      total += e.title.length + e.description.length;
+    }
+    assert.ok(total <= 6000, `embeds total ${total}`);
+  }
+}
+
+test('roadmap: every area in the roadmap\'s order, one embed each, items by status as links, Shipped as a count', () => {
+  const messages = hub.roadmapMessages(ROADMAP, URL_);
+  assertDiscordLimits(messages);
+  assert.equal(messages.length, 1);
+  assert.match(messages[0].content, /<https:\/\/playhorizon\.dev\/hub>/);
+  const [perf, servers] = embedsOf(messages);
+  assert.deepEqual([perf.title, servers.title], ['Performance', 'Servers and multiplayer']);
+  assert.equal(perf.description, [
+    '**🔨 Now**',
+    '• [Steady frames](https://playhorizon.dev/hub#smooth-frames)',
+    '• [Faster block lookups](https://playhorizon.dev/hub#faster-lookups)',
+    '',
+    '**⏭️ Next**',
+    '• [Modpacks](https://playhorizon.dev/hub#modpacks)',
+  ].join('\n'));
+  assert.match(servers.description, /🙋 Help wanted\*\*\n• \[A good first task\]/);
+  assert.match(servers.description, /\n\n✅ 1 shipped$/);
+  assert.doesNotMatch(servers.description, /Shipped thing|Pick me|Servers that show dialogs work/, 'titles only, shipped as a count');
+  assert.match(hub.roadmapMessages(null, URL_)[0].content, /The roadmap is at https:\/\/playhorizon\.dev\/hub/);
+  assert.match(hub.roadmapMessages({ items: 'nope' }, URL_)[0].content, /The roadmap is at/);
 });
 
-test('roadmap <area>: by id, name or prefix; that area\'s Now, Next and Help wanted; an unknown one lists the areas', () => {
-  const perf = hub.roadmapText(ROADMAP, URL_, 'perf');
-  assert.match(perf, /Now in Performance/);
-  assert.match(perf, /Faster block lookups/);
-  assert.doesNotMatch(perf, /Server dialogs/);
-  const servers = hub.roadmapText(ROADMAP, URL_, 'Servers and multiplayer');
-  assert.match(servers, /🙋 Help wanted[\s\S]*A good first task/);
-  assert.match(hub.roadmapText(ROADMAP, URL_, 'cooking'), /No area called "cooking"\. Areas: `performance`, `servers`/);
+test('roadmap <area>: by id, name or prefix; every item of that area with its plain words; an unknown one lists the areas', () => {
+  const perf = hub.roadmapMessages(ROADMAP, URL_, 'perf');
+  assertDiscordLimits(perf);
+  assert.equal(embedsOf(perf).length, 1);
+  assert.match(embedsOf(perf)[0].description, /Steady frames\]\(https:\/\/playhorizon\.dev\/hub#smooth-frames\): Smooth camera at 32 chunks\./);
+  assert.match(embedsOf(perf)[0].description, /Faster block lookups[\s\S]*Modpacks/);
+  assert.doesNotMatch(embedsOf(perf)[0].description, /Server dialogs|Frame pacing/, 'dev text stays out');
+  const servers = embedsOf(hub.roadmapMessages(ROADMAP, URL_, 'Servers and multiplayer'))[0].description;
+  assert.match(servers, /🙋 Help wanted\*\*\n• \[A good first task\]\(https:\/\/playhorizon\.dev\/hub#tidy\): Pick me\./);
+  assert.match(servers, /✅ Shipped\*\*\n• \[Shipped thing\]\(https:\/\/playhorizon\.dev\/hub#old\) \(v0\.2\.58\): Done\./, 'the shipped ones, with their release');
+  assert.match(hub.roadmapMessages(ROADMAP, URL_, 'cooking')[0].content, /No area called "cooking"\. Areas: `performance`, `servers`/);
+  assert.match(hub.roadmapMessages({ areas: [{ id: 'x', name: 'X' }], items: [] }, URL_, 'x')[0].content, /Nothing planned in this area yet/);
 });
 
-test('roadmap answers fit one Discord message, whatever the roadmap', () => {
-  const big = { areas: [], items: Array.from({ length: 40 }, (_, i) => ({ id: `i${i}`, title: 'T'.repeat(90), status: i % 2 ? 'next' : 'now', area: 'x', plain: 'p'.repeat(240) })) };
-  const text = hub.roadmapText(big, URL_);
-  assert.ok(text.length <= 1990, String(text.length));
-  assert.match(text, /playhorizon\.dev\/hub>/);
+test('roadmap: text from the site is data: markdown, links, mentions and newlines in a title or a plain text cannot act', () => {
+  const evil = { areas: [{ id: 'a', name: '**Area** @everyone' }], items: [
+    { id: 'x', title: '*Bold* [click](https://evil.example) @everyone <@123> <#456> `code` ||spoiler|| ~~s~~ _i_\n# head', status: 'now', area: 'a', plain: '> quote\n@here <:e:1> [a](b) \\ end' },
+  ] };
+  for (const area of ['', 'a']) {
+    const messages = hub.roadmapMessages(evil, URL_, area);
+    assertDiscordLimits(messages);
+    const e = embedsOf(messages)[0];
+    assert.equal(e.title, '\\*\\*Area\\*\\* @​everyone');
+    const line = e.description.split('\n')[1];
+    assert.match(line, /^• \[\\\*Bold\\\* \\\[click\\\]\\\(https:\/\/evil\.example\\\) @​everyone \\<@123\\> \\<#456\\> \\`code\\` \\\|\\\|spoiler\\\|\\\| \\~\\~s\\~\\~ \\_i\\_ # head\]\(https:\/\/playhorizon\.dev\/hub#x\)/);
+    assert.doesNotMatch(line, /\n/);
+    if (area) assert.match(line, /: \\> quote @​here \\<:e:1\\> \\\[a\\\]\\\(b\\\) \\\\ end$/);
+  }
+  assert.equal(hub.mdEscape('a'.repeat(30), 10), `${'a'.repeat(9)}…`);
+});
+
+test('roadmap: the real one (90 items, 12 areas) comes out whole, in order, within Discord\'s limits', () => {
+  const real = JSON.parse(readFileSync(new URL('./fixtures/roadmap.json', import.meta.url), 'utf8'));
+  assert.equal(real.items.length, 90);
+  assert.equal(real.areas.length, 12);
+  const messages = hub.roadmapMessages(real, URL_);
+  assertDiscordLimits(messages);
+  const embeds = embedsOf(messages);
+  assert.deepEqual(embeds.map((e) => e.title), real.areas.map((a) => a.name), 'one embed per area, in the roadmap\'s order');
+  assert.ok(messages.length >= 2 && messages.length <= 4, `${messages.length} messages`);
+  const text = embeds.map((e) => e.description).join('\n');
+  for (const i of real.items.filter((i) => i.status !== 'shipped')) assert.ok(text.includes(`#${i.id})`), `${i.id} is linked`);
+  for (const i of real.items.filter((i) => i.status === 'shipped')) assert.ok(!text.includes(`#${i.id})`), `${i.id} is only counted`);
+  assert.equal([...text.matchAll(/✅ (\d+) shipped/g)].reduce((n, m) => n + Number(m[1]), 0), 9);
+  assert.ok(text.indexOf('🔨 Now') < text.indexOf('⏭️ Next') && text.indexOf('⏭️ Next') < text.indexOf('🕰️ Later'));
+  for (const a of real.areas) { // every area in full
+    const full = hub.roadmapMessages(real, URL_, a.id);
+    assertDiscordLimits(full);
+    const t = embedsOf(full).map((e) => e.description).join('\n');
+    for (const i of real.items.filter((i) => i.area === a.id)) assert.ok(t.includes(`#${i.id})`) && t.includes(mdEscapeFirst(i.plain)), `${a.id}/${i.id}`);
+  }
+});
+const mdEscapeFirst = (s) => hub.mdEscape(s).slice(0, 40);
+
+test('roadmap: a huge roadmap splits across messages and embeds without crossing a limit', () => {
+  const areas = Array.from({ length: 12 }, (_, k) => ({ id: `a${k}`, name: `Area ${k} ${'N'.repeat(60)}` }));
+  const items = Array.from({ length: 480 }, (_, k) => ({ id: `item-${k}-${'z'.repeat(30)}`, title: 'T*'.repeat(50), status: ['now', 'next', 'later', 'help-wanted', 'shipped'][k % 5], area: `a${k % 12}`, plain: 'p_'.repeat(150), shipped_in: 'v1' }));
+  items.push({ id: 'lost', title: 'No area', status: 'next', area: 'nowhere', plain: '' });
+  for (const area of ['', 'a3']) {
+    const messages = hub.roadmapMessages({ areas, items }, URL_, area);
+    assertDiscordLimits(messages);
+    assert.ok(messages.length > 1);
+    const text = embedsOf(messages).map((e) => e.description).join('\n');
+    assert.equal(text.includes('#lost)'), !area, 'an item in no area goes under "Other"');
+    assert.equal(messages.slice(1).every((m) => !m.content), true, 'only the first message has the intro');
+  }
+  const split = embedsOf(hub.roadmapMessages({ areas, items }, URL_, 'a3'));
+  assert.ok(split.length > 1 && split.every((e, k) => e.title.endsWith(`(${k + 1}/${split.length})`)));
+  assert.ok(split.every((e) => !/\*\*[^*\n]+\*\*$/.test(e.description)), 'a heading never ends an embed');
 });
 
 test('status of a roadmap item', () => {
@@ -228,4 +306,37 @@ test('the hub\'s suggestions: relayed into the queue oldest first, each once; a 
   core.client.channels.fetch = send;
   assert.equal(await feature.relay(), 1);
   assert.equal(feature._test.relayState.after, 5);
+});
+
+test('/roadmap and @Kira roadmap: the first message answers, the others follow in the same place; never a ping', async () => {
+  const real = JSON.parse(readFileSync(new URL('./fixtures/roadmap.json', import.meta.url), 'utf8'));
+  feature._test.setFetch(async () => real);
+  const sent = [];
+  const i = {
+    options: { getString: () => '' },
+    deferReply: async () => sent.push('defer'),
+    editReply: async (m) => sent.push(['edit', m]),
+    followUp: async (m) => sent.push(['follow', m]),
+  };
+  await feature.handlers.roadmap(i);
+  assert.equal(sent[0], 'defer');
+  assert.deepEqual(sent.slice(1).map(([k]) => k), ['edit', 'follow']);
+  for (const [, m] of sent.slice(1)) assert.deepEqual(m.allowedMentions, { parse: [] });
+  assert.equal(sent.slice(1).reduce((n, [, m]) => n + m.embeds.length, 0), 12);
+
+  core.client.user = { id: '42' };
+  const said = [];
+  const msg = {
+    content: '<@42> roadmap servers',
+    reply: async (m) => said.push(['reply', m]),
+    channel: { send: async (m) => said.push(['send', m]) },
+  };
+  assert.equal(await feature.onMessage(msg), true);
+  assert.deepEqual(said.map(([k]) => k), ['reply'], 'one area fits one message');
+  assert.deepEqual(said[0][1].allowedMentions, { parse: [], repliedUser: false });
+  assert.equal(said[0][1].embeds[0].title, 'Servers and multiplayer');
+  said.length = 0;
+  await feature.onMessage({ ...msg, content: '<@42> roadmap' });
+  assert.deepEqual(said.map(([k]) => k), ['reply', 'send']);
+  assert.deepEqual(said[1][1].allowedMentions, { parse: [] });
 });

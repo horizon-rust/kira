@@ -113,3 +113,65 @@ test('the board summary at the top of #updates: posted and pinned once, then edi
   assert.match(msgs.get('m1').content, /To do \*\*1\*\*/);
   assert.equal(wb._test.work.summary, 'm1');
 });
+
+test('the pinned roadmap in #updates: posted and pinned once (the pin list in the roadmap\'s order), edited in place when the roadmap changes, a deleted message posted again', async () => {
+  const real = JSON.parse(readFileSync(new URL('./fixtures/roadmap.json', import.meta.url), 'utf8'));
+  let roadmapNow = real;
+  hubFeature._test.setFetch(async () => roadmapNow);
+  core.client.user = { id: 'kira' };
+  const msgs = new Map();
+  const pinned = [];
+  const log = [];
+  let made = 0;
+  const channel = {
+    send: async (m) => {
+      const msg = { id: `r${++made}`, ...m, pinned: false, type: 0, author: { id: 'kira' },
+        pin: async () => { msg.pinned = true; pinned.push(msg.id); }, edit: async (p) => { log.push(`edit ${msg.id}`); return Object.assign(msg, p); }, delete: async () => { msgs.delete(msg.id); } };
+      msgs.set(msg.id, msg);
+      return msg;
+    },
+    messages: { fetch: async (q) => {
+      if (typeof q !== 'string') return { filter: () => new Map() };
+      if (!msgs.has(q)) throw Object.assign(new Error('Unknown Message'), { code: 10008 });
+      return msgs.get(q);
+    } },
+  };
+  core.client.channels.cache.set(core.state.channels.updates, channel);
+  const before = JSON.stringify(Object.keys(core.state).sort());
+
+  await updates.syncRoadmap();
+  const ids = [...core.state.roadmapPin.ids];
+  assert.equal(ids.length, 2, 'the real roadmap is two messages');
+  assert.deepEqual(pinned, [ids[1], ids[0]], 'pinned last to first');
+  assert.equal(msgs.get(ids[0]).embeds.length + msgs.get(ids[1]).embeds.length, 12);
+  assert.deepEqual(msgs.get(ids[0]).allowedMentions, { parse: [] });
+  assert.equal(msgs.get(ids[1]).flags, 4096);
+  assert.equal(JSON.stringify(Object.keys(core.state).sort()), before, 'no other key of the state is added');
+
+  await updates.syncRoadmap(); // unchanged: no call at all
+  assert.deepEqual(log, []);
+  assert.equal(msgs.size, 2);
+
+  updates._test.forgetVerified(); // after a restart: checked, edited in place, never posted again
+  await updates.syncRoadmap();
+  assert.deepEqual(log, [`edit ${ids[0]}`, `edit ${ids[1]}`]);
+  assert.equal(msgs.size, 2);
+
+  roadmapNow = { ...real, items: real.items.map((i) => (i.id === 'smooth-frames' ? { ...i, title: 'Steady frames, renamed', status: 'shipped' } : i)) };
+  hubFeature._test.setFetch(async () => roadmapNow);
+  log.length = 0;
+  await updates.syncRoadmap();
+  assert.equal(log.length, 2);
+  assert.deepEqual(core.state.roadmapPin.ids, ids);
+  assert.doesNotMatch(msgs.get(ids[0]).embeds[0].description, /Steady frames at long render distances/);
+  assert.equal(pinned.length, 2, 'already pinned: not pinned again');
+
+  msgs.delete(ids[1]); // a moderator deleted one: noticed at the next start or change
+  updates._test.forgetVerified();
+  await updates.syncRoadmap();
+  assert.equal(msgs.size, 2);
+  assert.notEqual(core.state.roadmapPin.ids[1], ids[1]);
+  assert.equal(core.state.roadmapPin.ids[0], ids[0]);
+  assert.equal(pinned.length, 3, 'the new one is pinned');
+  assert.equal(JSON.parse(readFileSync(process.env.KIRA_STATE, 'utf8')).roadmapPin.ids.length, 2, 'saved');
+});

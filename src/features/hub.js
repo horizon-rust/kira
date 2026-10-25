@@ -177,11 +177,18 @@ export async function statusText(userId, of) {
 
 const reply = (msg, payload) => msg.reply({ allowedMentions: { parse: [], repliedUser: false }, ...(typeof payload === 'string' ? { content: payload } : payload) }).catch(() => {});
 
+// The roadmap is several messages: the first is the reply, the others follow it in the same channel.
+async function replyAll(msg, payloads) {
+  const [first, ...rest] = payloads;
+  await reply(msg, { ...first, allowedMentions: { parse: [], repliedUser: false } });
+  for (const p of rest) await msg.channel.send({ ...p, allowedMentions: { parse: [] } }).catch((e) => console.error('roadmap', e.message));
+}
+
 export async function onMessage(msg) {
   const parsed = client.user && hub.parseVerb(msg.content, client.user.id);
   if (!parsed) return false;
   const { verb, rest } = parsed;
-  if (verb === 'roadmap') await reply(msg, hub.roadmapText(await roadmap(), HUB.url, rest));
+  if (verb === 'roadmap') await replyAll(msg, hub.roadmapMessages(await roadmap(), HUB.url, rest));
   else if (verb === 'suggest') await reply(msg, await suggest(msg.author, msg.member, rest, 'Discord, @Kira suggest', msg.url));
   else if (verb === 'report') await reply(msg, { content: 'Click to fill in the bug form (it becomes a post in #horizon-bugs and a GitHub issue):', components: [reportButton()] });
   else if (verb === 'claim') {
@@ -197,8 +204,8 @@ export async function onMessage(msg) {
 // ── Commands ─────────────────────────────────────────────────────────────────
 
 export const commands = [
-  new SlashCommandBuilder().setName('roadmap').setDescription("What's being built now and next, in plain words (the hub has it all)")
-    .addStringOption((o) => o.setName('area').setDescription('One area: performance, modpacks, servers, mods…').setMaxLength(40)),
+  new SlashCommandBuilder().setName('roadmap').setDescription('The whole roadmap, or one area in full: what is being built, what is next, how to help')
+    .addStringOption((o) => o.setName('area').setDescription('One area in full: performance, modpacks, servers, mods…').setMaxLength(40)),
   new SlashCommandBuilder().setName('suggest').setDescription('Suggest something for Horizon: it goes to the queue the maintainers read')
     .addStringOption((o) => o.setName('idea').setDescription('Your idea, and why').setRequired(true).setMinLength(10).setMaxLength(1000)),
   new SlashCommandBuilder().setName('report').setDescription('Report a Horizon bug: a form, then a post in #horizon-bugs and a GitHub issue'),
@@ -211,7 +218,9 @@ export const commands = [
 export const handlers = {
   async roadmap(i) {
     await i.deferReply();
-    return i.editReply({ content: hub.roadmapText(await roadmap(), HUB.url, i.options.getString('area') ?? ''), allowedMentions: { parse: [] } });
+    const [first, ...rest] = hub.roadmapMessages(await roadmap(), HUB.url, i.options.getString('area') ?? '');
+    await i.editReply(first);
+    for (const p of rest) await i.followUp({ ...p, allowedMentions: { parse: [] } }).catch((e) => console.error('roadmap', e.message));
   },
   async suggest(i) {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
