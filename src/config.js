@@ -164,9 +164,10 @@ export const LAYOUT = [
     channels: [
       { key: 'modchat', name: 'mod-chat', type: 'text', staff: true },
       { key: 'modlog', name: 'mod-log', type: 'text', staff: true, topic: 'Kira logs here: joins (and the invite they used), leaves, deleted and edited messages, warnings, timeouts, bans, raids, AutoMod.' },
-      { key: 'reports', name: 'reports', type: 'text', staff: true, topic: 'Reports from members: /report and "Report to mods" on a message.' },
+      { key: 'reports', name: 'reports', type: 'text', staff: true, topic: 'Reports from members: /report-member and "Report to mods" on a message.' },
       { key: 'modmail', name: 'mod-mail', type: 'text', staff: true, topic: "Members DM Kira; each conversation is a thread here. Write in the thread to answer (start with // for a note they don't see, //close to close)." },
       { key: 'discordupdates', name: 'discord-updates', type: 'text', staff: true, topic: 'Messages from Discord to community servers.' },
+      { key: 'roadmapsuggestions', name: 'roadmap-suggestions', type: 'text', staff: true, topic: 'The suggestion queue: /suggest, @Kira suggest, #horizon-ideas posts and the hub\'s form. A good one becomes a roadmap item (a pull request to roadmap.toml), never an issue. Kira posts here once ROADMAP_SUGGESTIONS_CHANNEL_ID is this channel\'s ID.' },
       { key: 'agentlog', name: 'agent-log', type: 'text', staff: true, topic: "Every call contributors' AI agents make through Kira's MCP server: who (the token's owner), which tool, the outcome. Tokens: /agent tokens member:." },
     ],
   },
@@ -290,6 +291,10 @@ export const HUB = {
   roadmapJson: process.env.HUB_ROADMAP_URL || 'https://playhorizon.dev/data/roadmap.json',
   journalJson: process.env.HUB_JOURNAL_URL || 'https://playhorizon.dev/data/journal.json',
   suggestionsChannel: process.env.ROADMAP_SUGGESTIONS_CHANNEL_ID?.trim() || null,
+  // The suggestions sent from the hub's form, kept by the telemetry server: Kira relays them into the queue.
+  intakeUrl: (process.env.HUB_INTAKE_URL || 'https://telemetry.playhorizon.dev').replace(/\/+$/, ''),
+  token: process.env.HUB_TOKEN?.trim() || null, // its bearer token (HORIZON_TELEMETRY_HUB_TOKEN there); sealed on Railway
+  relayEveryMs: 5 * 60_000,
   cacheMs: 5 * 60_000, // the roadmap is fetched again at most every 5 minutes
   journalEveryMs: 10 * 60_000, // the journal, for #updates
   suggestPerHour: 3, // suggestions per member an hour (/suggest, @Kira suggest)
