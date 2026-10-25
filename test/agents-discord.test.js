@@ -82,7 +82,7 @@ test('claim then unclaim within 10 minutes is refused; names go to GitHub in a c
   assert.match(await wb.claim(again, null, 77), /a moment ago/); // and no instant re-claim either
 });
 
-test('a member holds at most 3 claims, and waits between claims across issues; maintainers don\'t (N1)', async () => {
+test('a member holds at most 8 claims, and waits between claims across issues; maintainers don\'t (N1)', async () => {
   const wb = await import('../src/features/workboard.js');
   wb._test.setGitHub({
     get: async (path) => (path.includes('/labels/') ? {} : { number: Number(path.split('/').pop()), title: 'Issue', html_url: 'https://github.com/x/y/issues/1', state: 'open', labels: [] }),
@@ -92,9 +92,8 @@ test('a member holds at most 3 claims, and waits between claims across issues; m
   const later = () => { wb._test.work.memberGithubAt[u.id] -= 3 * 60_000; };
   assert.match(await wb.claim(u, null, 101), /is yours/);
   assert.match(await wb.claim(u, null, 102), /a moment ago: try again in \d+ s/); // per-member pause, another issue
-  later(); assert.match(await wb.claim(u, null, 102), /is yours/);
-  later(); assert.match(await wb.claim(u, null, 103), /is yours/);
-  later(); assert.match(await wb.claim(u, null, 104), /already have 3 claimed issues/);
+  for (const n of [102, 103, 104, 105, 106, 107, 108]) { later(); assert.match(await wb.claim(u, null, n), /is yours/); }
+  later(); assert.match(await wb.claim(u, null, 109), /already have 8 claimed issues/);
   const mod = { id: '666666666666666666', displayName: 'Mod', permissions: { has: () => true } };
   for (const n of [111, 112, 113, 114]) assert.match(await wb.claim({ id: mod.id, globalName: 'Mod' }, mod, n), /is yours/);
 });

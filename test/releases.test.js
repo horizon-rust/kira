@@ -166,7 +166,7 @@ test('the agents announcement: one endpoint value, the three setups, only once /
     assert.match(d, /\/agent connect/);
     assert.match(d, /\/agent revoke/);
     assert.match(d, /90 days/);
-    assert.match(d, /3 claimed issues at a time/);
+    assert.match(d, /8 claimed issues at a time/);
     assert.doesNotMatch(`${p.content} ${d}`, /@everyone|@here/);
     assert.equal(p.role, undefined);
   }
