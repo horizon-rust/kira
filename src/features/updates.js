@@ -36,6 +36,9 @@ export async function poll() {
   console.log(`#updates: ${entries.length} journal entries posted`);
 }
 
+export const commands = []; // bot.js gathers every feature's commands and handlers
+export const handlers = {};
+
 export const _test = { setFetch: (fn) => { fetchJson = fn; }, state: U };
 
 export function setup() {
