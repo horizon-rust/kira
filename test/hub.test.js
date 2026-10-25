@@ -9,6 +9,7 @@ import { join } from 'node:path';
 process.env.KIRA_STATE = join(mkdtempSync(join(tmpdir(), 'kira-hub-')), 'state.json');
 process.env.GITHUB_TOKEN = 'test-token-not-used';
 process.env.ROADMAP_SUGGESTIONS_CHANNEL_ID = '777';
+process.env.HUB_TOKEN = 'hub-test-token';
 const hub = await import('../src/hub.js');
 const { LAYOUT, HUB } = await import('../src/config.js');
 const core = await import('../src/core.js');
@@ -189,4 +190,42 @@ test('#horizon-ideas posts no longer open issues (a mod\'s /issue still can)', a
   assert.equal(await github._test.openIssue(thread, starter), null);
   assert.equal(writes.length, 0);
   assert.equal((await github._test.openIssue(thread, starter, { manual: true })).number, 1);
+});
+
+test('the hub\'s suggestions: relayed into the queue oldest first, each once; a missing endpoint or a failed post waits for the next round', async () => {
+  queued.length = 0;
+  const asked = [];
+  let answer = { status: 404, body: null };
+  feature._test.setQueueFetch(async (url, token) => { asked.push({ url, token }); return answer; });
+  assert.equal(await feature.relay(), 0, 'not live yet: nothing, no throw');
+  assert.equal(queued.length, 0);
+  assert.match(asked[0].url, /^https:\/\/telemetry\.playhorizon\.dev\/hub\/suggestions\?after=0&limit=100$/);
+  assert.equal(asked[0].token, 'hub-test-token');
+  feature._test.setQueueFetch(async () => { throw new Error('network down'); });
+  assert.equal(await feature.relay(), 0);
+
+  feature._test.setQueueFetch(async () => answer);
+  answer = { status: 200, body: { suggestions: [
+    { id: 3, text: 'A minimap @everyone [click](https://evil.example)', name: 'Sam', created_at: 'x' },
+    { id: 4, text: 'Faster chunk loading please', item: 'smooth-frames' },
+    { id: 'x', text: 'not an id' },
+  ] } };
+  assert.equal(await feature.relay(), 2);
+  assert.equal(feature._test.relayState.after, 4);
+  assert.equal(queued.length, 2);
+  assert.doesNotMatch(queued[0].embeds[0].description, /@everyone|\[click\]\(/);
+  assert.deepEqual(queued[0].allowedMentions, { parse: [] });
+  assert.match(queued[0].embeds[0].fields[0].value, /^Sam$/);
+  assert.match(queued[1].embeds[0].fields[0].value, /someone on the hub/);
+  assert.match(queued[1].embeds[0].fields[1].value, /smooth-frames.*playhorizon\.dev\/hub#smooth-frames/);
+  assert.equal(await feature.relay(), 0, 'the same answer again: nothing twice');
+
+  const send = core.client.channels.fetch;
+  core.client.channels.fetch = async () => null; // the queue channel is gone
+  answer = { status: 200, body: { suggestions: [{ id: 5, text: 'Later one' }] } };
+  assert.equal(await feature.relay(), 0);
+  assert.equal(feature._test.relayState.after, 4, 'kept for the next round');
+  core.client.channels.fetch = send;
+  assert.equal(await feature.relay(), 1);
+  assert.equal(feature._test.relayState.after, 5);
 });
