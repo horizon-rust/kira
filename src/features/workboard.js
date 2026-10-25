@@ -366,6 +366,7 @@ export const commands = enabled ? [
     .addStringOption((o) => o.setName('dm').setDescription('On or off').setRequired(true).addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })),
   new SlashCommandBuilder().setName('link-github').setDescription('Link your GitHub account, so your pull requests show your Discord name')
     .addStringOption((o) => o.setName('username').setDescription('Your GitHub username').setRequired(true).setMaxLength(39))
+    .addBooleanOption((o) => o.setName('credit').setDescription("Show your Discord name and GitHub together on the hub's contributors page (default: no)"))
     .addUserOption((o) => o.setName('member').setDescription('Mods: link someone else')),
 ] : [];
 
@@ -426,11 +427,24 @@ export const handlers = {
     if (taken && taken !== target.id && !isStaff(i.member)) return i.editReply(ephemeral(`\`${ghUser.login}\` is already linked to someone else. Ask a mod if that's wrong.`));
     for (const [id, login] of Object.entries(work.links)) if (id !== target.id && login.toLowerCase() === ghUser.login.toLowerCase()) delete work.links[id];
     work.links[target.id] = ghUser.login;
+    // Only the member decides whether the pair is public (a mod linking someone else never turns it on).
+    const credit = target.id === i.user.id ? i.options.getBoolean('credit') : null;
+    work.credit ??= {};
+    if (credit === true) work.credit[target.id] = true;
+    else if (credit === false || target.id !== i.user.id) delete work.credit[target.id];
     save();
     refreshSoon();
-    return i.editReply(ephemeral(`🔗 <@${target.id}> is GitHub **${ghUser.login}**: their pull requests show their Discord name on the board.`));
+    const shown = work.credit[target.id] ? ` It shows on the hub's contributors page (\`/link-github ${ghUser.login} credit:False\` hides it).` : target.id === i.user.id ? ` To be credited on the hub's contributors page with both names: \`/link-github ${ghUser.login} credit:True\`.` : '';
+    return i.editReply(ephemeral(`🔗 <@${target.id}> is GitHub **${ghUser.login}**: their pull requests show their Discord name on the board.${shown}`));
   },
 };
+
+// The Discord ↔ GitHub pairs members agreed to show (/link-github credit:True), for the hub's contributors page:
+// the GitHub login and the Discord name only, members still on the server only, sorted by login.
+export function creditedPairs() {
+  return Object.keys(work.credit ?? {}).filter((id) => work.links[id]).map((id) => ({ github: work.links[id], discord: displayName(id) }))
+    .filter((p) => p.discord).sort((a, b) => a.github.localeCompare(b.github));
+}
 
 // For end-to-end checks (scratch scripts): the GitHub client can be swapped.
 export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render, notices, setRaw: (r) => { raw = r; } };

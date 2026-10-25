@@ -115,6 +115,11 @@ if (port) {
   const limiter = rateLimiter();
   const routes = {
     ...(publicKey ? { '/seal-key': (req, res) => { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(publicKey); } } : {}),
+    // The pairs members agreed to show, for the hub's contributors page (public, read-only, cached 5 minutes).
+    '/contributors.json': (req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ contributors: workboard.creditedPairs() }));
+    },
     ...adminRoutes({ hash: process.env.KIRA_ADMIN_TOKEN_SHA256, limiter, save, freeze, files: { state: dataFile('state.json'), agents: process.env.KIRA_AGENTS || dataFile('agents.json') } }),
   };
   startServer(Number(port), { store: agents.store, api: agents.api, routes, limiter }).then(() => console.log(`mcp server on :${port}${routes['GET /admin/backup'] ? ', admin routes on' : ''}`));
