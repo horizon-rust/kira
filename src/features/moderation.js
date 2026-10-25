@@ -21,7 +21,7 @@ const member = (o) => o.setName('member').setDescription('Who').setRequired(true
 const reason = (o, required = false) => o.setName('reason').setDescription('Why (they get it in a DM)').setRequired(required).setMaxLength(500);
 
 export const commands = [
-  new SlashCommandBuilder().setName('report').setDescription('Report a member to the mods (only the mods see it)')
+  new SlashCommandBuilder().setName('report-member').setDescription('Report a member to the mods (only the mods see it)')
     .addUserOption(member).addStringOption((o) => o.setName('reason').setDescription('What happened').setRequired(true).setMaxLength(1000)),
   new ContextMenuCommandBuilder().setName('Report to mods').setType(ApplicationCommandType.Message),
   new SlashCommandBuilder().setName('warn').setDescription(`Warn a member (${MOD.warnLimit} warnings in ${MOD.warnWindowDays} days = 1 h timeout)`)
@@ -71,7 +71,7 @@ async function report(i, about, text, message) {
 }
 
 export const handlers = {
-  report: (i) => report(i, i.options.getUser('member'), i.options.getString('reason')),
+  'report-member': (i) => report(i, i.options.getUser('member'), i.options.getString('reason')),
   'Report to mods': (i) => report(i, i.targetMessage.author, 'Reported this message.', i.targetMessage),
 
   async warn(i) {

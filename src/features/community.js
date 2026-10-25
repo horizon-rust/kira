@@ -41,7 +41,7 @@ const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Ki
   '**Your work**: `/mytasks` your cards · `/goodfirst` good first tasks · `/notify` DMs when CI fails on your pull requests · `/status` say what you are on · `/agent connect` lets your AI coding agent read the board and work on your cards (personal token, `/agent tokens`, `/agent revoke`; setup in #horizon-info).',
   `**Releases**: every new Horizon version and launcher in <#${state.channels.releases}>.`,
   '**You**: `/rank`, `/leaderboard`, `/remind`, `/userinfo`, `/avatar`, `/room` (your own voice channel: join ➕ create your room).',
-  '**The mods**: DM me to reach them privately, `/report` or right-click a message → Apps → Report to mods. `/modmail`.',
+  '**The mods**: DM me to reach them privately, `/report-member` or right-click a message → Apps → Report to mods. `/modmail`.',
 ].join('\n\n'));
 
 export const handlers = {

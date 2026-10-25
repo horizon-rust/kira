@@ -1,5 +1,5 @@
 // Contributors' AI agents, the Discord side: /agent connect (a token, shown once), /agent tokens, /agent revoke,
-// /status (what you're working on, in your words), /mytasks; the MCP server's actions (src/mcp.js) done in the
+// /mytasks (/status is one of the hub's verbs: src/features/hub.js); the MCP server's actions (src/mcp.js) done in the
 // token owner's name; and #agent-log, where every agent call is written (staff only).
 import { SlashCommandBuilder, MessageFlags, Routes } from 'discord.js';
 import { AGENTS, GUILD_ID, OWNER_ID, agentSnippets } from '../config.js';
@@ -187,8 +187,6 @@ export const commands = [
       .addUserOption((o) => o.setName('member').setDescription('Mods: whose')))
     .addSubcommand((s) => s.setName('revoke').setDescription('Revoke a token now')
       .addStringOption((o) => o.setName('id').setDescription('Its id, from /agent tokens (8 characters)').setRequired(true).setMinLength(8).setMaxLength(8))),
-  new SlashCommandBuilder().setName('status').setDescription('Say what you are working on (agents and /working show it); empty clears it')
-    .addStringOption((o) => o.setName('text').setDescription('What you are on right now').setMaxLength(200)),
   new SlashCommandBuilder().setName('mytasks').setDescription('Your cards on the work board (only you see it)'),
 ];
 
@@ -234,15 +232,6 @@ export const handlers = {
         return i.reply(ephemeral(e.message));
       }
     }
-  },
-  async status(i) {
-    const text = i.options.getString('text')?.trim();
-    const w = wb.workState();
-    w.statuses ??= {};
-    if (text) w.statuses[i.user.id] = { text, at: Date.now() };
-    else delete w.statuses[i.user.id];
-    save();
-    return i.reply(ephemeral(text ? `📍 Status set: ${clean(text, 200)}` : 'Status cleared.'));
   },
   mytasks(i) {
     const s = wb.current();

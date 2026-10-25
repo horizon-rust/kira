@@ -112,7 +112,7 @@ export const LAYOUT = [
       {
         key: 'horizonbugs', name: 'horizon-bugs', type: 'forum',
         topic: 'One bug per post, with the template. Search first: if it\'s already reported, add your details in that post.',
-        tags: [['💥', 'crash'], ['🖼️', 'rendering'], ['🎮', 'gameplay'], ['🌍', 'world gen'], ['⚡', 'performance'], ['🔊', 'sound'], ['🖥️', 'install / launch'], ['🔍', 'confirmed', true], ['🔁', 'duplicate', true], ['✅', 'fixed', true]],
+        tags: [['💥', 'crash'], ['🖼️', 'rendering'], ['🎮', 'gameplay'], ['🌍', 'world gen'], ['⚡', 'performance'], ['🔊', 'sound'], ['🖥️', 'install / launch'], ['🔍', 'confirmed', true], ['🔁', 'duplicate', true], ['✅', 'fixed', true], ['📝', 'via /report', true]],
         guide: 'One bug per post. **Search first**: if someone already reported it, reply in their post instead. Title: what\'s broken, in a few words ("Water renders black on AMD"). Pick a tag. Kira checks that the template is filled in; posts without it are closed after an hour. Each post becomes a GitHub issue, and you are pinged here when it is answered or fixed.',
         template: '**What I did:** the steps, one per line\n**What happened:**\n**What I expected:**\n**Horizon version:** release or commit\n**OS, CPU, GPU:**\n+ a screenshot, a video or the log file if you have one',
         check: { min: 80, needs: [['What I did', /what i did|steps/i], ['What happened', /what happened|happen/i], ['What I expected', /expect/i], ['OS, CPU, GPU', /\b(os|windows|linux|mac|macos|gpu|nvidia|amd|intel|radeon|geforce)\b/i]] },
@@ -277,6 +277,20 @@ export const ONE_OFFS = [
   { key: 'agents-info', channel: 'horizoninfo', when: 'agents', editable: true, pin: true, content: '', embed: AGENT_GUIDE },
 ];
 
+// The hub (playhorizon.dev/hub): the one public place for the roadmap, the kanban, the journal and how to help.
+// Kira is its front desk on Discord, with the same verbs (src/hub.js, src/features/hub.js). The website publishes
+// the roadmap and the journal as JSON (the horizon repo's roadmap/README.md). Suggestions, from Discord and from
+// the site, go to one private queue: #roadmap-suggestions, whose ID is ROADMAP_SUGGESTIONS_CHANNEL_ID (unset: off).
+export const HUB = {
+  url: process.env.HUB_URL || 'https://playhorizon.dev/hub',
+  roadmapJson: process.env.HUB_ROADMAP_URL || 'https://playhorizon.dev/data/roadmap.json',
+  journalJson: process.env.HUB_JOURNAL_URL || 'https://playhorizon.dev/data/journal.json',
+  suggestionsChannel: process.env.ROADMAP_SUGGESTIONS_CHANNEL_ID?.trim() || null,
+  cacheMs: 5 * 60_000, // the roadmap is fetched again at most every 5 minutes
+  suggestPerHour: 3, // suggestions per member an hour (/suggest, @Kira suggest)
+  reportPerHour: 3, // bugs per member an hour (/report); the GitHub limits of GITHUB.rate apply too
+};
+
 // Forum posts → GitHub issues (src/features/github.js). Off until GITHUB_TOKEN is set (see the README).
 // Per forum: the repo and kind. `fixed` / `notPlanned` / `duplicate`: the forum tags Kira applies when
 // the issue is closed that way.
@@ -284,7 +298,8 @@ export const GITHUB = {
   owner: 'ludovic111',
   forums: {
     horizonbugs: { repo: 'horizon', kind: 'bug', fixed: 'fixed', duplicate: 'duplicate' },
-    horizonideas: { repo: 'horizon', kind: 'idea', fixed: 'done', notPlanned: "won't do" },
+    // queue: ideas go to the suggestion queue (HUB), not to GitHub; ideas sent before that keep their issue and answers.
+    horizonideas: { repo: 'horizon', kind: 'idea', fixed: 'done', notPlanned: "won't do", queue: true },
   },
   private: [], // repos whose issues get no link in Discord (players can't open them)
   labels: { bug: 'bug', idea: 'enhancement', from: 'from-discord' },
