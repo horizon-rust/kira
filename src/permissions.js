@@ -14,6 +14,12 @@ export function overwrites(ids, spec, staffCategory) {
       role(everyone, { deny: [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads] }),
       role(mod, { allow: [P.SendMessages] }),
     );
+  } else if (spec.members) {
+    // Private to these roles: nobody else sees it.
+    ow.push(
+      role(everyone, { deny: [P.ViewChannel] }),
+      ...spec.members.map((key) => roles[key]).filter(Boolean).map((id) => role(id, { allow: [P.ViewChannel, P.ReadMessageHistory, P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.EmbedLinks, P.AttachFiles, P.AddReactions] })),
+    );
   } else if (spec.writers) {
     // Everyone reads and reacts; only the mods and the roles in `writers` write, open threads and write in them.
     ow.push(

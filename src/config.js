@@ -70,6 +70,11 @@ export const ROLES = [
   { key: 'lvl50', name: 'lvl 50', color: 0xeb4d4b, level: 50, hoist: true },
   { key: 'booster', managed: 'premium_subscriber', name: '💎 Booster', color: 0xf47fff, hoist: true },
   { key: 'tester', name: '🧪 Horizon Tester', color: 0xffd166, hoist: true },
+  // Given by Ludovic by hand. 💚 Sponsor: who sponsors Horizon (Sculk Hosting's owner, 2026-10-27).
+  { key: 'sponsor', name: '💚 Sponsor', color: 0x2ecc40, hoist: true },
+  // The core contributors who review and merge (GitHub team horizon-team): above everyone but the mods; writes in
+  // #contributors and is the only role in #horizon-team.
+  { key: 'team', name: '🌌 Horizon Team', color: 0x9b59b6, hoist: true, mentionable: true },
   {
     key: 'mod', name: '🛡️ Mod', color: 0x2ecc71, hoist: true,
     permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers'],
@@ -112,7 +117,7 @@ export const LAYOUT = [
       { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the disclaimer.' },
       { key: 'horizonchat', name: 'horizon-chat', type: 'text', topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' },
       // writers: everyone reads; only the mods and these roles write, open threads and write in them (src/permissions.js).
-      { key: 'contributors', name: 'contributors', type: 'text', writers: ['contributor'], topic: "Where Horizon's contributors talk. Everyone can read. To write: have a merged PR, then `/link-github` + `/verify-github`." },
+      { key: 'contributors', name: 'contributors', type: 'text', writers: ['contributor', 'team'], topic: "Where Horizon's contributors talk. Everyone can read. To write: have a merged PR, then `/link-github` + `/verify-github`." },
       {
         key: 'horizonbugs', name: 'horizon-bugs', type: 'forum',
         topic: 'One bug per post, with the template. Search first: if it\'s already reported, add your details in that post.',
@@ -139,6 +144,8 @@ export const LAYOUT = [
       },
       { key: 'releases', name: 'releases', type: 'text', readonly: true, topic: 'Every new Horizon version and launcher, posted by Kira. Pick the 📦 Releases role to get pinged.' },
       { key: 'updates', name: 'updates', type: 'text', readonly: true, topic: 'What changed in Horizon: merged work grouped by roadmap item, releases, the weekly summary, and the board at a glance. The full kanban and roadmap: playhorizon.dev/hub. Talk about it in #horizon-chat.' },
+      // members: only these roles (and Kira, Ludovic) see it, write and open threads (src/permissions.js).
+      { key: 'horizonteam', name: 'horizon-team', type: 'text', members: ['team'], topic: 'Horizon Team only: the maintainers and the core contributors.' },
     ],
   },
   {

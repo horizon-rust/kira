@@ -8,7 +8,7 @@ import { rolesMessage } from '../src/texts.js';
 
 const specs = LAYOUT.flatMap((g) => g.channels);
 const spec = specs.find((c) => c.key === 'contributors');
-const ids = { everyone: 'EVERYONE', mod: 'MOD', kira: 'KIRA', owner: 'OWNER', roles: { contributor: 'CONTRIB', mod: 'MOD' } };
+const ids = { everyone: 'EVERYONE', mod: 'MOD', kira: 'KIRA', owner: 'OWNER', roles: { contributor: 'CONTRIB', mod: 'MOD', team: 'TEAM' } };
 
 // What a member holding `roles` can do in the channel, from @everyone's base permissions (as setup gives them) and
 // the overwrites, in Discord's order: @everyone's overwrite, then the member's roles (all denies, then all allows).
@@ -29,7 +29,7 @@ test('#contributors sits in Horizon\'s category right after #horizon-chat, with 
   const horizon = LAYOUT.find((g) => g.key === 'horizon').channels.map((c) => c.key);
   assert.equal(horizon.indexOf('contributors'), horizon.indexOf('horizonchat') + 1);
   assert.equal(spec.type, 'text');
-  assert.deepEqual(spec.writers, ['contributor']);
+  assert.deepEqual(spec.writers, ['contributor', 'team']);
   assert.equal(spec.topic, "Where Horizon's contributors talk. Everyone can read. To write: have a merged PR, then `/link-github` + `/verify-github`.");
   assert.ok(DEFAULT_CHANNELS.includes('contributors'));
 });
@@ -67,4 +67,15 @@ test('🛠️ Contributor is not a self role any more: no button, no Onboarding 
   const ids = rolesMessage().components.flatMap((row) => row.components.map((b) => b.data.custom_id));
   assert.deepEqual(ids, ['role:horizon', 'role:releases', 'role:newvideos', 'role:modder']);
   assert.match(rolesMessage().embeds[0].data.description, /not a button.*merged pull request.*\/verify-github/s);
+});
+
+test('#horizon-team: only the 🌌 Horizon Team (and Kira) see it; the team also writes in #contributors', () => {
+  const team = specs.find((c) => c.key === 'horizonteam');
+  const ow = overwrites(ids, team, false);
+  assert.equal(can([], P.ViewChannel, ow), false);
+  assert.equal(can(['CONTRIB'], P.ViewChannel, ow), false);
+  for (const perm of [P.ViewChannel, P.SendMessages, P.CreatePublicThreads]) assert.equal(can(['TEAM'], perm, ow), true, String(perm));
+  assert.equal(can(['TEAM'], P.SendMessages, overwrites(ids, spec, false)), true);
+  const order = ROLES.map((r) => r.key);
+  assert.ok(order.indexOf('team') > order.indexOf('contributor') && order.indexOf('team') > order.indexOf('sponsor') && order.indexOf('team') < order.indexOf('mod'));
 });

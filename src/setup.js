@@ -49,7 +49,7 @@ async function ensureRoles(guild) {
     let role = guild.roles.cache.get(state.roles[spec.key] ?? state.roles[spec.was]);
     if (spec.managed) role ??= guild.roles.cache.find((r) => r.tags?.premiumSubscriberRole);
     role ??= guild.roles.cache.find((r) => r.name === spec.name);
-    const data = { name: spec.name, colors: { primaryColor: spec.color }, hoist: !!spec.hoist, mentionable: false };
+    const data = { name: spec.name, colors: { primaryColor: spec.color }, hoist: !!spec.hoist, mentionable: !!spec.mentionable };
     if (!spec.managed) data.permissions = (spec.permissions ?? []).map((p) => P[p]);
     if (role) await role.edit(data);
     else if (spec.managed) { log('no', spec.name, 'role yet (Discord makes it)'); continue; }
