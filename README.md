@@ -9,7 +9,7 @@ projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no pai
 `npm run setup` makes the server match [`src/config.js`](src/config.js):
 
 - **Categories**: 👋 start here (welcome, #new-members, rules, FAQ, announcements, #ludovic-videos) · 🌅 horizon (#horizon-info,
-  #horizon-chat, #horizon-bugs, #horizon-ideas, #showcase for videos/clips/screenshots/builds made in Horizon,
+  #horizon-chat, #contributors (everyone reads; only 🛠️ Contributor and mods write), #horizon-bugs, #horizon-ideas, #showcase for videos/clips/screenshots/builds made in Horizon,
   #releases, #updates) · 💬 general (#general, #introductions, #off-topic, #memes, #hall-of-fame,
   #bot-commands) · 🔊 voice · 🛡️ staff. The old channels (#projects, #resources, #help, #beats, …) were deleted
   on 2026-10-14 after their messages were exported (`scratch/deleted-channels-2026-10-14/`, not committed).
@@ -21,7 +21,7 @@ projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no pai
   ONE locked, pinned **📌 How to post here: read me first** post (guide, template, rules). It is Kira's own
   post: never checked against the template, no reactions, never a GitHub issue, `/done` refuses it.
 - **Roles** (top to bottom): kira · 👑 ludovic · 🛡️ Mod · 🧪 Horizon Tester · 💎 Booster · lvl 50 → lvl 5 ·
-  🛠️ Contributor · 🧩 Modder · 🎬 Videos · 📣 Big news · 📦 Releases.
+  🛠️ Contributor (earned with a merged PR and `/verify-github`, not picked: see [Contributors](#contributors)) · 🧩 Modder · 🎬 Videos · 📣 Big news · 📦 Releases.
 - **Onboarding** (2 questions when you join: what brings you to Horizon, which pings; the default
   channels, `DEFAULT_CHANNELS` in `config.js`, include #new-members) and the
   **Server Guide** (Discord's newcomer home; bots get "Bots cannot use this endpoint", so Ludovic applies it

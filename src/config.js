@@ -60,7 +60,8 @@ export const ROLES = [
   // Not key 'videos': that is the old role of the all-projects server (🔔 Videos), in RETIRED_ROLES, which setup
   // deletes by key when nobody holds it. Pinged by every post of src/videos.js.
   { key: 'newvideos', name: '🎬 Videos', color: 0xff4d4d, self: true, label: 'New videos' },
-  { key: 'contributor', was: 'ai', name: '🛠️ Contributor', color: 0x9b7bff, self: true, label: 'Contributor' },
+  // Not a role to pick: a merged PR in Horizon, verified with /verify-github (src/features/contributors.js). It opens #contributors.
+  { key: 'contributor', was: 'ai', name: '🛠️ Contributor', color: 0x9b7bff, self: false, label: 'Contributor' },
   { key: 'modder', name: '🧩 Modder', color: 0x4cc38a, self: true, label: 'Modder' },
   { key: 'lvl5', name: 'lvl 5', color: 0x95a5a6, level: 5 },
   { key: 'lvl10', name: 'lvl 10', color: 0x7ed6df, level: 10 },
@@ -81,7 +82,7 @@ export const ROLES = [
 export const RETIRED_ROLES = ['videos', 'beatmaker', 'rapper', 'singer', 'youtuber', 'editor', 'designer'];
 
 // Channel types: text, voice, forum, announcement.
-// readonly: everyone reads, only staff and Kira post. staff: only mods see it. posts: 'staff' → only staff open forum posts.
+// readonly: everyone reads, only staff and Kira post. writers: everyone reads, only staff, Kira and these roles post. staff: only mods see it. posts: 'staff' → only staff open forum posts.
 // locked: a voice channel nobody joins by themselves (Ludovic or a mod moves people in). lobby: join it to get your own room.
 // Forums: `guide` is the post guidelines Discord shows above the forum (with the template) and the text of the
 // locked, pinned HOWTO post (one per forum that has a template);
@@ -110,6 +111,8 @@ export const LAYOUT = [
     channels: [
       { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the disclaimer.' },
       { key: 'horizonchat', name: 'horizon-chat', type: 'text', topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' },
+      // writers: everyone reads; only the mods and these roles write, open threads and write in them (src/permissions.js).
+      { key: 'contributors', name: 'contributors', type: 'text', writers: ['contributor'], topic: "Where Horizon's contributors talk. Everyone can read. To write: have a merged PR, then `/link-github` + `/verify-github`." },
       {
         key: 'horizonbugs', name: 'horizon-bugs', type: 'forum',
         topic: 'One bug per post, with the template. Search first: if it\'s already reported, add your details in that post.',
@@ -178,7 +181,7 @@ export const LAYOUT = [
 export const HOWTO = { name: '📌 How to post here: read me first', tag: ['📌', 'read me', true], mention: 'the 📌 **How to post here** post' };
 
 // What everyone sees in the channel list from the start; the Onboarding answers add the rest.
-export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'horizonchat', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'offtopic', 'memes', 'halloffame', 'botcommands'];
+export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'horizonchat', 'contributors', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'offtopic', 'memes', 'halloffame', 'botcommands'];
 
 // Replaced by another channel (2026-10-25: #updates replaces #work-board and #dev-log). Setup exports every message of
 // each one to scratch/ (not committed), then deletes it; if the export fails, the channel stays.
@@ -384,7 +387,7 @@ export const WELCOME = {
     '**Horizon** is Minecraft: Java Edition rewritten from scratch in Rust, checked against the real game so it plays exactly like vanilla, and faster. This is its server: players, testers and the people building it.',
     '',
     '**Where things are**',
-    '🌅 **horizon**: #horizon-info (what it is, the download), #horizon-chat, #horizon-bugs, #horizon-ideas, #showcase (your videos, screenshots, builds), #releases, #updates (what changed)',
+    '🌅 **horizon**: #horizon-info (what it is, the download), #horizon-chat, #contributors (read by all, written by people with a merged PR), #horizon-bugs, #horizon-ideas, #showcase (your videos, screenshots, builds), #releases, #updates (what changed)',
     '💬 **general**: chat, introductions, memes, the #hall-of-fame. Anything that isn\'t Horizon (other games, music, AI coding, Ludovic\'s other projects) goes in #off-topic.',
     '🔊 **voice**: join **➕ create your room** for your own voice channel',
     '',
@@ -427,7 +430,7 @@ export const FAQ = [
   ['How do I contribute?', `Pick a good first task on the hub (or \`/goodfirst\`), then \`/claim <number>\` **before you start**, so nobody does the same work twice. Open your pull request with "Fixes #<number>". \`/link-github <username>\` shows your Discord name on your pull requests (\`credit:True\` also lists you on the hub's contributors page). Done or stuck? \`/unclaim <number>\`. Claims lapse after 14 days without activity.`],
   ['Microsoft sign-in? CurseForge?', 'Microsoft sign-in is in the launcher since launcher 0.2.16: the account button at the top right → Sign in with Microsoft, then enter the code it shows at microsoft.com/link (online-mode servers need it). CurseForge is coming soon.'],
   ['Why was my post closed?', 'Forum posts must follow the template in the forum\'s 📌 How to post here post (pinned at the top; the post guidelines have it too). Kira tells you in your post what\'s missing. Edit your first message (⋯ → Edit) within an hour and the post stays; otherwise it\'s closed, and you can post again with the template.'],
-  ['How do I get roles?', 'With the buttons in #welcome (click again to remove), or in **Channels & Roles** at the top of the channel list. Level roles come by themselves.'],
+  ['How do I get roles?', 'With the buttons in #welcome (click again to remove), or in **Channels & Roles** at the top of the channel list. Level roles come by themselves. 🛠️ **Contributor** (writes in #contributors) is for a merged PR: `/link-github`, then `/verify-github`.'],
   ['What are levels?', 'You earn XP by talking (once a minute) and by hanging out in voice with other people. lvl 5, 10, 20, 30 and 50 give a role. `/rank` shows yours, `/leaderboard` the top 10. #memes and #bot-commands give no XP.'],
   ['How do I get my own voice channel?', 'Join **➕ create your room**: Kira makes you one and moves you in. `/room lock`, `/room invite @someone`, `/room private`, `/room limit 4`, `/room rename`. It disappears when it\'s empty.'],
   ['How do I reach the mods?', 'Send a DM to **Kira**: only the mods read it, and they answer through Kira. To report a message: right-click it → Apps → **Report to mods**, or `/report`.'],

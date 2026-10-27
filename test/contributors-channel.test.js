@@ -1,0 +1,70 @@
+// #contributors: everyone reads, only 🛠️ Contributor, mods and Kira write; and the role is no longer a button.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { PermissionFlagsBits as P } from 'discord.js';
+import { LAYOUT, ROLES, DEFAULT_CHANNELS } from '../src/config.js';
+import { overwrites } from '../src/permissions.js';
+import { rolesMessage } from '../src/texts.js';
+
+const specs = LAYOUT.flatMap((g) => g.channels);
+const spec = specs.find((c) => c.key === 'contributors');
+const ids = { everyone: 'EVERYONE', mod: 'MOD', kira: 'KIRA', owner: 'OWNER', roles: { contributor: 'CONTRIB', mod: 'MOD' } };
+
+// What a member holding `roles` can do in the channel, from @everyone's base permissions (as setup gives them) and
+// the overwrites, in Discord's order: @everyone's overwrite, then the member's roles (all denies, then all allows).
+const BASE = [P.ViewChannel, P.SendMessages, P.SendMessagesInThreads, P.AddReactions, P.ReadMessageHistory];
+function can(roles, perm, ow) {
+  let allowed = BASE.includes(perm);
+  const mine = (id) => ow.find((o) => o.id === id && o.type === 0);
+  const every = mine('EVERYONE');
+  if (every?.deny?.includes(perm)) allowed = false;
+  if (every?.allow?.includes(perm)) allowed = true;
+  const rs = roles.map(mine).filter(Boolean);
+  if (rs.some((o) => o.deny?.includes(perm))) allowed = false;
+  if (rs.some((o) => o.allow?.includes(perm))) allowed = true;
+  return allowed;
+}
+
+test('#contributors sits in Horizon\'s category right after #horizon-chat, with its topic, and is a default channel', () => {
+  const horizon = LAYOUT.find((g) => g.key === 'horizon').channels.map((c) => c.key);
+  assert.equal(horizon.indexOf('contributors'), horizon.indexOf('horizonchat') + 1);
+  assert.equal(spec.type, 'text');
+  assert.deepEqual(spec.writers, ['contributor']);
+  assert.equal(spec.topic, "Where Horizon's contributors talk. Everyone can read. To write: have a merged PR, then `/link-github` + `/verify-github`.");
+  assert.ok(DEFAULT_CHANNELS.includes('contributors'));
+});
+
+test('a member without the role reads and reacts but cannot write, open threads or write in threads', () => {
+  const ow = overwrites(ids, spec, false);
+  for (const perm of [P.ViewChannel, P.ReadMessageHistory, P.AddReactions]) assert.equal(can([], perm, ow), true, String(perm));
+  for (const perm of [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads]) assert.equal(can([], perm, ow), false, String(perm));
+});
+
+test('with 🛠️ Contributor, or as a mod, a member writes, opens threads and writes in them', () => {
+  const ow = overwrites(ids, spec, false);
+  for (const roles of [['CONTRIB'], ['MOD'], ['CONTRIB', 'MOD']]) {
+    for (const perm of [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads]) assert.equal(can(roles, perm, ow), true, `${roles} ${perm}`);
+  }
+  assert.equal(can(['CONTRIB'], P.CreatePrivateThreads, ow), false, 'private threads stay closed');
+  const kira = ow.find((o) => o.id === 'KIRA');
+  assert.ok(kira.allow.includes(P.SendMessages) && kira.allow.includes(P.ManageThreads));
+});
+
+test('the other kinds of channel keep their overwrites', () => {
+  const chat = specs.find((c) => c.key === 'horizonchat');
+  assert.equal(overwrites(ids, chat, false).length, 1, 'a normal channel: only Kira');
+  const rules = specs.find((c) => c.key === 'rules');
+  assert.deepEqual(overwrites(ids, rules, false).slice(1).map((o) => o.id), ['EVERYONE', 'MOD']);
+  const staff = specs.find((c) => c.key === 'modlog');
+  assert.deepEqual(overwrites(ids, staff, true).slice(1).map((o) => o.id), ['EVERYONE', 'MOD']);
+  assert.deepEqual(overwrites(ids, specs.find((c) => c.key === 'ludovic'), false).slice(1).map((o) => o.id), ['EVERYONE', 'OWNER']);
+});
+
+test('🛠️ Contributor is not a self role any more: no button, no Onboarding answer', () => {
+  const role = ROLES.find((r) => r.key === 'contributor');
+  assert.equal(role.self, false);
+  assert.equal(role.name, '🛠️ Contributor');
+  const ids = rolesMessage().components.flatMap((row) => row.components.map((b) => b.data.custom_id));
+  assert.deepEqual(ids, ['role:horizon', 'role:releases', 'role:newvideos', 'role:modder']);
+  assert.match(rolesMessage().embeds[0].data.description, /not a button.*merged pull request.*\/verify-github/s);
+});
