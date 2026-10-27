@@ -25,6 +25,8 @@ const verified = (id) => kit.isVerified(work, id, WORK.github);
 const fetchMember = (id) => guild()?.members.fetch(id).catch(() => null);
 // Staff write in #contributors anyway: the role is for everyone else.
 const isStaffMember = (m) => m.id === OWNER_ID || isStaff(m);
+// Ludovic's trusted reviewers: nothing automatic takes the role from them.
+const isTrusted = (id) => Object.hasOwn(CONTRIBUTORS.protectedMembers, id);
 
 // ── Granting ─────────────────────────────────────────────────────────────────
 
@@ -71,7 +73,7 @@ export async function relinked(id) {
   if (!had) return;
   const member = await fetchMember(id);
   const role = roleId();
-  if (member && role && member.roles.cache.has(role) && !isStaffMember(member)) await member.roles.remove(role, 'GitHub link changed: verify again').catch(() => {});
+  if (member && role && member.roles.cache.has(role) && !isStaffMember(member) && !isTrusted(id)) await member.roles.remove(role, 'GitHub link changed: verify again').catch(() => {});
 }
 
 // What /link-github adds to its answer: how to get #contributors (once, when the login already has a merged PR).
@@ -213,7 +215,7 @@ export async function cleanup({ dry = true } = {}) {
     } else {
       const n = await lookup(login);
       if (n === null) { out.unknown++; continue; }
-      const qualifies = n >= 1 || guarded.has(login.toLowerCase());
+      const qualifies = n >= 1 || guarded.has(login.toLowerCase()) || isTrusted(m.id);
       if (qualifies && verified(m.id)) { out.keepVerified++; delete work.grace?.[m.id]; continue; }
       if (qualifies) {
         await giveGrace(m, 'graceDm', (until) => kit.graceDm(login, until, n >= 1));
@@ -267,7 +269,7 @@ export async function sweep() {
     try {
       const login = kit.loginOf(work, id, WORK.github);
       const ok = member && login && verified(id) && (CONTRIBUTORS.protectedLogins.some((l) => l.toLowerCase() === login.toLowerCase()) || (await merged(login)) >= 1);
-      if (member && !ok && member.roles.cache.has(role)) await member.roles.remove(role, 'did not verify GitHub in time');
+      if (member && !ok && !isTrusted(id) && member.roles.cache.has(role)) await member.roles.remove(role, 'did not verify GitHub in time');
       delete work.grace[id];
       save();
     } catch (e) { console.error('contributors grace', e.message); }
