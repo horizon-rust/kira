@@ -8,7 +8,7 @@ import { makeGitHub } from '../github.js';
 import { onTemplateOk, followsTemplate } from './forums.js';
 import * as kit from '../issuekit.js';
 import { isOwnPost } from '../adopt.js';
-import { reviewBug } from './ai.js';
+import { reviewBug, onBugPostMention } from './ai.js';
 import { searchTerms, yesNo, missingAsk } from '../ai-kit.js';
 
 const TOKEN = process.env.GITHUB_TOKEN?.trim();
@@ -300,8 +300,33 @@ async function tick(now = Date.now()) {
   if (!DRY) save();
 }
 
+// "@Kira …" inside a #horizon-bugs post is about that post. Not filed yet: the same path as a new post (template check,
+// duplicate search, filing). Filed: the issue link. Returns true when it replied, false to leave the message to the
+// general answers (GitHub off, Kira's own guide posts).
+async function mentionInBugPost(msg) {
+  const thread = msg.channel;
+  const reply = (content) => msg.reply({ content, allowedMentions: { parse: [], repliedUser: false } }).catch((e) => console.error('github mention reply', e.message));
+  if (!enabled || !thread?.isThread?.() || isOwnPost(thread, client.user?.id)) return false;
+  const entry = store.issues[thread.id];
+  if (entry) { await reply(`This post is on GitHub as ${ref(entry)}${entry.state === 'closed' ? ' (closed)' : ''}.`); return true; }
+  if (store.pending[thread.id]) { await reply(`I'm waiting for the reporter's yes or no above: is it the same bug as the issue I found? Then it's filed.`); return true; }
+  if (busy.has(thread.id)) { await reply("I'm sending this post to GitHub right now."); return true; }
+  const starter = await followsTemplate(thread).catch(() => false);
+  if (!starter) {
+    const waiting = state.formatChecks[thread.id];
+    await reply(waiting ? "This post doesn't follow the template yet, so I haven't sent it to GitHub. Edit the first message with what my notice above asks for, and I'll file it." : "I can't send this post to GitHub (it's locked or I can't read its first message).");
+    return true;
+  }
+  const filed = await openIssue(thread, starter);
+  if (filed) await reply(`Sent to GitHub: ${ref(filed)}.`);
+  else if (store.pending[thread.id]) await reply('I found a possible duplicate: see my question above.');
+  else if (!DRY) await reply("I couldn't send it to GitHub just now; I've told the mods.");
+  return true;
+}
+onBugPostMention((msg) => mentionInBugPost(msg));
+
 // For the tests and the end-to-end check: the opening logic, the tick (with a given time), a fake GitHub.
-export const _test = { openIssue, onMessage, tick, store, setGitHub: (g) => { gh = g; } };
+export const _test = { openIssue, mentionInBugPost, onMessage, tick, store, setGitHub: (g) => { gh = g; } };
 
 export const commands = enabled ? [
   new SlashCommandBuilder().setName('issue').setDescription('Staff: send this forum post to GitHub as an issue, or link it to an existing one')
