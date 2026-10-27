@@ -355,6 +355,18 @@ export const CONTRIBUTORS = {
   protectedMembers: { '437262688930889730': 'kacpherek', '777346923232886784': 'rdbtCVS', '821858512975953993': 'levzzz5154' },
 };
 
+// Triage through Kira (src/features/triage.js): GitHub has no Triage role on a personal account's repo, and write
+// access would let a branch push run workflows with the repo's secrets. So Ludovic's trusted reviewers label, close,
+// reopen and mark duplicates in GITHUB.owner/WORK.repo with `/gh`, using Kira's token. Ludovic edits this list: a
+// reviewer needs a GitHub login here and a verified link to it (/verify-github). `/gh pause` stops everyone.
+export const TRIAGE = {
+  reviewers: ['kacpherek', 'rdbtCVS', 'levzzz5154'],
+  perDay: 60,                          // actions per reviewer in any 24 hours
+  noLabels: /release/i,                // release-now, release-blocker, skip-release…: only Ludovic's side touches those
+  keepLabels: ['in progress'],         // Kira's own claim label (WORK.label)
+  ownPullsOf: 'ludovic111',            // pull requests by this login (Ludovic's own and his agents') are never touched
+};
+
 // Moderation knobs.
 export const MOD = {
   floodMessages: 6, floodWindowMs: 8_000,        // 6 messages in 8 s

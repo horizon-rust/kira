@@ -60,6 +60,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | `#updates` | One feed generated from the hub's journal: merged work grouped by roadmap item, releases (pointing to `#releases`), shipped items, the weekly summary; the board's summary on top: see below |
 | Work board | The board behind the hub's kanban, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/goodfirst`, `/notify`: see below |
 | Contributors | `/verify-github` proves a linked GitHub account is the member's; a merged pull request in Horizon then gives 🛠️ Contributor: see [Contributors](#contributors) |
+| Triage | `/gh label|close|reopen|duplicate|pause|resume` for Ludovic's trusted reviewers, through Kira's GitHub token: see [Triage through Kira](#triage-through-kira) |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
 | Info | `/help` (what Kira does, its commands), `/links`, `/horizon`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
@@ -222,6 +223,25 @@ After setup made the role and Kira is deployed with the ping, give it to the mem
     ~/fleet/op run --env-file .env.op -- node scripts/grant-videos-role.js
 
 `--role <id>` skips the lookup by name. The code is [`src/grant.js`](src/grant.js).
+
+## Triage through Kira
+
+GitHub has no Triage role on a personal account's repo, and write access would let a branch push run workflows with
+the repo's secrets. So the reviewers Ludovic trusts (`TRIAGE.reviewers` in `config.js`: kacpherek, rdbtCVS,
+levzzz5154; he edits the list) triage ludovic111/horizon **through Kira**, with Kira's token
+([`src/features/triage.js`](src/features/triage.js), rules in [`src/triage-kit.js`](src/triage-kit.js)):
+
+- `/gh label <#> add|remove <label>` (the label must exist), `/gh close <#> [reason] [note]`, `/gh reopen <#>`,
+  `/gh duplicate <#> of <#>` (labels `duplicate`, closes as not planned), for issues and pull requests.
+- Never merge. Never a label with "release" in its name (`release-now`, `release-blocker`, `skip-release`…) nor Kira's
+  `in progress`. Never a pull request by ludovic111 (his and his agents'), never a merged one.
+- Each action is a GitHub comment "🤖 Kira, on behalf of @login: …" (free text goes through the same neutraliser as
+  forum posts: no pings, no cross-references) and a line in `#mod-log`. 60 actions per reviewer in any 24 hours; an
+  action GitHub refuses is not counted.
+- The member needs a verified link (`/verify-github`) to a listed login. Ludovic removes someone by editing the list;
+  `/gh pause` (Ludovic or a mod) stops everyone until `/gh resume`.
+- Kira's token needs permission to write issues and pull requests for closing and labelling a pull request; if
+  GitHub refuses, the reviewer is told nothing changed.
 
 ## Contributors
 
