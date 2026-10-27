@@ -171,3 +171,25 @@ export function makeAnswerer({ client, sources, models = kit.MODELS }) {
     return { ...result, status: 'pass', reply: checked.ok ? checked.text : kit.PASSED };
   };
 }
+
+// A bug report read before it's filed (#horizon-bugs, /report): one call to the fast model, no tools. Returns
+// { draft, cost, model, input, output, reason? }: draft is checkBugDraft's (null when the model gave nothing usable,
+// and the report is then filed as it is). Throws only for an API error.
+export function makeBugReviewer({ client, model = kit.MODELS.fast }) {
+  return async function review(report) {
+    const r = await client.messages.create({
+      model, max_tokens: 2000, system: kit.BUG_RULES,
+      messages: [{ role: 'user', content: kit.bugTurn(report) }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: kit.BUG_SCHEMA } },
+    });
+    const u = r.usage ?? {};
+    const spent = { cost: kit.costOf(model, u), model, input: u.input_tokens ?? 0, output: u.output_tokens ?? 0 };
+    if (r.stop_reason !== 'end_turn') return { ...spent, draft: null, reason: `stop: ${r.stop_reason}` };
+    try {
+      const out = JSON.parse(r.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
+      return { ...spent, draft: kit.checkBugDraft(out, report) };
+    } catch (e) {
+      return { ...spent, draft: null, reason: `unreadable answer: ${e.message}` };
+    }
+  };
+}

@@ -488,4 +488,8 @@ export const AI = {
   contextMessages: 4, // the reply chain the model sees (the messages being replied to), at most
   handoffsKept: 200, // questions passed to the team that the orchestrator can read (MCP ai_handoffs)
   daysKept: 62, // daily usage kept for GET /ai-usage
+  // KIRA_AI_BUGS=1: a bug report is read by the model before it's filed (src/features/github.js): a title, the
+  // version and OS from the report, a duplicate check against open issues, one ask for what's missing.
+  bugs: ['1', 'on'].includes((process.env.KIRA_AI_BUGS ?? '').trim().toLowerCase()),
+  pendingMs: 30 * 60_000, // a "maybe the same as #N" waits this long for the reporter's yes or no, then is filed as new
 };

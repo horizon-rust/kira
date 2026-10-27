@@ -180,6 +180,7 @@ test('GET /ai-usage: 401 without the token or with a wrong one; per-day and mont
   f.record({ status: 'answer', cost: 0.0011, models: ['claude-haiku-5-5'] }, at(27));
   f.record({ status: 'pass', cost: 0.03, models: ['claude-haiku-5-5', 'claude-sonnet-5-5'] }, at(27));
   f.record({ status: 'answer', cost: 0.5, models: ['claude-haiku-5-5'] }, Date.UTC(2026, 8, 30, 12)); // last month
+  f.record({ kind: 'bug', cost: 0.0004, models: ['claude-haiku-5-5'] }, at(27)); // a bug report read before filing
   f._test.store.handoffs = [{ id: 'm1', url: 'https://discord.com/x', channel: 'horizon-chat', author: 'Player', question: 'secret question text', reason: 'x', at: 0, done: false }];
   assert.deepEqual(f.usageRoutes({ token: '' }), {}, 'no token, no route');
   assert.deepEqual(f.usageRoutes({ token: 'short' }), {}, 'a weak token, no route');
@@ -199,13 +200,13 @@ test('GET /ai-usage: 401 without the token or with a wrong one; per-day and mont
     assert.equal(res.headers.get('cache-control'), 'no-store');
     const body = await res.json();
     assert.deepEqual(body, {
-      daily_budget_usd: 3, enabled: true, on: true, mode: 'mentions', today: '2026-10-27',
+      daily_budget_usd: 3, enabled: true, on: true, mode: 'mentions', bugs: false, today: '2026-10-27',
       days: [
-        { day: '2026-09-30', cost_usd: 0.5, answers: 1, passed_to_team: 0, models: { 'claude-haiku-5-5': 1 } },
-        { day: '2026-10-26', cost_usd: 0.0013, answers: 1, passed_to_team: 0, models: { 'claude-haiku-5-5': 1 } },
-        { day: '2026-10-27', cost_usd: 0.0311, answers: 1, passed_to_team: 1, models: { 'claude-haiku-5-5': 2, 'claude-sonnet-5-5': 1 } },
+        { day: '2026-09-30', cost_usd: 0.5, answers: 1, passed_to_team: 0, bug_reviews: 0, models: { 'claude-haiku-5-5': 1 } },
+        { day: '2026-10-26', cost_usd: 0.0013, answers: 1, passed_to_team: 0, bug_reviews: 0, models: { 'claude-haiku-5-5': 1 } },
+        { day: '2026-10-27', cost_usd: 0.0315, answers: 1, passed_to_team: 1, bug_reviews: 1, models: { 'claude-haiku-5-5': 3, 'claude-sonnet-5-5': 1 } },
       ],
-      month: { month: '2026-10', cost_usd: 0.0324, answers: 2, passed_to_team: 1, models: { 'claude-haiku-5-5': 3, 'claude-sonnet-5-5': 1 } },
+      month: { month: '2026-10', cost_usd: 0.0328, answers: 2, passed_to_team: 1, bug_reviews: 1, models: { 'claude-haiku-5-5': 4, 'claude-sonnet-5-5': 1 } },
     });
     const text = JSON.stringify(body);
     assert.ok(!text.includes('secret question') && !text.includes('Player') && !/\d{17,20}/.test(text), 'no message text, no names, no ids');
