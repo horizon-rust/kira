@@ -33,7 +33,7 @@ core.client.channels.cache.set('LOG', { send: async (m) => logged.push(m.embeds[
 core.state.channels.modlog = 'LOG';
 
 const work = (core.state.work ??= {});
-work.links = { kac: 'kacpherek', rdbt: 'rdbtCVS', rando: 'rando-gh', nover: 'levzzz5154' };
+work.links = { kac: 'kacpherek', rdbt: 'rdbtCVS', rando: 'rando-gh', nover: 'Online5277' };
 work.verified = { kac: 'kacpherek', rdbt: 'rdbtCVS', rando: 'rando-gh' };
 
 const run = async (userId, sub, opts = {}, { staff = false } = {}) => {

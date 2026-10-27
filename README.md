@@ -228,7 +228,7 @@ After setup made the role and Kira is deployed with the ping, give it to the mem
 
 GitHub has no Triage role on a personal account's repo, and write access would let a branch push run workflows with
 the repo's secrets. So the reviewers Ludovic trusts (`TRIAGE.reviewers` in `config.js`: kacpherek, rdbtCVS,
-levzzz5154; he edits the list) triage ludovic111/horizon **through Kira**, with Kira's token
+Online5277, the three with most merged PRs; he edits the list) triage ludovic111/horizon **through Kira**, with Kira's token
 ([`src/features/triage.js`](src/features/triage.js), rules in [`src/triage-kit.js`](src/triage-kit.js)):
 
 - `/gh label <#> add|remove <label>` (the label must exist), `/gh close <#> [reason] [note]`, `/gh reopen <#>`,
@@ -265,11 +265,12 @@ ludovic111/horizon. Members don't pick it any more (no button, not an Onboarding
   a merged pull request keep it; a linked login with a merged pull request that isn't verified gets a DM and 7 days to
   run `/verify-github` (the daily sweep removes the role after that). A holder who never linked GitHub is compared with
   every author of a merged pull request in Horizon (the search API, split by merge date because it shows 1000 results
-  at most): the Discord username, global name and server nickname, without spaces, dots and underscores, equal to a
-  login or containing it (or the other way round) when both have at least 5 characters. A match gets a DM and the same 7
-  days to `/link-github` and `/verify-github`. Ludovic's trusted reviewers (`CONTRIBUTORS.protectedLogins`) are never
-  removed without that DM and 7 days. Everyone else loses the role, and Kira posts one line without a ping in
-  `#announcements`. It runs inside Kira (it needs the state), through the admin routes: with `KIRA_ADMIN_TOKEN_SHA256`
+  at most): the Discord **username** (display names are too loose), without spaces, dots and underscores, equal to a
+  login or containing it (or the other way round) when both have at least 5 characters, with look-alike digits read as
+  letters (`Excurs1ons`). A match gets a DM and the same 7 days to `/link-github` and `/verify-github`. Ludovic's
+  trusted reviewers (`CONTRIBUTORS.protectedMembers`, by Discord id) always count with their login and are never removed
+  automatically. Everyone else (no merged PR) loses the role **at once**, with no grace (Ludovic, 2026-10-27), and gets one DM
+  saying how to get it back; Kira posts one line without a ping in `#announcements`. It runs inside Kira (it needs the state), through the admin routes: with `KIRA_ADMIN_TOKEN_SHA256`
   set, `POST /admin/contributors-cleanup` starts a **dry run** (nothing changes) and `{"dry": false}` the real one;
   `GET /admin/contributors-cleanup` returns the last result: counts, and the `matches` (Discord name and the GitHub
   login it was matched to) for the staff to read.

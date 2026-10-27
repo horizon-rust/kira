@@ -348,11 +348,11 @@ export const CONTRIBUTORS = {
   sweepEveryMs: 24 * 60 * 60_000, // the daily look for members who qualify and were missed
   verifyPerHour: 6,             // /verify-github answers per member an hour (each check reads GitHub)
   searchPaceMs: 2_200,          // between two searches (the search API allows 30 a minute)
-  // Ludovic's trusted reviewers: the clean-up never removes their role without a DM and 7 days (kacpherek, rdbtCVS, levzzz5154).
-  protectedLogins: ['kacpherek', 'rdbtCVS', 'levzzz5154'],
+  // Ludovic's trusted reviewers: the clean-up never removes their role without a DM and 7 days (kacpherek, rdbtCVS, Online5277).
+  protectedLogins: ['kacpherek', 'rdbtCVS', 'Online5277'],
   // Discord id → login of Ludovic's trusted reviewers (found by hand). Nothing automatic ever takes the role from
   // them: the clean-up gives an unlinked one the DM and 7 days, and the sweep and a changed link leave them the role.
-  protectedMembers: { '437262688930889730': 'kacpherek', '777346923232886784': 'rdbtCVS', '821858512975953993': 'levzzz5154' },
+  protectedMembers: { '437262688930889730': 'kacpherek', '777346923232886784': 'rdbtCVS', '1531466016054444261': 'Online5277' },
 };
 
 // Triage through Kira (src/features/triage.js): GitHub has no Triage role on a personal account's repo, and write
@@ -360,7 +360,7 @@ export const CONTRIBUTORS = {
 // reopen and mark duplicates in GITHUB.owner/WORK.repo with `/gh`, using Kira's token. Ludovic edits this list: a
 // reviewer needs a GitHub login here and a verified link to it (/verify-github). `/gh pause` stops everyone.
 export const TRIAGE = {
-  reviewers: ['kacpherek', 'rdbtCVS', 'levzzz5154'],
+  reviewers: ['kacpherek', 'rdbtCVS', 'Online5277'], // the top three contributors by merged PRs (Ludovic, 2026-10-27)
   perDay: 60,                          // actions per reviewer in any 24 hours
   noLabels: /release/i,                // release-now, release-blocker, skip-release…: only Ludovic's side touches those
   keepLabels: ['in progress'],         // Kira's own claim label (WORK.label)
