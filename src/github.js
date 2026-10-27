@@ -34,8 +34,11 @@ export function makeGitHub({ token, dryRun = false, fetchImpl = fetch, log = con
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(20_000),
     });
+    // Only the core pool is the shared hour: the search API has its own 30 a minute, and its small number must
+    // not make every other GET hold back.
     const left = res.headers?.get?.('x-ratelimit-remaining');
-    if (left != null) {
+    const resource = res.headers?.get?.('x-ratelimit-resource');
+    if (left != null && (resource == null || resource === 'core')) {
       budget.remaining = Number(left);
       budget.reset = Number(res.headers.get('x-ratelimit-reset')) * 1000;
     }
