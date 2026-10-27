@@ -59,17 +59,26 @@ export function makeSources({ gh, faq = FAQ, log = console.error }) {
     if (out.length) releases = out;
   }
 
-  // Refreshes what is stale; false when nothing could ever be loaded (Kira then passes every question).
-  async function refresh(now = Date.now()) {
-    if (now - at.docs >= DOCS_EVERY_MS) {
+  // Refreshes what is stale; false when nothing could ever be loaded. A call during a refresh waits for it (right after
+  // a deploy the first questions arrive while the sources are still loading). `force` retries what never loaded, even
+  // inside the retry delay of a failed refresh.
+  let inflight = null;
+  async function load(now, force) {
+    if (now - at.docs >= DOCS_EVERY_MS || (force && !readme)) {
       at.docs = now;
       await refreshDocs().catch((e) => { at.docs = now - DOCS_EVERY_MS + 15 * 60_000; log('ai sources: docs', e.message); });
     }
-    if (now - at.releases >= RELEASES_EVERY_MS) {
+    if (now - at.releases >= RELEASES_EVERY_MS || (force && !releases.length)) {
       at.releases = now;
       await refreshReleases().catch((e) => { at.releases = now - RELEASES_EVERY_MS + 5 * 60_000; log('ai sources: releases', e.message); });
     }
     return ready();
+  }
+  async function refresh(now = Date.now(), { force = false } = {}) {
+    if (inflight) await inflight.catch(() => {});
+    const p = load(now, force).finally(() => { if (inflight === p) inflight = null; });
+    inflight = p;
+    return p;
   }
   const ready = () => !!readme && releases.length > 0;
 
@@ -141,7 +150,7 @@ export function makeAnswerer({ client, sources, models = kit.MODELS }) {
       if (r.stop_reason !== 'end_turn') return { status: 'pass', reason: `stop: ${r.stop_reason}` };
       try {
         const out = JSON.parse(r.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
-        if (!['answer', 'pass', 'unsure'].includes(out.status) || typeof out.reply !== 'string') throw new Error('bad shape');
+        if (!['answer', 'pass', 'unsure', 'ignore'].includes(out.status) || typeof out.reply !== 'string') throw new Error('bad shape');
         return { status: out.status, reply: out.reply, language: out.language };
       } catch (e) {
         return { status: 'pass', reason: `unreadable answer: ${e.message}` };
@@ -166,6 +175,7 @@ export function makeAnswerer({ client, sources, models = kit.MODELS }) {
     if (r.status === 'unsure') r = { status: 'pass', reason: 'unsure' }; // an unsure draft is never posted
     const result = { status: r.status, reason: r.reason, language: r.language, ...spent };
     const checked = r.reply != null ? kit.checkReply(r.reply) : { ok: false, reason: r.reason ?? 'no reply' };
+    if (r.status === 'ignore') return { ...result, reply: '' }; // chatter or a jailbreak: no reply, no hand-off
     if (r.status === 'answer' && checked.ok) return { ...result, reply: checked.text };
     if (r.status === 'answer') return { ...result, status: 'pass', reason: `filtered: ${checked.reason}`, reply: kit.PASSED };
     return { ...result, status: 'pass', reply: checked.ok ? checked.text : kit.PASSED };

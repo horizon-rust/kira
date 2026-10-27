@@ -175,3 +175,68 @@ test('ideas and a mod\'s /issue are never read by the model', async () => {
   await github._test.openIssue(thread, starter, { manual: true, target: { repo: 'horizon', kind: 'bug' } });
   assert.equal(asked.length, 0);
 });
+
+// ── "@Kira …" inside a #horizon-bugs post ────────────────────────────────────
+
+const mention = (thread, text = 'check this out', user = 'u2') => {
+  const replies = [];
+  return {
+    id: `x${++n}`, content: `<@kira> ${text}`, guildId: process.env.GUILD_ID ?? undefined, channelId: thread.id, channel: thread,
+    author: { id: user, username: 'lee', bot: false }, member: { displayName: 'Lee' }, mentions: { repliedUser: null }, reference: null,
+    reply: async (p) => { replies.push(p.content); return p; }, replies,
+  };
+};
+const bugThread = (o) => {
+  const p = post(o.text ?? REPORT, o);
+  Object.assign(p.thread, { isThread: () => true, locked: false, guild: { members: { fetch: async () => ({ roles: { cache: new Map() } }) } }, fetchStarterMessage: async () => Object.assign(p.starter, { channel: p.thread, embeds: [] }) });
+  return p;
+};
+
+test('a mention in a bug post that is not filed yet: the same filing path as a new post (duplicate search, filing), and no "go to #horizon-bugs"', async () => {
+  raw = { title: 'Water renders black', version: 'Horizon 0.2.60', os: 'Windows 11, RX 6700', missing: [], match: 'none', match_number: 0 };
+  const { thread } = bugThread({});
+  const m = mention(thread, 'please report this ticket to github');
+  const answers = [];
+  ai._test.set({ answer: async (q) => { answers.push(q); return { status: 'pass', reply: 'x' }; } });
+  assert.equal(await github._test.mentionInBugPost(m), true);
+  assert.equal(created().length, 1, 'filed');
+  assert.equal(searches.length, 1, 'duplicate search ran');
+  assert.equal(asked.length, 1, 'the bug reviewer read it');
+  assert.match(m.replies[0], /Sent to GitHub: horizon#77/);
+  assert.ok(!/horizon-bugs|\/report|mod action/.test(m.replies[0]));
+  assert.equal(answers.length, 0, 'not a general question, never handed off');
+});
+
+test('a mention in a bug post that is already filed: the issue link, no second issue', async () => {
+  raw = { title: 'Water renders black', version: '', os: '', missing: [], match: 'none', match_number: 0 };
+  const { thread, starter } = bugThread({});
+  await github._test.openIssue(thread, starter);
+  writes = [];
+  const m = mention(thread, 'check this out');
+  assert.equal(await github._test.mentionInBugPost(m), true);
+  assert.equal(created().length, 0);
+  assert.match(m.replies[0], /already|on GitHub as horizon#77/);
+  assert.ok(m.replies[0].includes('https://github.com/horizon-rust/horizon/issues/77'));
+  assert.ok(!/#horizon-bugs/.test(m.replies[0]));
+});
+
+test('a mention in a bug post that misses the template: not filed, and told to edit it (not to post elsewhere)', async () => {
+  const { thread } = bugThread({ text: 'it is broken' });
+  core.state.formatChecks[thread.id] = { forum: 'horizonbugs', owner: 'u1', at: Date.now(), notice: 'n1' };
+  const m = mention(thread, 'report this please');
+  assert.equal(await github._test.mentionInBugPost(m), true);
+  assert.equal(created().length, 0);
+  assert.match(m.replies[0], /template/);
+  assert.ok(!/in #horizon-bugs|\/report/.test(m.replies[0]));
+  delete core.state.formatChecks[thread.id];
+});
+
+test('a mention in a bug post that may be a duplicate: the reporter is asked, nothing is filed yet', async () => {
+  raw = { title: 'Water renders black', version: '', os: '', missing: [], match: 'maybe', match_number: 40 };
+  const { thread } = bugThread({});
+  const m = mention(thread, 'check this out');
+  assert.equal(await github._test.mentionInBugPost(m), true);
+  assert.equal(created().length, 0);
+  assert.ok(github._test.store.pending[thread.id]);
+  assert.match(m.replies[0], /possible duplicate/);
+});

@@ -91,7 +91,7 @@ test('replies: no pings, a length cap, never empty', () => {
 
 test('the reply schema the model must follow', () => {
   assert.deepEqual(kit.REPLY_SCHEMA.required, ['status', 'reply', 'language']);
-  assert.deepEqual(kit.REPLY_SCHEMA.properties.status.enum, ['answer', 'pass', 'unsure']);
+  assert.deepEqual(kit.REPLY_SCHEMA.properties.status.enum, ['answer', 'pass', 'unsure', 'ignore']);
   assert.equal(kit.REPLY_SCHEMA.additionalProperties, false);
 });
 

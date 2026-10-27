@@ -37,6 +37,7 @@ export function record(r, now = Date.now()) {
   const d = (store.days[today(now)] ??= { cost_usd: 0, answers: 0, passed_to_team: 0, models: {} });
   d.cost_usd += r.cost ?? 0;
   if (r.kind === 'bug') d.bug_reviews = (d.bug_reviews ?? 0) + 1;
+  else if (r.status === 'ignore') d.ignored = (d.ignored ?? 0) + 1;
   else if (r.status === 'answer') d.answers++;
   else d.passed_to_team++;
   for (const m of r.models ?? []) d.models[m] = (d.models[m] ?? 0) + 1;
@@ -104,17 +105,22 @@ async function respond(msg, text) {
   }
   let r;
   if (spentToday() >= AI.dailyUsd) r = { status: 'pass', reply: kit.BUDGET_SPENT, reason: 'daily budget spent', models: [], cost: 0 };
-  else if (!(await sources.refresh())) r = { status: 'pass', reply: kit.PASSED, reason: 'sources not loaded', models: [], cost: 0 };
+  else if (!(await sources.refresh()) && !(await sources.refresh(Date.now(), { force: true }))) r = { status: 'pass', reply: kit.PASSED, reason: 'sources not loaded', models: [], cost: 0 };
   else {
     msg.channel?.sendTyping?.().catch(() => {});
     r = await answer({ author: name(msg), channel: channelName(msg), text, context: await contextOf(msg) });
   }
   record(r);
+  if (r.status === 'ignore') return save(); // chatter or a jailbreak: no reply, nothing for the team
   if (r.status !== 'answer') handoff(msg, text, r.reason ?? 'not in the sources');
   save();
   await send(r.reply).catch((e) => console.error('kira ai reply', e.message));
   await logAnswer(msg, text, r);
 }
+
+// Set by src/features/github.js: (msg) → true when the mention in a bug post was dealt with (it replied itself).
+let bugPostHook = null;
+export const onBugPostMention = (fn) => { bugPostHook = fn; };
 
 // true when Kira took the message (answered, passed it on, or hit a limit).
 export async function onMessage(msg) {
@@ -128,6 +134,10 @@ export async function onMessage(msg) {
   if (seen.has(msg.id)) return true;
   seen.add(msg.id);
   if (seen.size > 1000) seen.delete(seen.values().next().value);
+  const inBugPost = !!bugPostHook && state.channels.horizonbugs && msg.channel?.parentId === state.channels.horizonbugs;
+  // A mention inside a #horizon-bugs post is about that post: filed, or linked if it already is (src/features/github.js).
+  const handled = inBugPost ? await bugPostHook(msg).catch((e) => { console.error('kira ai bug post', e.message); return null; }) : null;
+  if (handled) return true;
   await respond(msg, text).catch((e) => console.error('kira ai', e));
   return true;
 }
