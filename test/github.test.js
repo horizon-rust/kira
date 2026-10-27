@@ -37,3 +37,16 @@ test('below KEEP calls left, GETs wait for the reset but writes still go', async
   assert.deepEqual(f.calls.map((c) => c[0] + ' ' + c[1]), ['GET /b', 'POST /c']);
   _budget.remaining = Infinity;
 });
+
+test('an answer from the search API does not count against the shared hour', async () => {
+  _budget.remaining = Infinity;
+  const fetchImpl = async () => new Response('{}', { status: 200, headers: { 'x-ratelimit-remaining': '3', 'x-ratelimit-resource': 'search', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 60) } });
+  const gh = makeGitHub({ token: 't', fetchImpl });
+  await gh.get('/search/issues?q=x');
+  assert.equal(_budget.remaining, Infinity);
+  await gh.get('/repos/a/b'); // not held back
+  const core = async () => new Response('{}', { status: 200, headers: { 'x-ratelimit-remaining': '3999', 'x-ratelimit-resource': 'core', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 60) } });
+  await makeGitHub({ token: 't', fetchImpl: core }).get('/repos/a/c');
+  assert.equal(_budget.remaining, 3999);
+  _budget.remaining = Infinity;
+});
