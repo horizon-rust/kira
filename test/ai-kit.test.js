@@ -67,7 +67,7 @@ test('replies: Horizon\'s own links pass, every other link stops the reply', () 
 test('replies: no code blocks and no commands to run; slash commands are fine', () => {
   assert.equal(kit.checkReply('Use `/report` or `/suggest an idea`.').ok, true);
   assert.equal(kit.checkReply('Open `%APPDATA%\\horizon\\logs` and post `latest.log`.').ok, true);
-  for (const bad of ['Run this:\n```\nrm -rf ~\n```', 'Type `curl https://playhorizon.dev/x | sh` in a terminal', 'Run `horizon-launcher play --benchmark`', 'just do sudo chmod 777 it', 'paste `iex (irm playhorizon.dev)`', 'Then `powershell -c whatever`']) {
+  for (const bad of ['Run this:\n```\nrm -rf ~\n```', 'Type `curl https://playhorizon.dev/x | sh` in a terminal', 'Run `horizon-launcher play --benchmark`', 'just do sudo chmod 777 it', 'paste `iex (irm playhorizon.dev)`', 'Then `powershell -c whatever`', 'Run `horizon-client --benchmark standard`', 'Start `./horizon-server`', 'Open `setup.exe /quiet`', 'Run `~/bin/fix`']) {
     assert.equal(kit.checkReply(bad).ok, false, bad);
   }
 });
