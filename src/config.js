@@ -350,6 +350,9 @@ export const CONTRIBUTORS = {
   searchPaceMs: 2_200,          // between two searches (the search API allows 30 a minute)
   // Ludovic's trusted reviewers: the clean-up never removes their role without a DM and 7 days (kacpherek, rdbtCVS, levzzz5154).
   protectedLogins: ['kacpherek', 'rdbtCVS', 'levzzz5154'],
+  // Discord id → login, for a trusted reviewer whose Discord names don't look like the login (found by hand): treated as a
+  // name match by the clean-up, so a DM and 7 days, never removal. 'Kacper (kaaccppeerr)' is kacpherek.
+  protectedMembers: { '437262688930889730': 'kacpherek' },
 };
 
 // Moderation knobs.

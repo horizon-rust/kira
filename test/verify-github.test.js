@@ -10,6 +10,7 @@ process.env.KIRA_STATE = join(mkdtempSync(join(tmpdir(), 'kira-verify-')), 'stat
 process.env.GITHUB_TOKEN = 'test-token-not-used';
 const { GUILD_ID, OWNER_ID, CONTRIBUTORS } = await import('../src/config.js');
 CONTRIBUTORS.searchPaceMs = 0; // no wait between searches in tests
+CONTRIBUTORS.protectedMembers.kacp = 'kacpherek'; // found by hand: his Discord names don't look like his login
 const core = await import('../src/core.js');
 const c = await import('../src/features/contributors.js');
 
@@ -193,7 +194,7 @@ function holders() {
   member('bot', { ...has, bot: true });
   hub.authors = ['davethedev', 'Keep-Gh'];
   member('dave', { ...has, username: 'dave.the_dev' }); // never linked, but this is davethedev's name
-  member('kacp', { ...has, nickname: 'Kacpherek' }); // a trusted reviewer, unlinked and with no merged PR in the list
+  member('kacp', { ...has, username: 'kaaccppeerr', nickname: 'Kacper' }); // a trusted reviewer, unlinked, names unlike his login
   member('levz', has); work.links.levz = 'levzzz5154'; // a trusted reviewer, linked, no merged PR
   member('outsider'); work.links.outsider = 'outsider-gh'; hub.merged['outsider-gh'] = 2; // linked, no role, qualifies
   member('plain');
@@ -203,7 +204,7 @@ test('dry run: counts only, nothing changes, nobody is told', async () => {
   holders();
   const snapshot = JSON.stringify(work);
   const r = await c.cleanup({ dry: true });
-  assert.deepEqual(r, { dry: true, holders: 10, staff: 2, keepVerified: 1, graceDm: 3, graceAlready: 0, graceUnlinkedMatch: 2, removeNoLink: 1, removeNoMergedPr: 1, unknown: 0, authors: 5, linked: 6, linkedQualify: 4, linkedQualifyNeedVerify: 3, dmFailed: 0, removeFailed: 0, matches: [{ discord: 'dave.the_dev (dave.the_dev)', github: 'davethedev' }, { discord: 'Kacpherek (kacp)', github: 'kacpherek' }] });
+  assert.deepEqual(r, { dry: true, holders: 10, staff: 2, keepVerified: 1, graceDm: 3, graceAlready: 0, graceUnlinkedMatch: 2, removeNoLink: 1, removeNoMergedPr: 1, unknown: 0, authors: 5, linked: 6, linkedQualify: 4, linkedQualifyNeedVerify: 3, dmFailed: 0, removeFailed: 0, matches: [{ discord: 'dave.the_dev (dave.the_dev)', github: 'davethedev' }, { discord: 'Kacper (kaaccppeerr)', github: 'kacpherek' }] });
   assert.equal(JSON.stringify(work), snapshot);
   for (const m of members.values()) assert.equal(m.roles.cache.has('ROLE'), m.user.bot || ['keep', 'nudge', 'closed', 'nopr', 'nolink', 'staff', OWNER_ID, 'dave', 'kacp', 'levz'].includes(m.id));
   assert.equal(sent.dms.length, 0);
@@ -243,7 +244,7 @@ test('a GitHub error leaves the holder alone', async () => {
   hub.down = true;
   const r = await c.cleanup({ dry: false });
   hub.down = false;
-  assert.equal(r.unknown, 7); // keep, nudge, closed, nopr, levz: looked up; dave, kacp: no list of authors, so no guess
+  assert.equal(r.unknown, 6); // keep, nudge, closed, nopr, levz: looked up; dave: no list of authors, so no guess (kacp is protected by id: no GitHub needed)
   assert.equal(members.get('nopr').roles.cache.has('ROLE'), true);
 });
 
