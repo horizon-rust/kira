@@ -12,7 +12,7 @@ export function linkify(text, state) {
   });
 }
 
-const ROWS = [['horizon', 'releases', 'newvideos'], ['contributor', 'modder']];
+const ROWS = [['horizon', 'releases', 'newvideos'], ['modder']];
 
 // The "pick your roles" message in #welcome: one toggle button per self role.
 export function rolesMessage(state = { channels: {} }) {
@@ -22,7 +22,8 @@ export function rolesMessage(state = { channels: {} }) {
       'Click a button to add the role, click it again to remove it. Only you see the answer.',
       '',
       '**Pings**: 📣 big Horizon news · 📦 every new version and launcher · 🎬 every new video from Ludovic',
-      '**What you do**: 🛠️ you contribute code (see #updates and the hub) · 🧩 you mod, or want to once modding lands',
+      '**What you do**: 🧩 you mod, or want to once modding lands',
+      '**🛠️ Contributor** is not a button: it comes by itself with a merged pull request in Horizon. `/link-github`, then `/verify-github`; it opens #contributors.',
       '',
       'Level roles (lvl 5, 10, 20, 30, 50) come by themselves: talk, and hang out in voice. `/rank` shows yours.',
     ].join('\n'), state))],

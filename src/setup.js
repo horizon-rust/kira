@@ -1,7 +1,7 @@
 // Makes the server match config.js: settings, roles, channels, Community, texts, AutoMod, Onboarding, invite.
 // Safe to run again: everything is found by the ID it got the first time (data/state.json) and updated.
 import {
-  Client, GatewayIntentBits, ChannelType, PermissionFlagsBits as P, OverwriteType,
+  Client, GatewayIntentBits, ChannelType, PermissionFlagsBits as P,
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Routes,
   GuildVerificationLevel, GuildExplicitContentFilter, GuildDefaultMessageNotifications,
   ForumLayoutType, SortOrderType, ChannelFlags,
@@ -9,6 +9,7 @@ import {
 } from 'discord.js';
 import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, HORIZON, HOWTO, DEFAULT_CHANNELS } from './config.js';
 import { screeningBody, screeningUpToDate } from './screening.js';
+import { overwrites as permissionOverwrites } from './permissions.js';
 import { load, save, claim } from './store.js';
 import { unique, isCopy, ensureThread } from './adopt.js';
 import { linkify, rolesMessage, howToPost } from './texts.js';
@@ -67,28 +68,8 @@ async function ensureRoles(guild) {
   save();
 }
 
-function overwrites(guild, spec, staffCategory) {
-  const everyone = guild.roles.everyone.id;
-  const mod = state.roles.mod;
-  const kira = guild.members.me.id;
-  const ow = [{ id: kira, type: OverwriteType.Member, allow: [P.ViewChannel, P.SendMessages, P.ManageMessages, P.ManageThreads, P.EmbedLinks, P.AddReactions, P.Connect, P.MoveMembers, P.ManageChannels] }];
-  if (spec.staff || staffCategory) {
-    ow.push({ id: everyone, type: OverwriteType.Role, deny: [P.ViewChannel] }, { id: mod, type: OverwriteType.Role, allow: [P.ViewChannel, P.SendMessages] });
-  } else if (spec.readonly) {
-    ow.push(
-      { id: everyone, type: OverwriteType.Role, deny: [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads] },
-      { id: mod, type: OverwriteType.Role, allow: [P.SendMessages] },
-    );
-  } else if (spec.posts === 'staff') {
-    ow.push({ id: everyone, type: OverwriteType.Role, deny: [P.SendMessages], allow: [P.SendMessagesInThreads] }, { id: mod, type: OverwriteType.Role, allow: [P.SendMessages] });
-  } else if (spec.locked) {
-    // Everyone sees it, nobody joins by themselves: Ludovic (and mods) move people in.
-    ow.push({ id: everyone, type: OverwriteType.Role, deny: [P.Connect] }, { id: OWNER_ID, type: OverwriteType.Member, allow: [P.Connect, P.Speak, P.MoveMembers] });
-  } else if (spec.lobby) {
-    ow.push({ id: everyone, type: OverwriteType.Role, deny: [P.Speak, P.SendMessages] });
-  }
-  return ow;
-}
+const overwrites = (guild, spec, staffCategory) => permissionOverwrites(
+  { everyone: guild.roles.everyone.id, mod: state.roles.mod, kira: guild.members.me.id, owner: OWNER_ID, roles: state.roles }, spec, staffCategory);
 
 // Channels another one replaced (REPLACED): every message exported to scratch/replaced-channels-<date>/ (not
 // committed), then the channel deleted. A failed export keeps the channel (setup stops, nothing is lost).
@@ -371,7 +352,8 @@ async function onboarding(guild) {
             option('🎮', 'Playing it', 'Download, help, chat, share your creations', [], [c.horizoninfo, c.horizonchat, c.showcase]),
             option('🐛', 'Testing and bug reports', 'Find bugs and report them', [], [c.horizonbugs, c.releases]),
             option('💡', 'Ideas', 'Suggest and vote on what comes next', [], [c.horizonideas]),
-            option('🛠️', 'Contributing code', 'Claim an issue, follow what gets merged, connect your AI agent', [r.contributor], [c.updates, c.horizoninfo]),
+            // No role: 🛠️ Contributor is earned with a merged PR and /verify-github (src/features/contributors.js).
+            option('🛠️', 'Contributing code', 'Claim an issue, follow what gets merged, connect your AI agent', [], [c.updates, c.horizoninfo, c.contributors]),
             option('🧩', 'Modding', 'Mods for Horizon, when modding support lands', [r.modder], [c.horizonideas]),
             option('👀', 'Just following', 'News and hanging out', [], [c.general, c.announcements]),
           ],
@@ -404,7 +386,7 @@ async function serverGuide(guild) {
     new_member_actions: [
       action('rules', 0, 'Read the rules', 'Kira enforces them, day and night', '📜'),
       action('horizoninfo', 0, 'Get Horizon', 'Download the launcher, see what it is', '🌅'),
-      action('welcome', 0, 'Pick your roles', 'Pings for news, releases and videos, contributor', '🎭'),
+      action('welcome', 0, 'Pick your roles', 'Pings for news, releases and videos, modder', '🎭'),
       action('introductions', 1, 'Introduce yourself', 'One message, with the template', '👋'),
       action('horizonchat', 1, 'Say hi in #horizon-chat', 'Talk about Horizon', '💬'),
     ],
