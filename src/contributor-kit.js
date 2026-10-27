@@ -117,20 +117,27 @@ export async function mergedAuthors(gh, owner, repo, { today = new Date(), sleep
 
 // "Ana_B.", "ana b" → "anab": lowercase, without spaces, dots and underscores.
 export const squash = (name) => String(name ?? '').toLowerCase().replace(/[\s._]+/g, '');
+// The same with look-alike digits read as letters (Excurs1ons ~ excursions): 0 o, 1 i, 3 e, 4 a, 5 s, 7 t.
+const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't' };
+export const squashLeet = (name) => squash(name).replace(/[013457]/g, (d) => LEET[d]);
 
-// The GitHub login a member's names point to, or null: a name equal to a login once squashed, else one containing the
-// other when both are at least 5 characters. The best match wins (equal first, then the longest login).
+// The GitHub login a member's names point to, or null: a name equal to a login once squashed (digits as they are, or
+// read as letters), else one containing the other when both are at least 5 characters. The best match wins (equal
+// first, then the longest login).
 export function matchLogin(names, logins) {
-  const wanted = names.map(squash).filter(Boolean);
+  const forms = [squash, squashLeet];
   let best = null;
   for (const login of logins) {
-    const l = squash(login);
     let rank = 0;
-    for (const n of wanted) {
-      if (n === l) rank = Math.max(rank, 2);
-      else if (n.length >= 5 && l.length >= 5 && (n.includes(l) || l.includes(n))) rank = Math.max(rank, 1);
+    for (const form of forms) {
+      const l = form(login);
+      for (const n of names.map(form).filter(Boolean)) {
+        if (n === l) rank = Math.max(rank, 2);
+        else if (n.length >= 5 && l.length >= 5 && (n.includes(l) || l.includes(n))) rank = Math.max(rank, 1);
+      }
     }
-    if (rank && (!best || rank > best.rank || (rank === best.rank && l.length > best.length))) best = { login, rank, length: l.length };
+    const length = squash(login).length;
+    if (rank && (!best || rank > best.rank || (rank === best.rank && length > best.length))) best = { login, rank, length };
   }
   return best?.login ?? null;
 }
@@ -146,6 +153,8 @@ export const graceOver = (work, now) => Object.entries(work.grace ?? {}).filter(
 // ── Texts ────────────────────────────────────────────────────────────────────
 
 export const MEANING = '🛠️ Contributor now means a merged PR in Horizon, verified with `/verify-github`; it opens #contributors.';
+
+export const removedDm = () => '🛠️ **Contributor** now means a merged pull request in Horizon, so Kira took the role away from you. If you have one, you get it back by running `/link-github <your GitHub username>` and then `/verify-github` in the server (a code in your GitHub bio, takes a minute).';
 
 export const graceDmUnlinked = (until) => `🛠️ **Contributor** now means a merged pull request in Horizon, verified with \`/verify-github\`. If you have one, keep the role: run \`/link-github <your GitHub username>\` in the server, then \`/verify-github\` (it gives you a code to put in your GitHub bio, takes a minute), before <t:${Math.floor(until / 1000)}:D>. After that date the role is removed if no verified GitHub account of yours has a merged pull request.`;
 

@@ -115,3 +115,12 @@ test('merged authors: every page, bots left out, a window of more than 1000 is s
   assert.ok(calls.filter(([p]) => p.includes('search')).every(([, o]) => o?.cache === false), 'long searches are not cached');
   assert.equal(calls.filter(([p]) => p.includes('&page=3')).length, 1);
 });
+
+test('look-alike digits count as letters; a digit-laden username does not match a longer login by its letters', () => {
+  assert.equal(kit.squashLeet('Excurs1ons.'), 'excursions');
+  assert.equal(kit.matchLogin(['excursions.'], ['Excurs1ons', 'other']), 'Excurs1ons');
+  assert.equal(kit.matchLogin(['murilinho145'], ['Murilinho145SG']), 'Murilinho145SG');
+  assert.equal(kit.matchLogin(['domanffe_gg'], ['Domanffe']), 'Domanffe');
+  assert.equal(kit.matchLogin(['louis9987_98481'], ['Louistuis']), null, 'the weak match stays weak');
+  assert.equal(kit.matchLogin(['short_fox'], ['TheGaner']), null);
+});

@@ -194,50 +194,62 @@ function holders() {
   member('staff', { ...has, staff: true });
   member(OWNER_ID, has);
   member('bot', { ...has, bot: true });
-  hub.authors = ['davethedev', 'Keep-Gh'];
+  hub.authors = ['davethedev', 'Keep-Gh', 'Louistuis', 'Excurs1ons'];
   member('dave', { ...has, username: 'dave.the_dev' }); // never linked, but this is davethedev's name
   member('kacp', { ...has, username: 'kaaccppeerr', nickname: 'Kacper' }); // a trusted reviewer, unlinked, names unlike his login
-  member('levz', has); work.links.levz = 'levzzz5154'; // a trusted reviewer, linked, no merged PR
+  member('online', has); work.links.online = 'Online5277'; // a trusted reviewer, linked, no merged PR in the fake list
+  member('louis', { ...has, username: 'louis9987_98481', globalName: 'Louis' }); // only a weak name match: removed
+  member('exc', { ...has, username: 'excursions.' }); // Excurs1ons, with a digit for an i
   member('outsider'); work.links.outsider = 'outsider-gh'; hub.merged['outsider-gh'] = 2; // linked, no role, qualifies
   member('plain');
 }
 
-test('dry run: counts only, nothing changes, nobody is told', async () => {
+test('dry run: nothing changes, nobody is told; the lists say who is kept and who would lose the role', async () => {
   holders();
   const snapshot = JSON.stringify(work);
   const r = await c.cleanup({ dry: true });
-  assert.deepEqual(r, { dry: true, holders: 10, staff: 2, keepVerified: 1, graceDm: 3, graceAlready: 0, graceUnlinkedMatch: 2, removeNoLink: 1, removeNoMergedPr: 1, unknown: 0, authors: 5, linked: 6, linkedQualify: 4, linkedQualifyNeedVerify: 3, dmFailed: 0, removeFailed: 0, matches: [{ discord: 'dave.the_dev (dave.the_dev)', github: 'davethedev' }, { discord: 'Kacper (kaaccppeerr)', github: 'kacpherek' }] });
+  const { matches, kept, removed, ...counts } = r;
+  assert.deepEqual(counts, { dry: true, holders: 12, staff: 2, keepVerified: 1, graceDm: 4, graceAlready: 0, graceUnlinkedMatch: 2, removeNoLink: 2, removeNoMergedPr: 1, unknown: 0, authors: 7, linked: 6, linkedQualify: 4, linkedQualifyNeedVerify: 3, dmFailed: 0, removeFailed: 0 });
+  assert.deepEqual(matches, [{ discord: 'dave.the_dev (dave.the_dev)', github: 'davethedev' }, { discord: 'excursions. (excursions.)', github: 'Excurs1ons' }]);
+  assert.deepEqual(removed.sort(), ['Louis (louis9987_98481)', 'nolink (nolink)', 'nopr (nopr)']);
+  assert.equal(kept.length, 9);
+  assert.ok(kept.some((k) => /Kacper \(kaaccppeerr\)/.test(k)) && kept.some((k) => /^online/.test(k)), 'the trusted reviewers are kept');
   assert.equal(JSON.stringify(work), snapshot);
-  for (const m of members.values()) assert.equal(m.roles.cache.has('ROLE'), m.user.bot || ['keep', 'nudge', 'closed', 'nopr', 'nolink', 'staff', OWNER_ID, 'dave', 'kacp', 'levz'].includes(m.id));
+  for (const m of members.values()) assert.equal(m.roles.cache.has('ROLE'), m.user.bot || ['keep', 'nudge', 'closed', 'nopr', 'nolink', 'staff', OWNER_ID, 'dave', 'kacp', 'online', 'louis', 'exc'].includes(m.id));
   assert.equal(sent.dms.length, 0);
   assert.equal(sent.announcements.length, 0);
-  assert.ok(!JSON.stringify({ ...r, matches: 0 }).match(/gh|\d{5}/), 'no names or ids in the counts, only in the matches list');
 });
 
-test('real run: unlinked and no-PR holders lose the role, matches and reviewers get 7 days and a DM, one announcement', async () => {
+test('real run: no merged PR means no role and no grace, with one DM saying how to get it back; matches and reviewers get 7 days', async () => {
   const r = await c.cleanup({ dry: false });
-  assert.equal(r.removeNoLink, 1);
+  assert.equal(r.removeNoLink, 2);
   assert.equal(r.removeNoMergedPr, 1);
-  assert.equal(r.graceDm, 3);
+  assert.equal(r.graceDm, 4);
   assert.equal(r.graceUnlinkedMatch, 2);
   assert.equal(r.dmFailed, 1);
   const has = (id) => members.get(id).roles.cache.has('ROLE');
-  assert.deepEqual(['keep', 'nudge', 'closed', 'nopr', 'nolink', 'staff', OWNER_ID, 'dave', 'kacp', 'levz'].map(has), [true, true, true, false, false, true, true, true, true, true]);
-  assert.equal(sent.dms.length, 4);
+  const ids = ['keep', 'nudge', 'closed', 'nopr', 'nolink', 'staff', OWNER_ID, 'dave', 'kacp', 'online', 'louis', 'exc'];
+  assert.deepEqual(ids.map(has), [true, true, true, false, false, true, true, true, true, true, false, true]);
   const dm = Object.fromEntries(sent.dms);
+  assert.equal(sent.dms.length, 8, 'six kept members and three removed, minus the one whose DMs are closed');
+  for (const id of ['nopr', 'nolink', 'louis']) {
+    assert.match(dm[id], /took the role away.*\/link-github <your GitHub username>.*\/verify-github/s);
+    assert.equal(work.grace[id], undefined, 'no grace for a removed member');
+  }
   assert.match(dm.nudge, /Your GitHub account \*\*nudge-gh\*\*.*\/verify-github.*before <t:/s);
   assert.match(dm.dave, /\/link-github <your GitHub username>.*\/verify-github.*before <t:/s, 'the DM of an unlinked member covers linking');
-  assert.match(dm.levz, /is linked, so you keep the role/);
-  assert.ok(dm.kacp);
+  assert.match(dm.online, /is linked, so you keep the role/);
+  assert.match(dm.kacp, /link-github <your GitHub username>/, 'a reviewer who never linked is told to link');
   assert.ok(work.grace.nudge.until > Date.now() + 6.9 * 86_400_000);
   assert.equal(work.grace.closed.dmFailed, true);
   assert.equal(sent.announcements.length, 1);
   assert.match(sent.announcements[0].content, /Contributor now means a merged PR in Horizon, verified with `\/verify-github`; it opens (<#C1>|#contributors)\./);
   assert.deepEqual(sent.announcements[0].allowedMentions, { parse: [] });
   // Run again: nobody is told twice, no second announcement.
+  const dms = sent.dms.length;
   const again = await c.cleanup({ dry: false });
-  assert.equal(again.graceAlready, 5);
-  assert.equal(sent.dms.length, 4);
+  assert.equal(again.graceAlready, 6);
+  assert.equal(sent.dms.length, dms);
   assert.equal(sent.announcements.length, 1);
 });
 
@@ -246,7 +258,7 @@ test('a GitHub error leaves the holder alone', async () => {
   hub.down = true;
   const r = await c.cleanup({ dry: false });
   hub.down = false;
-  assert.equal(r.unknown, 6); // keep, nudge, closed, nopr, levz: looked up; dave: no list of authors, so no guess (kacp is protected by id: no GitHub needed)
+  assert.equal(r.unknown, 8); // keep, nudge, closed, nopr, online, kacp (reviewer, looked up too): 6; dave, exc, no list of authors: 2
   assert.equal(members.get('nopr').roles.cache.has('ROLE'), true);
 });
 
@@ -271,7 +283,7 @@ test('sweep: a verified member with a merged PR gets the role; grace over withou
 });
 
 test('the trusted reviewers keep the role: not at the end of the 7 days, not when the link changes', async () => {
-  assert.ok(['kacpherek', 'rdbtCVS', 'levzzz5154'].every((l) => Object.values(CONTRIBUTORS.protectedMembers).includes(l)), 'all three are listed by id');
+  assert.ok(['kacpherek', 'rdbtCVS', 'Online5277'].every((l) => Object.values(CONTRIBUTORS.protectedMembers).includes(l)), 'all three are listed by id');
   const m = member('rdbtid', { roles: ['ROLE'], username: 'rdbt' });
   work.links.rdbtid = 'rdbtCVS'; // linked, never verified
   work.grace.rdbtid = { until: Date.now() - 1 };

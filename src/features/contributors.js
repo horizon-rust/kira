@@ -163,8 +163,10 @@ export const handlers = {
 //   staff → kept; verified with ≥1 merged PR → kept; a linked login with ≥1 merged PR, not verified → a DM and 7
 //   days to run /verify-github; no link but a name that looks like the GitHub login of someone with a merged PR (or
 //   one of CONTRIBUTORS.protectedLogins) → a DM and 7 days to /link-github and /verify-github; everyone else → the
-//   role is removed. A GitHub error leaves that holder alone.
-// Returns counts and `matches` ({ discord, github } of the unlinked holders who got the 7 days): public names only.
+//   role is removed at once, with a DM saying how to get it back. A GitHub error leaves that holder alone.
+//   Trusted reviewers (CONTRIBUTORS.protectedMembers, by Discord id) always count with their login.
+// Returns counts and the lists `matches` ({ discord, github } of the unlinked holders kept on their username),
+// `kept` and `removed` (Discord names): public names only.
 export async function cleanup({ dry = true } = {}) {
   const g = guild();
   const role = roleId();
@@ -187,7 +189,7 @@ export async function cleanup({ dry = true } = {}) {
     authors = await kit.mergedAuthors(gh, GITHUB.owner, WORK.repo, { sleep, paceMs: CONTRIBUTORS.searchPaceMs }).catch((e) => { console.error('contributors authors', e.message); return null; });
     for (const l of CONTRIBUTORS.protectedLogins) authors?.set(l.toLowerCase(), l);
   }
-  const out = { dry, holders: 0, staff: 0, keepVerified: 0, graceDm: 0, graceAlready: 0, graceUnlinkedMatch: 0, removeNoLink: 0, removeNoMergedPr: 0, unknown: 0, authors: authors?.size ?? null, linked: 0, linkedQualify: 0, linkedQualifyNeedVerify: 0, dmFailed: 0, removeFailed: 0, matches: [] };
+  const out = { dry, holders: 0, staff: 0, keepVerified: 0, graceDm: 0, graceAlready: 0, graceUnlinkedMatch: 0, removeNoLink: 0, removeNoMergedPr: 0, unknown: 0, authors: authors?.size ?? null, linked: 0, linkedQualify: 0, linkedQualifyNeedVerify: 0, dmFailed: 0, removeFailed: 0, matches: [], kept: [], removed: [] };
   const now = Date.now();
   // Gives the 7 days (once) and the DM; counted under `kind` (or graceAlready when they already have them).
   const giveGrace = async (m, kind, text) => {
@@ -199,14 +201,18 @@ export async function cleanup({ dry = true } = {}) {
     if (!sent) { until.dmFailed = true; out.dmFailed++; } // /link-github and /verify-github tell them the next time
     save();
   };
+  const who = (m) => `${m.displayName} (${m.user.username})`;
   for (const m of holders) {
     out.holders++;
-    if (isStaffMember(m)) { out.staff++; continue; }
-    const login = kit.loginOf(work, m.id, WORK.github);
+    if (isStaffMember(m)) { out.staff++; out.kept.push(`${who(m)}: staff`); continue; }
+    // The login that counts: the linked one, the maintainers' (config.js), or a trusted reviewer's (found by hand).
+    const login = kit.loginOf(work, m.id, WORK.github) ?? CONTRIBUTORS.protectedMembers[m.id] ?? null;
     if (!login) {
-      const guess = CONTRIBUTORS.protectedMembers[m.id] ?? (authors ? kit.matchLogin([m.user.username, m.user.globalName, m.nickname], authors.values()) : null);
+      // Not linked: only the Discord username is compared with the merged-PR authors (display names are too loose).
+      const guess = authors ? kit.matchLogin([m.user.username], authors.values()) : null;
       if (guess) {
-        out.matches.push({ discord: `${m.displayName} (${m.user.username})`, github: guess });
+        out.matches.push({ discord: who(m), github: guess });
+        out.kept.push(`${who(m)}: username matches ${guess}`);
         await giveGrace(m, 'graceUnlinkedMatch', kit.graceDmUnlinked);
         continue;
       }
@@ -216,15 +222,22 @@ export async function cleanup({ dry = true } = {}) {
       const n = await lookup(login);
       if (n === null) { out.unknown++; continue; }
       const qualifies = n >= 1 || guarded.has(login.toLowerCase()) || isTrusted(m.id);
-      if (qualifies && verified(m.id)) { out.keepVerified++; delete work.grace?.[m.id]; continue; }
+      if (qualifies && verified(m.id)) { out.keepVerified++; out.kept.push(`${who(m)}: verified ${login}`); delete work.grace?.[m.id]; continue; }
       if (qualifies) {
-        await giveGrace(m, 'graceDm', (until) => kit.graceDm(login, until, n >= 1));
+        out.kept.push(`${who(m)}: ${login}`);
+        await giveGrace(m, 'graceDm', kit.loginOf(work, m.id, WORK.github) ? (until) => kit.graceDm(login, until, n >= 1) : kit.graceDmUnlinked);
         continue;
       }
       out.removeNoMergedPr++;
     }
+    out.removed.push(who(m));
     if (dry) continue;
-    try { await m.roles.remove(role, 'Contributor now needs a merged PR and /verify-github'); delete work.grace?.[m.id]; } catch { out.removeFailed++; }
+    // Ludovic, 2026-10-27: no merged PR, no role, and no grace. One DM says how to get it back.
+    try {
+      await m.roles.remove(role, 'Contributor now needs a merged PR and /verify-github');
+      delete work.grace?.[m.id];
+      if (!(await m.send(kit.removedDm()).then(() => true).catch(() => false))) out.dmFailed++;
+    } catch { out.removeFailed++; }
   }
   // Everyone who linked GitHub, holder or not: who already has a merged PR and only needs /verify-github.
   for (const [id, login] of Object.entries(work.links ?? {})) {
