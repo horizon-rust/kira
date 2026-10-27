@@ -202,7 +202,7 @@ export async function cleanup({ dry = true } = {}) {
     if (isStaffMember(m)) { out.staff++; continue; }
     const login = kit.loginOf(work, m.id, WORK.github);
     if (!login) {
-      const guess = authors ? kit.matchLogin([m.user.username, m.user.globalName, m.nickname], authors.values()) : null;
+      const guess = CONTRIBUTORS.protectedMembers[m.id] ?? (authors ? kit.matchLogin([m.user.username, m.user.globalName, m.nickname], authors.values()) : null);
       if (guess) {
         out.matches.push({ discord: `${m.displayName} (${m.user.username})`, github: guess });
         await giveGrace(m, 'graceUnlinkedMatch', kit.graceDmUnlinked);
