@@ -229,7 +229,7 @@ async function update(issue, threads, since) {
   for (const [threadId, entry] of threads) {
     for (const c of comments) {
       if (c.id <= entry.lastCommentId) continue;
-      if (!kit.isOwnComment(c) && kit.isMaintainer(c, OWNER)) kit.queueAnswer(entry, { type: 'comment', author: c.user.login, body: c.body, url: c.html_url }, Date.now());
+      if (!kit.isOwnComment(c) && kit.isMaintainer(c, GITHUB.maintainer)) kit.queueAnswer(entry, { type: 'comment', author: c.user.login, body: c.body, url: c.html_url }, Date.now());
     }
     entry.lastCommentId = Math.max(entry.lastCommentId, ...comments.map((c) => c.id));
     if (issue.state === 'closed' && entry.state !== 'closed') {

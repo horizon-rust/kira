@@ -106,7 +106,7 @@ export const api = {
     const st = wb.workState().statuses?.[OWNER_ID];
     const mine = s ? board.cards(s).filter((c) => ['progress', 'review'].includes(c.column) && c.people.some((p) => p.login === AGENTS.ludovicLogin || p.discordId === OWNER_ID)) : [];
     return {
-      about: 'Only public information: his /status in Discord, his open pull requests and the branches of ludovic111/horizon, and his cards on the board.',
+      about: 'Only public information: his /status in Discord, his open pull requests and the branches of horizon-rust/horizon, and his cards on the board.',
       status: st ? { text: untrusted(st.text, 'discord'), setAt: new Date(st.at).toISOString() } : null,
       openPullRequests: wb.openPullsNow().filter((p) => p.author === AGENTS.ludovicLogin).map((p) => ({ ...p, title: untrusted(p.title, 'github') })),
       branches: wb.branchesNow(),

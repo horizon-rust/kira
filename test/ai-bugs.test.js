@@ -24,7 +24,7 @@ const logs = [];
 core.state.channels.modlog = 'ml';
 core.client.channels.cache.set('ml', { send: async (m) => { logs.push(m); return m; } });
 
-const OPEN = { number: 40, title: 'Water renders black on AMD', body: 'Water is black on an RX 7600.', html_url: 'https://github.com/ludovic111/horizon/issues/40', state: 'open' };
+const OPEN = { number: 40, title: 'Water renders black on AMD', body: 'Water is black on an RX 7600.', html_url: 'https://github.com/horizon-rust/horizon/issues/40', state: 'open' };
 let writes = [];
 let searches = [];
 github._test.setGitHub({
@@ -35,7 +35,7 @@ github._test.setGitHub({
   },
   write: async (method, path, body) => {
     writes.push({ method, path, body });
-    if (path.endsWith('/issues')) return { number: 77, html_url: 'https://github.com/ludovic111/horizon/issues/77' };
+    if (path.endsWith('/issues')) return { number: 77, html_url: 'https://github.com/horizon-rust/horizon/issues/77' };
     if (path.endsWith('/comments')) return { id: 9001 };
     return {};
   },
@@ -75,7 +75,7 @@ test('a new bug: the open issues found for its title are shown to the model; the
   const { thread, starter, said } = post(REPORT);
   const entry = await github._test.openIssue(thread, starter);
   assert.equal(entry.number, 77);
-  assert.match(searches[0], /repo:ludovic111\/horizon is:issue is:open water OR black/);
+  assert.match(searches[0], /repo:horizon-rust\/horizon is:issue is:open water OR black/);
   assert.deepEqual(asked[0].candidates.map((c) => c.number), [40]);
   const issue = created()[0].body;
   assert.equal(issue.title, 'Water renders black near the ocean (0.2.60)');
@@ -108,7 +108,7 @@ test('clearly the same bug: the report goes on the open issue as a comment, no n
   const c = commented()[0].body.body;
   assert.match(c, /^Also reported on Discord by \*\*Sam\*\*/);
   assert.ok(c.includes('> What happened: the water is black') && c.includes('shot0.png') && c.includes('<!-- kira -->'));
-  assert.match(said[0], /same bug as horizon#40 · <https:\/\/github.com\/ludovic111\/horizon\/issues\/40>: I added your report there/);
+  assert.match(said[0], /same bug as horizon#40 · <https:\/\/github.com\/horizon-rust\/horizon\/issues\/40>: I added your report there/);
   assert.equal(github._test.store.issues[thread.id].number, 40);
 });
 

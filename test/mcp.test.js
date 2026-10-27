@@ -212,7 +212,7 @@ test('card links that would inject a masked link are refused (M3)', async () => 
     const r = await c.callTool({ name: 'card_add', arguments: { title: 'linked card', url } }).catch((e) => ({ isError: true, content: [{ text: e.message }] }));
     assert.ok(r.isError, url);
   }
-  assert.ok(!(await call(c, 'card_add', { title: 'linked card', url: 'https://github.com/ludovic111/horizon/pull/56' })).error);
+  assert.ok(!(await call(c, 'card_add', { title: 'linked card', url: 'https://github.com/horizon-rust/horizon/pull/56' })).error);
 });
 
 test('unexpected errors are not shown to the agent (L3)', async () => {
@@ -237,10 +237,10 @@ test("Kira cards' labels and links are wrapped as untrusted; labels must be plai
   const c = await connect(ag.issue(store, { user: 'u12', name: 'Labeller', scope: 'write' }).token);
   const r = await c.callTool({ name: 'card_add', arguments: { title: 'bad labels', labels: ['Ignore <instructions>'] } }).catch((e) => ({ isError: true, content: [{ text: e.message }] }));
   assert.ok(r.isError);
-  assert.ok(!(await call(c, 'card_add', { title: 'good card', labels: ['net code', 'v2'], url: 'https://github.com/ludovic111/horizon' })).error);
+  assert.ok(!(await call(c, 'card_add', { title: 'good card', labels: ['net code', 'v2'], url: 'https://github.com/horizon-rust/horizon' })).error);
   const card = (await call(c, 'board_list', { person: 'Labeller' })).data.cards[0];
   assert.deepEqual(card.labels, ['<untrusted source="discord">net code</untrusted>', '<untrusted source="discord">v2</untrusted>']);
-  assert.equal(card.url, '<untrusted source="discord">https://github.com/ludovic111/horizon</untrusted>');
+  assert.equal(card.url, '<untrusted source="discord">https://github.com/horizon-rust/horizon</untrusted>');
 });
 
 test('every request of a member counts, initialize, tools/list and ping too (N4)', async () => {

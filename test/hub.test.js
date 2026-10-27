@@ -232,7 +232,7 @@ test('every slash command name is used once (Discord refuses the whole list othe
 test('/report: the form becomes a post in #horizon-bugs (tagged, no ping) and a GitHub issue the member owns', async () => {
   const github = await import('../src/features/github.js');
   const writes = [];
-  github._test.setGitHub({ get: async () => ({}), write: async (method, path, body) => { writes.push({ method, path, body }); return path.endsWith('/issues') ? { number: 77, html_url: 'https://github.com/ludovic111/horizon/issues/77' } : {}; } });
+  github._test.setGitHub({ get: async () => ({}), write: async (method, path, body) => { writes.push({ method, path, body }); return path.endsWith('/issues') ? { number: 77, html_url: 'https://github.com/horizon-rust/horizon/issues/77' } : {}; } });
   core.state.channels.horizonbugs = '600';
   const made = [];
   core.client.channels.cache.set('600', {

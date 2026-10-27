@@ -12,7 +12,7 @@ export function discordApi(token, { fetchImpl = fetch, sleep = sleepFor, retries
       for (let attempt = 0; attempt <= retries; attempt++) {
         const res = await fetchImpl(`${API}${path}`, {
           method,
-          headers: { Authorization: `Bot ${token}`, 'User-Agent': 'DiscordBot (https://github.com/ludovic111/kira, 1)', 'X-Audit-Log-Reason': 'kira: Videos role for existing members' },
+          headers: { Authorization: `Bot ${token}`, 'User-Agent': 'DiscordBot (https://github.com/horizon-rust/kira, 1)', 'X-Audit-Log-Reason': 'kira: Videos role for existing members' },
         });
         if (res.status === 429) {
           const body = await res.json().catch(() => ({}));

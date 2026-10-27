@@ -1,5 +1,5 @@
 // Unit tests for the release announcements. No network: the releases are recorded GitHub answers
-// (ludovic111/horizon and kimchi, trimmed to the fields Kira reads).
+// (horizon-rust/horizon and kimchi, trimmed to the fields Kira reads).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -49,7 +49,7 @@ test('newReleases reads the REST API, with or without a token', async () => {
   };
   const got = await newReleases(makeGitHub({ fetchImpl }), 'horizon', []);
   assert.deepEqual(got.map((r) => r.tag_name), []); // all older than SINCE
-  assert.match(calls[0].url, /^https:\/\/api\.github\.com\/repos\/ludovic111\/horizon\/releases/);
+  assert.match(calls[0].url, /^https:\/\/api\.github\.com\/repos\/horizon-rust\/horizon\/releases/);
   assert.equal(calls[0].auth, undefined);
   await newReleases(makeGitHub({ token: 't', fetchImpl }), 'horizon', []);
   assert.equal(calls[1].auth, 'Bearer t');
@@ -73,7 +73,7 @@ test('a game release: its title, New and Fixed in short, the launcher line and t
   const m = rel.releaseMessage('horizon', byTag('v2026.10.13.1'), ROLE);
   const [e] = m.embeds;
   assert.equal(e.title, 'Horizon 2026.10.13.1: own menus, graphics settings, faster, many fixes');
-  assert.equal(e.url, 'https://github.com/ludovic111/horizon/releases/tag/v2026.10.13.1');
+  assert.equal(e.url, 'https://github.com/horizon-rust/horizon/releases/tag/v2026.10.13.1');
   assert.equal(e.color, 0xf2a33a);
   assert.match(e.description, /Update from the Horizon launcher: it installs new versions by itself/);
   const field = (n) => e.fields.find((f) => f.name === n).value;
@@ -83,9 +83,9 @@ test('a game release: its title, New and Fixed in short, the launcher line and t
   assert.match(field('Fixed'), /Missing swing animations/);
   assert.equal(field('Fixed').split('\n').length, 8);
   for (const l of field('New').split('\n')) assert.ok(l.length <= 112, l);
-  assert.match(field('Links'), /\(https:\/\/github\.com\/ludovic111\/horizon\/releases\/tag\/v2026\.10\.13\.1\)/);
+  assert.match(field('Links'), /\(https:\/\/github\.com\/horizon-rust\/horizon\/releases\/tag\/v2026\.10\.13\.1\)/);
   assert.match(field('Links'), /\(https:\/\/playhorizon\.dev\)/);
-  assert.match(field('Links'), /\(https:\/\/github\.com\/ludovic111\/horizon\/releases\?q=launcher&expanded=true\)/);
+  assert.match(field('Links'), /\(https:\/\/github\.com\/horizon-rust\/horizon\/releases\?q=launcher&expanded=true\)/);
   assert.match(m.content, new RegExp(`^<@&${ROLE}> \\*\\*Horizon 2026\\.10\\.13\\.1`));
 });
 
@@ -95,7 +95,7 @@ test('a launcher release: its own small embed, even with empty notes', () => {
   assert.equal(e.title, 'Horizon launcher 0.1.2');
   assert.equal(e.fields, undefined);
   assert.match(e.description, /^• \*\*Downloads resume\*\*\n• The window remembers its size\./);
-  assert.match(e.description, /Your launcher updates itself; new here\? \[Download it\]\(https:\/\/github\.com\/ludovic111\/horizon\/releases\?q=launcher&expanded=true\)/);
+  assert.match(e.description, /Your launcher updates itself; new here\? \[Download it\]\(https:\/\/github\.com\/horizon-rust\/horizon\/releases\?q=launcher&expanded=true\)/);
   const empty = rel.releaseMessage('horizon', byTag('launcher-v0.1.1'), ROLE).embeds[0];
   assert.equal(empty.title, 'Horizon launcher 0.1.1');
   assert.match(empty.description, /^Your launcher updates itself/);
@@ -175,7 +175,7 @@ test('the agents announcement: one endpoint value, the three setups, only once /
 
 const NOTES = '### New\n- **Zoom:** hold C to zoom in, like OptiFine does.\n### Fixed\n- Composters take items.';
 const game = (id, tag, at, extra = {}) => ({ id, tag_name: tag, name: `Horizon ${tag.slice(1)}: Zoom`, prerelease: false, draft: false,
-  published_at: at, html_url: `https://github.com/ludovic111/horizon/releases/tag/${tag}`, body: NOTES, ...extra });
+  published_at: at, html_url: `https://github.com/horizon-rust/horizon/releases/tag/${tag}`, body: NOTES, ...extra });
 
 test('a post pings only when given the role; every other post is @silent, with no mention at all', () => {
   const pinged = rel.releaseMessage('horizon', game(1, 'v0.2.20', '2026-10-24T20:05:00Z'), ROLE);

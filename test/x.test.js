@@ -15,7 +15,7 @@ const core = await import('../src/core.js');
 const HUB = 'https://playhorizon.dev/hub';
 const long = 'Horizon now keeps steady frames at render distance 32 on most computers, because world generation no longer queues structure starts behind the render thread and the worker pool leaves one core free, as vanilla does. ' .repeat(2);
 const entries = [
-  { id: 'r1', kind: 'release', date: '2026-10-25T20:00:00Z', tag: 'v0.2.61', plain: long, url: 'https://github.com/ludovic111/horizon/releases/tag/v0.2.61' },
+  { id: 'r1', kind: 'release', date: '2026-10-25T20:00:00Z', tag: 'v0.2.61', plain: long, url: 'https://github.com/horizon-rust/horizon/releases/tag/v0.2.61' },
   { id: 'w1', kind: 'weekly', date: '2026-10-26T09:00:00Z', title: 'The week of 19 October', plain: 'Faster frames and server dialogs. Thanks @someone!' },
   { id: 's1', kind: 'shipped', date: '2026-10-25T20:01:00Z', item: 'smooth-frames', title: 'Steady frames', post: 'Steady frames at 32 chunks are in Horizon v0.2.61.', announce: true },
   { id: 's2', kind: 'shipped', date: '2026-10-25T20:02:00Z', item: 'quiet', title: 'Quiet thing', plain: 'Not for X.' },
@@ -26,7 +26,7 @@ test('only releases, weekly summaries and announced shipped items; 240 character
   assert.deepEqual(entries.filter(xp.forX).map((e) => e.id), ['r1', 'w1', 's1']);
   const r = xp.xText(entries[0], HUB);
   assert.ok(r.length <= 240, String(r.length));
-  assert.match(r, /^Horizon v0\.2\.61 is out: Horizon now keeps steady frames[^\n]*…\nhttps:\/\/github\.com\/ludovic111\/horizon\/releases\/tag\/v0\.2\.61$/);
+  assert.match(r, /^Horizon v0\.2\.61 is out: Horizon now keeps steady frames[^\n]*…\nhttps:\/\/github\.com\/horizon-rust\/horizon\/releases\/tag\/v0\.2\.61$/);
   assert.doesNotMatch(r, / …/, 'cut at a word, no dangling space');
   const w = xp.xText(entries[1], HUB);
   assert.equal(w, 'The week of 19 October: Faster frames and server dialogs. Thanks @​someone!\nhttps://playhorizon.dev/hub');
@@ -40,7 +40,7 @@ test('the feature: first look records, then each new entry once, 3 a round; the 
   feature._test.setPoster(xp.makePoster({ tokens: {}, dryRun: true, log: (l) => printed.push(l) }));
   await feature.onNewJournal({ entries: entries.slice(0, 1) });
   assert.equal(printed.length, 0);
-  const more = [...entries, ...[1, 2, 3].map((n) => ({ id: `r${n + 1}`, kind: 'release', date: `2026-10-2${n + 6}T20:00:00Z`, tag: `v0.2.6${n + 1}`, url: 'https://github.com/ludovic111/horizon/releases' }))];
+  const more = [...entries, ...[1, 2, 3].map((n) => ({ id: `r${n + 1}`, kind: 'release', date: `2026-10-2${n + 6}T20:00:00Z`, tag: `v0.2.6${n + 1}`, url: 'https://github.com/horizon-rust/horizon/releases' }))];
   await feature.onNewJournal({ entries: more });
   assert.equal(printed.length, 3);
   assert.match(printed[0], /^x dry-run: "Steady frames/); // oldest first
