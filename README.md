@@ -59,6 +59,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | X | Releases, the weekly summary and announced shipped items, from the same journal, ≤ 240 characters; off without credentials, `X_DRY_RUN=1` prints: see below |
 | `#updates` | One feed generated from the hub's journal: merged work grouped by roadmap item, releases (pointing to `#releases`), shipped items, the weekly summary; the board's summary on top: see below |
 | Work board | The board behind the hub's kanban, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/goodfirst`, `/notify`: see below |
+| Contributors | `/verify-github` proves a linked GitHub account is the member's; a merged pull request in Horizon then gives 🛠️ Contributor: see [Contributors](#contributors) |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
 | Info | `/help` (what Kira does, its commands), `/links`, `/horizon`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
@@ -221,6 +222,31 @@ After setup made the role and Kira is deployed with the ping, give it to the mem
     ~/fleet/op run --env-file .env.op -- node scripts/grant-videos-role.js
 
 `--role <id>` skips the lookup by name. The code is [`src/grant.js`](src/grant.js).
+
+## Contributors
+
+🛠️ **Contributor** is earned: a member whose **verified** GitHub account has at least one merged pull request in
+ludovic111/horizon. Members don't pick it any more (no button, not an Onboarding answer). The code is
+[`src/features/contributors.js`](src/features/contributors.js) (Discord) and
+[`src/contributor-kit.js`](src/contributor-kit.js) (the rules, no Discord).
+
+- **Verifying** (`/link-github` alone proves nothing): after `/link-github <login>`, `/verify-github` gives a one-time
+  code (`kira-` and 8 characters, valid 30 minutes) to put in the GitHub profile bio, or in a public gist named
+  `kira.txt`; `/verify-github check:True` reads the bio (`/users/<login>`) or the gist and, on a match, marks the link
+  verified (`state.work.verified`). A mod can verify someone by hand with `/verify-github member:`; it is logged in
+  `#mod-log`. Linking another login clears the verification (and takes the role). The logins in `WORK.github`
+  (config.js, set by Ludovic) count as verified.
+- **Granting**: on a successful verification Kira counts the merged pull requests (`/search/issues`, its own limit of
+  30 a minute, `repo:… is:pr is:merged author:<login>`) and gives the role at 1 or more, with one welcome line in
+  `#contributors`. It also gives it when the board's refresh sees a verified author's pull request merged, and a
+  daily sweep catches the ones it missed. Kira never takes the role away because of a count: only when the link or
+  the verification goes.
+- **The role clean-up** (one-off, 2026-10-27, `cleanup()` in the feature): holders who are staff keep it; verified with
+  a merged pull request keep it; a linked login with a merged pull request that isn't verified gets a DM and 7 days to
+  run `/verify-github` (the daily sweep removes the role after that); everyone else loses it, and Kira posts one line
+  without a ping in `#announcements`. It runs inside Kira (it needs the state), through the admin routes: with
+  `KIRA_ADMIN_TOKEN_SHA256` set, `POST /admin/contributors-cleanup` starts a **dry run** (counts only, nothing changes)
+  and `{"dry": false}` the real one; `GET /admin/contributors-cleanup` returns the last counts (never names or ids).
 
 ## Hosting (Railway)
 

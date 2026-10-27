@@ -336,6 +336,17 @@ export const WORK = {
   },
 };
 
+// Contributors (src/features/contributors.js): 🛠️ Contributor = a member whose GitHub account is verified
+// (/verify-github) and has at least one merged pull request in GITHUB.owner/WORK.repo. It opens #contributors.
+export const CONTRIBUTORS = {
+  role: 'contributor', channel: 'contributors',
+  codeTtlMs: 30 * 60_000,       // a /verify-github code is valid this long
+  graceDays: 7,                 // holders with a merged PR but no verification keep the role this long
+  sweepEveryMs: 24 * 60 * 60_000, // the daily look for members who qualify and were missed
+  verifyPerHour: 6,             // /verify-github answers per member an hour (each check reads GitHub)
+  searchPaceMs: 2_200,          // between two searches (the search API allows 30 a minute)
+};
+
 // Moderation knobs.
 export const MOD = {
   floodMessages: 6, floodWindowMs: 8_000,        // 6 messages in 8 s
