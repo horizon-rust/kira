@@ -19,7 +19,7 @@ export function validAgents(a) {
     && (t.name === undefined || typeof t.name === 'string') && (t.label == null || typeof t.label === 'string'));
 }
 
-export function adminRoutes({ hash, files, limiter, save, freeze, exit = () => process.exit(75) }) { // non-zero: every restart policy starts it again
+export function adminRoutes({ hash, files, limiter, save, freeze, cleanup = null, exit = () => process.exit(75) }) { // non-zero: every restart policy starts it again
   if (!/^[0-9a-f]{64}$/.test(hash ?? '')) return {};
   const want = Buffer.from(hash, 'hex');
   const ok = (req) => {
@@ -33,7 +33,35 @@ export function adminRoutes({ hash, files, limiter, save, freeze, exit = () => p
     res.writeHead(limited ? 429 : 401, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: limited ? 'too many attempts' : 'unauthorized' }));
   };
+  // The role clean-up of 🛠️ Contributor (src/features/contributors.js): a background job, because it paces itself
+  // on GitHub's search limit. POST starts it ({ "dry": false } to really change roles; anything else is a dry run
+  // that only counts), GET returns the last result (counts only).
+  const job = { running: false, last: null };
+  const cleanupRoutes = !cleanup ? {} : {
+    'POST /admin/contributors-cleanup': (req, res) => {
+      if (!ok(req)) { req.resume(); return deny(req, res); }
+      const chunks = [];
+      req.on('data', (c) => { if (chunks.length < 64) chunks.push(c); });
+      req.on('end', () => {
+        let body = null;
+        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { /* a dry run */ }
+        const send = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+        if (job.running) return send(409, { error: 'a clean-up is already running' });
+        const dry = body?.dry !== false;
+        job.running = true;
+        job.last = { dry, running: true };
+        cleanup({ dry }).then((counts) => { job.last = { ...counts, running: false }; }, (e) => { job.last = { dry, running: false, error: String(e.message).slice(0, 200) }; }).finally(() => { job.running = false; });
+        send(202, { started: true, dry });
+      });
+    },
+    'GET /admin/contributors-cleanup': (req, res) => {
+      if (!ok(req)) return deny(req, res);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(job.last ?? { running: false, last: null }));
+    },
+  };
   return {
+    ...cleanupRoutes,
     'GET /admin/backup': (req, res) => {
       if (!ok(req)) return deny(req, res);
       save(); // what is in memory, first

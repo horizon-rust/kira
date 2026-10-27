@@ -12,6 +12,7 @@ import { makeGitHub } from '../github.js';
 import * as board from '../board.js';
 import * as wk from '../workkit.js';
 import { summaryText } from '../journal.js';
+import * as contributors from './contributors.js';
 import { writeFileSync, renameSync, readFileSync } from 'node:fs';
 
 const TOKEN = process.env.GITHUB_TOKEN?.trim();
@@ -304,6 +305,7 @@ export function refresh() {
       rebuild();
       await render();
       await notices().catch((e) => console.error('notices', e.message));
+      await contributors.afterRefresh(raw).catch((e) => console.error('contributors', e.message));
     } catch (e) {
       console.error('work board', e.message);
       refreshSoon(60_000); // GitHub failed (a 5xx, a timeout): try again in a minute, not in 10
@@ -425,7 +427,10 @@ export const handlers = {
     if (!ghUser) return i.editReply(ephemeral(`There's no GitHub user \`${wanted}\`.`));
     const taken = userOf(ghUser.login);
     if (taken && taken !== target.id && !isStaff(i.member)) return i.editReply(ephemeral(`\`${ghUser.login}\` is already linked to someone else. Ask a mod if that's wrong.`));
-    for (const [id, login] of Object.entries(work.links)) if (id !== target.id && login.toLowerCase() === ghUser.login.toLowerCase()) delete work.links[id];
+    // A changed login (or one taken from someone else, by a mod) loses its verification, and the role with it.
+    const dropped = Object.entries(work.links).filter(([id, login]) => id !== target.id && login.toLowerCase() === ghUser.login.toLowerCase()).map(([id]) => id);
+    for (const id of dropped) delete work.links[id];
+    const changed = work.links[target.id]?.toLowerCase() !== ghUser.login.toLowerCase();
     work.links[target.id] = ghUser.login;
     // Only the member decides whether the pair is public (a mod linking someone else never turns it on).
     const credit = target.id === i.user.id ? i.options.getBoolean('credit') : null;
@@ -433,9 +438,11 @@ export const handlers = {
     if (credit === true) work.credit[target.id] = true;
     else if (credit === false || target.id !== i.user.id) delete work.credit[target.id];
     save();
+    for (const id of changed ? [target.id, ...dropped] : dropped) await contributors.relinked(id);
     refreshSoon();
     const shown = work.credit[target.id] ? ` It shows on the hub's contributors page (\`/link-github ${ghUser.login} credit:False\` hides it).` : target.id === i.user.id ? ` To be credited on the hub's contributors page with both names: \`/link-github ${ghUser.login} credit:True\`.` : '';
-    return i.editReply(ephemeral(`🔗 <@${target.id}> is GitHub **${ghUser.login}**: their pull requests show their Discord name on the board.${shown}`));
+    const more = target.id === i.user.id ? await contributors.linkNote(target.id).catch(() => '') : '';
+    return i.editReply(ephemeral(`🔗 <@${target.id}> is GitHub **${ghUser.login}**: their pull requests show their Discord name on the board.${shown}${more}`));
   },
 };
 
