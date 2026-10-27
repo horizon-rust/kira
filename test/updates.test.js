@@ -17,10 +17,10 @@ const hubFeature = await import('../src/features/hub.js');
 const HUB = 'https://playhorizon.dev/hub';
 const J = { entries: [
   { id: 'weekly-2026-43', kind: 'weekly', date: '2026-10-26T09:00:00Z', title: 'The week of 19 October', plain: 'Faster frames, server dialogs.', url: 'https://playhorizon.dev/hub#journal' },
-  { id: 'release-v0.2.61', kind: 'release', date: '2026-10-25T20:00:00Z', tag: 'v0.2.61', title: 'v0.2.61', plain: 'Smoother frames.', url: 'https://github.com/ludovic111/horizon/releases/tag/v0.2.61' },
+  { id: 'release-v0.2.61', kind: 'release', date: '2026-10-25T20:00:00Z', tag: 'v0.2.61', title: 'v0.2.61', plain: 'Smoother frames.', url: 'https://github.com/horizon-rust/horizon/releases/tag/v0.2.61' },
   { id: 'shipped-smooth', kind: 'shipped', date: '2026-10-25T20:01:00Z', item: 'smooth-frames', title: 'Steady frames', plain: 'Smooth at 32 chunks.', post: 'Horizon now keeps steady frames at 32 chunks.', shipped_in: 'v0.2.61', announce: true },
-  { id: 'merge-1760', kind: 'merge', date: '2026-10-25T10:00:00Z', item: 'smooth-frames', number: 1760, title: 'Free structure starts', plain: 'Worlds generate without queueing.', url: 'https://github.com/ludovic111/horizon/pull/1760' },
-  { id: 'merge-1778', kind: 'merge', date: '2026-10-25T11:00:00Z', item: 'smooth-frames', number: 1778, title: 'Leave one core', url: 'https://github.com/ludovic111/horizon/pull/1778' },
+  { id: 'merge-1760', kind: 'merge', date: '2026-10-25T10:00:00Z', item: 'smooth-frames', number: 1760, title: 'Free structure starts', plain: 'Worlds generate without queueing.', url: 'https://github.com/horizon-rust/horizon/pull/1760' },
+  { id: 'merge-1778', kind: 'merge', date: '2026-10-25T11:00:00Z', item: 'smooth-frames', number: 1778, title: 'Leave one core', url: 'https://github.com/horizon-rust/horizon/pull/1778' },
   { id: 'merge-1800', kind: 'merge', date: '2026-10-25T12:00:00Z', number: 1800, title: 'Fix a typo', url: 'https://evil.example/x' },
   { id: 'odd-1', kind: 'tweet', date: '2026-10-25T12:00:00Z', title: '?' },
 ] };
@@ -40,7 +40,7 @@ test('the feed: merges grouped by roadmap item, a release points to #releases, s
   assert.match(posts[0].content, /^🔀 \*\*\[Steady frames at long render distances\]\(<https:\/\/playhorizon\.dev\/hub#smooth-frames>\)\*\*/);
   assert.match(posts[0].content, /#1760 Worlds generate without queueing[\s\S]*#1778 Leave one core/, 'plain words first, the title when there are none');
   assert.match(posts[1].content, /^🔀 \*\*Other changes\*\*\n• #1800 Fix a typo$/, 'a link outside GitHub or the site is dropped');
-  assert.match(posts[2].content, /📦 \*\*\[v0\.2\.61\]\(<https:\/\/github\.com\/ludovic111\/horizon\/releases\/tag\/v0\.2\.61>\)\*\* is out \(notes in <#42>\): Smoother frames\./);
+  assert.match(posts[2].content, /📦 \*\*\[v0\.2\.61\]\(<https:\/\/github\.com\/horizon-rust\/horizon\/releases\/tag\/v0\.2\.61>\)\*\* is out \(notes in <#42>\): Smoother frames\./);
   assert.match(posts[3].content, /✅ \*\*Shipped in v0\.2\.61: \[Steady frames\]\(<https:\/\/playhorizon\.dev\/hub#smooth-frames>\)\*\*\nHorizon now keeps steady frames/);
   assert.equal(posts[4].embeds[0].title, '🗓️ The week of 19 October');
   for (const p of posts) { assert.deepEqual(p.allowedMentions, { parse: [] }); assert.equal(p.flags, 4096); }
@@ -48,7 +48,7 @@ test('the feed: merges grouped by roadmap item, a release points to #releases, s
 
 test('the board summary: counts, a few good first tasks, the hub', () => {
   const snap = { columns: [{ key: 'todo', cards: [1, 2, 3] }, { key: 'progress', cards: [1] }, { key: 'review', cards: [] }, { key: 'done', cards: [1, 2] }] };
-  const s = journal.summaryText(snap, [{ number: 12, title: 'Sign glow', url: 'https://github.com/ludovic111/horizon/issues/12' }], HUB);
+  const s = journal.summaryText(snap, [{ number: 12, title: 'Sign glow', url: 'https://github.com/horizon-rust/horizon/issues/12' }], HUB);
   assert.match(s.content, /To do \*\*3\*\* · 🔨 In progress \*\*1\*\* · 👀 Review \*\*0\*\* · ✅ Done this week \*\*2\*\*/);
   assert.match(s.content, /\[#12 Sign glow\]\(<https:\/\/github\.com/);
   assert.match(s.content, /<https:\/\/playhorizon\.dev\/hub>/);
@@ -104,7 +104,7 @@ test('the board summary at the top of #updates: posted and pinned once, then edi
     send: async (m) => { const msg = { id: `m${msgs.size + 1}`, ...m, pin: async () => { pins++; }, edit: async (p) => Object.assign(msg, p) }; msgs.set(msg.id, msg); return msg; },
     messages: { fetch: async (q) => (typeof q === 'string' ? msgs.get(q) ?? Promise.reject(new Error('gone')) : { filter: () => new Map() }) }, // a Collection
   });
-  wb._test.setRaw({ repo: 'ludovic111/horizon', issues: [{ number: 4, title: 'Open one', html_url: 'https://github.com/ludovic111/horizon/issues/4', state: 'open', labels: [], assignees: [], created_at: '2026-10-20T00:00:00Z', updated_at: '2026-10-20T00:00:00Z' }], pulls: [], branches: [] });
+  wb._test.setRaw({ repo: 'horizon-rust/horizon', issues: [{ number: 4, title: 'Open one', html_url: 'https://github.com/horizon-rust/horizon/issues/4', state: 'open', labels: [], assignees: [], created_at: '2026-10-20T00:00:00Z', updated_at: '2026-10-20T00:00:00Z' }], pulls: [], branches: [] });
   wb._test.rebuild();
   await wb._test.render();
   await wb._test.render();

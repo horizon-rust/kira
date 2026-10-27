@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The open idea issues of ludovic111/horizon (label `enhancement`), for the move to the roadmap: since ideas go to
+// The open idea issues of horizon-rust/horizon (label `enhancement`), for the move to the roadmap: since ideas go to
 // the suggestion queue instead of GitHub, each one is either moved to the roadmap (an item in roadmap.toml, with
 // the issue in its links) or closed with a link to the roadmap. This script only reads: it closes nothing.
 //

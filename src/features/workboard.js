@@ -234,7 +234,7 @@ export const current = () => snapshot;
 export const openPullsNow = () => (raw?.pulls ?? []).filter((p) => p.state === 'open')
   .map((p) => ({ number: p.number, title: p.title, url: p.html_url, author: p.user?.login, draft: !!p.draft, status: p.status ?? null, updatedAt: p.updated_at }));
 export const branchesNow = () => raw?.branches ?? [];
-// A read of Horizon's repo on GitHub (issues, pulls, comments of ludovic111/horizon only).
+// A read of Horizon's repo on GitHub (issues, pulls, comments of horizon-rust/horizon only).
 export const repoGet = (path) => gh.get(`${REPO}${path}`);
 export const workState = () => work;
 // After a change made outside the commands (agents): save, rebuild the board, repaint it.
@@ -352,7 +352,7 @@ const COLUMN_CHOICES = board.COLUMNS.map((c) => ({ name: `${c.emoji} ${c.name}`,
 
 export const commands = enabled ? [
   new SlashCommandBuilder().setName('claim').setDescription('Tell everyone you are working on a Horizon issue (GitHub label + comment)')
-    .addIntegerOption((o) => o.setName('issue').setDescription('The issue number on GitHub (ludovic111/horizon)').setRequired(true).setMinValue(1)),
+    .addIntegerOption((o) => o.setName('issue').setDescription('The issue number on GitHub (horizon-rust/horizon)').setRequired(true).setMinValue(1)),
   new SlashCommandBuilder().setName('unclaim').setDescription('Stop working on an issue you claimed: it becomes free again')
     .addIntegerOption((o) => o.setName('issue').setDescription('The issue number').setRequired(true).setMinValue(1)),
   new SlashCommandBuilder().setName('working').setDescription("Who's working on what: claimed issues and open pull requests"),

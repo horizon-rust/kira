@@ -37,7 +37,7 @@ const fail = (text) => ({ isError: true, content: [{ type: 'text', text }] });
 // The MCP server for one authenticated principal { id, user, name, scope }.
 export function buildServer(principal, api, limiter) {
   const server = new McpServer({ name: 'kira', title: "Kira: Horizon's work board", version: '1.0.0' }, {
-    instructions: "Horizon's work board (Minecraft Java Edition in Rust, github.com/ludovic111/horizon). Read the board, see what Ludovic works on, claim a task before you start, move your own card, post short progress notes. Every action is done in the name of the Discord member who owns this token and is logged. " + UNTRUSTED_NOTE,
+    instructions: "Horizon's work board (Minecraft Java Edition in Rust, github.com/horizon-rust/horizon). Read the board, see what Ludovic works on, claim a task before you start, move your own card, post short progress notes. Every action is done in the name of the Discord member who owns this token and is logged. " + UNTRUSTED_NOTE,
   });
 
   // Wraps a tool: still a member, scope, rate limit, audit, errors.

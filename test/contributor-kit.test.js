@@ -40,9 +40,9 @@ test('the code is found in the bio, or in a public gist named kira.txt; a wrong 
 
 test('merged pull requests: 0 and 3, counted by the search API for that repo and author', async () => {
   const gh = fakeGh({ '/search/issues': { total_count: 3 } });
-  assert.equal(await kit.mergedCount(gh, 'ludovic111', 'horizon', 'ana-gh'), 3);
+  assert.equal(await kit.mergedCount(gh, 'horizon-rust', 'horizon', 'ana-gh'), 3);
   const q = decodeURIComponent(gh.calls[0]);
-  assert.match(q, /repo:ludovic111\/horizon is:pr is:merged author:ana-gh&per_page=1/);
+  assert.match(q, /repo:horizon-rust\/horizon is:pr is:merged author:ana-gh&per_page=1/);
   assert.equal(await kit.mergedCount(fakeGh({ '/search/issues': { total_count: 0 } }), 'o', 'r', 'ana'), 0);
   assert.equal(await kit.mergedCount(fakeGh({}), 'o', 'r', 'ana'), 0);
   assert.equal(await kit.mergedCount(gh, 'o', 'r', 'x y'), 0);
@@ -108,7 +108,7 @@ test('merged authors: every page, bots left out, a window of more than 1000 is s
       return { total_count: 0, items: [] };
     },
   };
-  const authors = await kit.mergedAuthors(gh, 'ludovic111', 'horizon', { today: new Date('2026-10-04T12:00:00Z') });
+  const authors = await kit.mergedAuthors(gh, 'horizon-rust', 'horizon', { today: new Date('2026-10-04T12:00:00Z') });
   assert.equal(authors.size, 251, '250 from the first window and Ana');
   assert.equal(authors.get('ana-gh'), 'Ana-GH');
   assert.ok(!authors.has('dependabot[bot]'));

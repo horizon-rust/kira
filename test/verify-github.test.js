@@ -41,7 +41,7 @@ const hub = { bio: {}, merged: {}, down: false, authors: [] };
 c._test.setGitHub({
   get: async (path) => {
     if (hub.down) throw new Error('HTTP 500');
-    if (path === '/repos/ludovic111/horizon') return { created_at: new Date().toISOString() };
+    if (path === '/repos/horizon-rust/horizon') return { created_at: new Date().toISOString() };
     if (decodeURIComponent(path).includes('merged:')) return { total_count: hub.authors.length, items: hub.authors.map((login) => ({ user: { login } })) };
     const user = path.match(/^\/users\/([^/?]+)$/)?.[1];
     if (user) return { login: user, bio: hub.bio[user] ?? '' };

@@ -53,9 +53,9 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | Forums | Each new post is checked against its template; Kira lists what's missing and closes it after an hour if it's still missing. `/done` closes your post with its tag (solved, taken, found, filled, done) |
 | Community | Welcome in `#new-members` (grouped when many people arrive), role buttons, 👍/👎 on ideas, 🔥 in #showcase, ⭐ hall of fame (5 stars), `/remind` |
 | The hub's verbs | Kira is the front desk of [playhorizon.dev/hub](https://playhorizon.dev/hub) with the same verbs, as slash commands and as `@Kira <verb>`: `report` (a bug form → a post in `#horizon-bugs` and a GitHub issue), `suggest` (→ the private suggestion queue), `roadmap` / `roadmap <area>` (the whole roadmap, or one area in full), `claim`, `status`: see [The hub](#the-hub) |
-| GitHub issues | Posts in `#horizon-bugs` that pass their template, and `/report`, become issues in ludovic111/horizon; answers on GitHub come back to the post, pinging the poster. `#horizon-ideas` posts go to the suggestion queue instead. `/issue` (staff). Off until its token exists: see below |
+| GitHub issues | Posts in `#horizon-bugs` that pass their template, and `/report`, become issues in horizon-rust/horizon; answers on GitHub come back to the post, pinging the poster. `#horizon-ideas` posts go to the suggestion queue instead. `/issue` (staff). Off until its token exists: see below |
 | Ludovic's videos | His YouTube channel (@lu4ovic) → `#ludovic-videos`, a read-only channel: every new video, Short or live stream, once, as `<@&🎬 Videos> 🎬 New video: **title**` and its link (Discord shows the player). Pings only the opt-in **🎬 Videos** role (picked in Onboarding's "Want to be pinged?" or with the buttons in `#welcome`; `allowedMentions: { parse: [], roles: [that role] }`, so nothing in a title can ping; the role's key is `newvideos`, not the retired `videos` of the old server). The channel's public Atom feed every 10 minutes ([`src/videos.js`](src/videos.js), channel id in `VIDEOS` in `config.js`); the ids posted are in `state.videos`. The first run only records the videos already out and sets the date before which nothing is ever posted; a feed error is logged and retried 10 minutes later. Giving the role to the members already on the server is a one-off: `scripts/grant-videos-role.js` (below) |
-| Releases | Releases of ludovic111/horizon → `#releases`: the game (`vX.Y.Z` tags, a summary of New and Fixed) and the launcher (`launcher@X.Y.Z`; before 0.2 `launcher-v…`), nothing else (REST API every 3 minutes, newest 200; [`src/releases.js`](src/releases.js)). One channel since 2026-10-23: every release gets one post, once by release id (`state.releases`; ids posted as Alpha before that, `state.nightlies`, are never posted again). Every post is silent (no role, Discord's `SUPPRESS_NOTIFICATIONS` flag 4096) except one a day: the first game release published after 20:00 UTC pings the 📦 Releases role and lists the game releases since the last ping ("Out since the last ping"; `state.releasePings`). Launcher releases never ping. No dates in the posts. Drafts never. Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
+| Releases | Releases of horizon-rust/horizon → `#releases`: the game (`vX.Y.Z` tags, a summary of New and Fixed) and the launcher (`launcher@X.Y.Z`; before 0.2 `launcher-v…`), nothing else (REST API every 3 minutes, newest 200; [`src/releases.js`](src/releases.js)). One channel since 2026-10-23: every release gets one post, once by release id (`state.releases`; ids posted as Alpha before that, `state.nightlies`, are never posted again). Every post is silent (no role, Discord's `SUPPRESS_NOTIFICATIONS` flag 4096) except one a day: the first game release published after 20:00 UTC pings the 📦 Releases role and lists the game releases since the last ping ("Out since the last ping"; `state.releasePings`). Launcher releases never ping. No dates in the posts. Drafts never. Hand-written posts: `ONE_OFFS` in `config.js`, each posted once |
 | X | Releases, the weekly summary and announced shipped items, from the same journal, ≤ 240 characters; off without credentials, `X_DRY_RUN=1` prints: see below |
 | `#updates` | One feed generated from the hub's journal: merged work grouped by roadmap item, releases (pointing to `#releases`), shipped items, the weekly summary; the board's summary on top: see below |
 | Work board | The board behind the hub's kanban, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/goodfirst`, `/notify`: see below |
@@ -230,7 +230,7 @@ After setup made the role and Kira is deployed with the ping, give it to the mem
 
 GitHub has no Triage role on a personal account's repo, and write access would let a branch push run workflows with
 the repo's secrets. So the reviewers Ludovic trusts (`TRIAGE.reviewers` in `config.js`: kacpherek, rdbtCVS,
-Online5277, the three with most merged PRs; he edits the list) triage ludovic111/horizon **through Kira**, with Kira's token
+Online5277, the three with most merged PRs; he edits the list) triage horizon-rust/horizon **through Kira**, with Kira's token
 ([`src/features/triage.js`](src/features/triage.js), rules in [`src/triage-kit.js`](src/triage-kit.js)):
 
 - `/gh label <#> add|remove <label>` (the label must exist), `/gh close <#> [reason] [note]`, `/gh reopen <#>`,
@@ -248,7 +248,7 @@ Online5277, the three with most merged PRs; he edits the list) triage ludovic111
 ## Contributors
 
 🛠️ **Contributor** is earned: a member whose **verified** GitHub account has at least one merged pull request in
-ludovic111/horizon. Members don't pick it any more (no button, not an Onboarding answer). The code is
+horizon-rust/horizon. Members don't pick it any more (no button, not an Onboarding answer). The code is
 [`src/features/contributors.js`](src/features/contributors.js) (Discord) and
 [`src/contributor-kit.js`](src/contributor-kit.js) (the rules, no Discord).
 
@@ -284,13 +284,13 @@ Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`
 - **When:** a message that mentions Kira, or replies to one of her messages, gets one answer. A reply in a `#horizon-bugs` or `#horizon-ideas` post counts only with a mention, because those posts get Kira's template notices. `@Kira <verb>` and a bare `@Kira` stay the hub's. `KIRA_AI=all` also answers questions (with a `?`) in `AI.helpChannels`; that list is empty for now.
 - **From what:**
   - the FAQ in `config.js`;
-  - from ludovic111/horizon main, the README and `docs/*.md` (refreshed daily) and the notes of the latest published releases (hourly).
+  - from horizon-rust/horizon main, the README and `docs/*.md` (refreshed daily) and the notes of the latest published releases (hourly).
   - All of it is read through `github.js`, so it counts against the shared budget; a doc is fetched again only when its sha changes.
   - When sources disagree, the FAQ wins, then the release notes, known issues, the README and the docs.
 - **Models:** `claude-haiku-5-5`. `claude-sonnet-5-5` only when Haiku says it is unsure, or for a reply chain of 4 messages or more. The model's only tool is `read_doc` (read-only). Its output is JSON: answer, pass, or unsure.
 - **Safety:**
   - Member text goes in as data inside `<member_message>`/`<context>` tags, and our own tags inside it are defused.
-  - Every reply goes through `checkReply()` before it is posted. It allows links only to playhorizon.dev, github.com/ludovic111/*, the server invite and microsoft.com/link (the FAQ's sign-in page). It blocks code blocks, commands, dates and promises, strips pings, and caps the length. A reply that fails is replaced by "passed to the team".
+  - Every reply goes through `checkReply()` before it is posted. It allows links only to playhorizon.dev, github.com/{ludovic111,horizon-rust}/*, the server invite and microsoft.com/link (the FAQ's sign-in page). It blocks code blocks, commands, dates and promises, strips pings, and caps the length. A reply that fails is replaced by "passed to the team".
   - Replies go out with `allowedMentions: { parse: [] }`.
 - **Limits:** 5 questions per member an hour, and `KIRA_AI_DAILY_USD` dollars a day (default 3, UTC days), counted from each response's `usage`. Over the budget, Kira says she has passed the question to the team.
 - **Logs:** every answer goes in `#mod-log`: the question link, the reply, the model, the tokens, the cost and the day's total. Questions passed to the team are kept in `state.kiraAi.handoffs`; the orchestrator reads them, and closes them once answered, with the MCP tool `ai_handoffs` (maintainers).
@@ -367,7 +367,7 @@ with a link to it by hand.
 ## GitHub issues
 
 When a post in `#horizon-bugs` passes its template (at once, or after an edit), or a member sends `/report`,
-Kira opens an issue in `ludovic111/horizon`. The mapping is in `GITHUB` in [`src/config.js`](src/config.js);
+Kira opens an issue in `horizon-rust/horizon`. The mapping is in `GITHUB` in [`src/config.js`](src/config.js);
 the code is [`src/features/github.js`](src/features/github.js) and [`src/issuekit.js`](src/issuekit.js).
 
 - **The issue**: the post's title; the post quoted (no HTML, `@mentions`, `#refs`, issue links or
@@ -405,6 +405,8 @@ give it the desktop's `gh` login: that token can do everything.
    repositories**: horizon, lsuite, ryolune, kimchi, nori, folio, DISPO. Repository permissions:
    **Issues: Read and write**, **Contents: Read-only** (for release lookup; Metadata: Read-only is
    added by itself). Nothing else.
+   Since 2026-10-27 Horizon's repos are in the `horizon-rust` organisation: a token whose resource owner is `ludovic111`
+   can no longer reach `horizon-rust/horizon`; it needs `horizon-rust` as resource owner (and the org must allow it).
 2. In 1Password, vault **Agents**, a new **API Credential** item named `GitHub Kira issues` with the
    token in its `credential` field (`op://Agents/GitHub Kira issues/credential`).
 3. Only then add it to `.env.op` (before the item exists, `op run` fails and Kira can't start):

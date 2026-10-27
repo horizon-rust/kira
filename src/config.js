@@ -18,12 +18,12 @@ export const SERVER = {
 
 export const LINKS = {
   github: 'https://github.com/ludovic111',
-  horizon: 'https://github.com/ludovic111/horizon',
+  horizon: 'https://github.com/horizon-rust/horizon',
   horizonSite: 'https://playhorizon.dev',
   hub: 'https://playhorizon.dev/hub', // the roadmap, the kanban, the journal and how to help
-  horizonLauncher: 'https://github.com/ludovic111/horizon/releases?q=launcher&expanded=true',
-  horizonIssues: 'https://github.com/ludovic111/horizon/issues',
-  horizonPulls: 'https://github.com/ludovic111/horizon/pulls',
+  horizonLauncher: 'https://github.com/horizon-rust/horizon/releases?q=launcher&expanded=true',
+  horizonIssues: 'https://github.com/horizon-rust/horizon/issues',
+  horizonPulls: 'https://github.com/horizon-rust/horizon/pulls',
   youtube: 'https://youtube.com/@lu4ovic',
 };
 
@@ -209,7 +209,7 @@ export const VIDEOS = {
 
 // One-off announcements Kira posts once (the key is remembered in state.oneOffs), for big releases.
 // `role`: the only role pinged (none if absent). Posted when Kira starts; written by hand.
-const V2026_10_13_1 = 'https://github.com/ludovic111/horizon/releases/tag/v2026.10.13.1';
+const V2026_10_13_1 = 'https://github.com/horizon-rust/horizon/releases/tag/v2026.10.13.1';
 const AGENT_GUIDE = {
   title: '🤖 Connect your AI coding agent to the work board',
   description: [
@@ -308,7 +308,8 @@ export const HUB = {
 // Per forum: the repo and kind. `fixed` / `notPlanned` / `duplicate`: the forum tags Kira applies when
 // the issue is closed that way.
 export const GITHUB = {
-  owner: 'ludovic111',
+  owner: 'horizon-rust', // the GitHub org that owns Horizon's repos (moved from ludovic111, 2026-10-27)
+  maintainer: 'ludovic111', // login whose comments on issues count as the maintainer's
   forums: {
     horizonbugs: { repo: 'horizon', kind: 'bug', fixed: 'fixed', duplicate: 'duplicate' },
     // queue: ideas go to the suggestion queue (HUB), not to GitHub; ideas sent before that keep their issue and answers.
@@ -429,7 +430,7 @@ export const RULES = [
   ['No scams or malware', 'No phishing, fake "free Nitro", or executables. Accounts younger than 3 days can\'t post links. Download Horizon only from playhorizon.dev or its GitHub releases.'],
   ['Keep it SFW', 'No NSFW, gore or shock content, anywhere: names, avatars and statuses included.'],
   ['Right channel, right format', 'Every channel says what it\'s for in its description. Bugs and ideas have a template in their 📌 How to post here post, pinned at the top: posts without it are closed after an hour.'],
-  ['Contributing', 'Working on an issue? `/claim` it first, so two people don\'t do the same work. Pull requests go to github.com/ludovic111/horizon.'],
+  ['Contributing', 'Working on an issue? `/claim` it first, so two people don\'t do the same work. Pull requests go to github.com/horizon-rust/horizon.'],
   ['English in the main channels', 'So everyone can follow. Any language is fine in #off-topic.'],
   ['No drama with the mods in public', 'Disagree with a decision? DM Kira: it reaches the mods privately.'],
   ["Discord's rules apply", 'Follow the Discord Terms of Service and Community Guidelines (13+).'],

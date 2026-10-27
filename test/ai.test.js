@@ -10,7 +10,7 @@ const ai = await import('../src/ai.js');
 const kit = await import('../src/ai-kit.js');
 
 const b64 = (s) => ({ content: Buffer.from(s).toString('base64'), encoding: 'base64' });
-const R = '/repos/ludovic111/horizon';
+const R = '/repos/horizon-rust/horizon';
 
 // A fake GitHub with a docs folder, a README and releases; every GET is recorded.
 function fakeGitHub() {

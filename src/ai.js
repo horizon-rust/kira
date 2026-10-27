@@ -1,6 +1,6 @@
 // Kira's answers with the Claude API: the sources she answers from, and the call itself.
 //
-// Sources: the FAQ (config.js), and from ludovic111/horizon's main branch the README and docs/*.md (refreshed daily),
+// Sources: the FAQ (config.js), and from horizon-rust/horizon's main branch the README and docs/*.md (refreshed daily),
 // plus the notes of the latest published releases (hourly). Every GitHub read goes through github.js, so it comes out
 // of the shared budget; unchanged files cost nothing (a doc is fetched again only when its blob sha changes, and
 // conditional GETs answered 304 aren't counted). A failed refresh keeps the last good copy.

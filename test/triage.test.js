@@ -16,7 +16,7 @@ const kit = await import('../src/triage-kit.js');
 const writes = [];
 const items = new Map();
 const labels = new Set(['bug', 'enhancement', 'duplicate', 'release-now', 'release-blocker', 'skip-release', 'in progress', 'good first issue']);
-const item = (n, o = {}) => items.set(n, { number: n, state: 'open', html_url: `https://github.com/ludovic111/horizon/issues/${n}`, labels: [], user: { login: 'someone' }, ...o });
+const item = (n, o = {}) => items.set(n, { number: n, state: 'open', html_url: `https://github.com/horizon-rust/horizon/issues/${n}`, labels: [], user: { login: 'someone' }, ...o });
 const fake = {
   get: async (path) => {
     const issue = path.match(/\/issues\/(\d+)$/);
@@ -25,7 +25,7 @@ const fake = {
     if (label) { const name = decodeURIComponent(label[1]); return [...labels].find((l) => l.toLowerCase() === name.toLowerCase()) ? { name: [...labels].find((l) => l.toLowerCase() === name.toLowerCase()) } : null; }
     return null;
   },
-  write: async (method, path, body) => { writes.push([method, path.replace('/repos/ludovic111/horizon', ''), body]); return {}; },
+  write: async (method, path, body) => { writes.push([method, path.replace('/repos/horizon-rust/horizon', ''), body]); return {}; },
 };
 t._test.setGitHub(fake);
 const logged = [];

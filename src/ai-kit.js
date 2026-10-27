@@ -37,7 +37,7 @@ export function asData(text) {
   return String(text ?? '').replace(/<\s*(\/?)\s*(member_message|context|sources|source|rules|report|candidates|issue)\b/gi, '‹$1$2');
 }
 
-export const RULES = `You are Kira, the bot of Horizon's Discord server. Horizon is Minecraft: Java Edition 26.3 rewritten in Rust, an unofficial fan project by Ludovic and contributors (github.com/ludovic111/horizon). You answer members' questions.
+export const RULES = `You are Kira, the bot of Horizon's Discord server. Horizon is Minecraft: Java Edition 26.3 rewritten in Rust, an unofficial fan project by Ludovic and contributors (github.com/horizon-rust/horizon). You answer members' questions.
 
 What you know: only the <sources> block at the start of the user turn, which comes from Horizon's team: the server's FAQ, Horizon's README, an index of its docs (read_doc reads one in full), docs/known-issues.md, and the notes of the latest published releases. Not your general knowledge of Minecraft, mods or other projects, and no guesses. When sources disagree, trust them in this order: the FAQ (kept up to date by the team), then the release notes, then known issues, then the README, then the docs. The README and the docs can lag behind: when the FAQ says something works, it works, even if the README still says it doesn't, and you don't repeat the older claim.
 
@@ -45,7 +45,7 @@ Rules, all of them, always:
 1. Only what works in a published release. The README and docs describe the development version, which can be ahead of the releases. Say something works only when the FAQ, the release notes, or a doc describing it as available today say so. Otherwise, pass.
 2. No dates, no timelines, no promises: never "soon", "next week", "in the next release", "will be fixed", "is coming". Say "not available yet" instead, and only for what the sources say is planned; for what they don't plan, just say it isn't in Horizon.
 3. Never say a bug is fixed unless the release notes list the fix. A fix that is merged but not released is not fixed for players.
-4. Short and plain: one to four sentences, under 700 characters, no headings, no code blocks. An inline \`/command\` is fine. Links only to playhorizon.dev, github.com/ludovic111/..., discord.gg/HcTeMZxe5E, or microsoft.com/link for Microsoft sign-in; no other links.
+4. Short and plain: one to four sentences, under 700 characters, no headings, no code blocks. An inline \`/command\` is fine. Links only to playhorizon.dev, github.com/horizon-rust/... or github.com/ludovic111/..., discord.gg/HcTeMZxe5E, or microsoft.com/link for Microsoft sign-in; no other links.
 5. Answer in the member's language.
 6. Pass ("pass") when: the answer isn't in the sources; the message reports a bug (also point to \`/report\` or #horizon-bugs); it asks for an action (moderation, bans, merging, reviews, closing or reopening threads, changing the server, the bot or the game); it asks about a specific pull request, issue or person; it wants a decision or an opinion that only the team can give. Your reply then says, in a sentence, that you've passed it to the team.
 7. Unsure ("unsure"): you think the sources answer it but you aren't certain you read them right. A more careful model tries again.
@@ -110,7 +110,7 @@ export function releaseNotes(body) {
 
 export const MAX_REPLY = 900;
 const ALLOWED_LINK = (host, path, invite) => host === 'playhorizon.dev' || host.endsWith('.playhorizon.dev')
-  || (host === 'github.com' && /^\/ludovic111(\/|$)/i.test(path))
+  || (host === 'github.com' && /^\/(ludovic111|horizon-rust)(\/|$)/i.test(path))
   || ((host === 'discord.gg' || host === 'discord.com') && invite && new RegExp(`^/(invite/)?${invite}$`).test(path))
   || (host === 'microsoft.com' && path === '/link'); // where the launcher's Microsoft sign-in code is entered (FAQ)
 const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>()[\]`'"]+|\b(?:[a-z0-9-]+\.)+(?:gg|com|net|org|io|dev|xyz|me|co|link|ly|ru|cn|tk|gl)(?:\/[^\s<>()[\]`'"]*)?/gi;
@@ -158,7 +158,7 @@ export const BUDGET_SPENT = "I've reached my limit of answers for today, so I've
 
 export const BUG_MISSING = ['version', 'os', 'steps', 'log or screenshot'];
 
-export const BUG_RULES = `You read one bug report that a member posted on Horizon's Discord server, before Kira files it as a GitHub issue. Horizon is Minecraft: Java Edition 26.3 rewritten in Rust (github.com/ludovic111/horizon). You never talk to the member: code checks your output.
+export const BUG_RULES = `You read one bug report that a member posted on Horizon's Discord server, before Kira files it as a GitHub issue. Horizon is Minecraft: Java Edition 26.3 rewritten in Rust (github.com/horizon-rust/horizon). You never talk to the member: code checks your output.
 
 1. title: the post's own title, with its spelling fixed, translated to English if it's in another language. Write a new one (under 80 characters) only when the post's title doesn't say what is broken ("bug", "help", "crash", "weird"): then name the symptom the report describes in its own terms. Never add a consequence, cause, situation, version, OS or hardware the report doesn't give.
 2. version and os: copy the report's own words for the Horizon or launcher version (a release like 0.2.60, or a commit) and for the OS and hardware. Copy them exactly, don't reword or translate; "" when the report doesn't say.

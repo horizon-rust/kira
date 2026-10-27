@@ -13,15 +13,15 @@ const fixture = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}.js
 const M = kit.MINUTE;
 
 test('neutralise: no pings, no closing keywords, no references, no HTML', () => {
-  const s = kit.neutralise('hey @ludovic111 and @org/team, fixes #12 closes ludovic111/horizon#3\n<img src=x onerror=alert(1)><details>x</details><!-- hidden -->\nsee https://github.com/ludovic111/horizon/issues/9 <@622720516779802630> <#123> <@&456> <:pog:789>');
+  const s = kit.neutralise('hey @ludovic111 and @org/team, fixes #12 closes horizon-rust/horizon#3\n<img src=x onerror=alert(1)><details>x</details><!-- hidden -->\nsee https://github.com/horizon-rust/horizon/issues/9 <@622720516779802630> <#123> <@&456> <:pog:789>');
   assert.match(s, /`@ludovic111`/);
   assert.match(s, /`@org`/);
   assert.doesNotMatch(s, /(^|[^`])@ludovic111/);
   assert.match(s, /`#12`/);
-  assert.match(s, /`ludovic111\/horizon#3`/);
+  assert.match(s, /`horizon-rust\/horizon#3`/);
   assert.doesNotMatch(s, /\bfixes\b|\bcloses\b/i); // broken by a zero-width space
   assert.doesNotMatch(s, /<img|<details|hidden/);
-  assert.match(s, /`https:\/\/github\.com\/ludovic111\/horizon\/issues\/9`/);
+  assert.match(s, /`https:\/\/github\.com\/horizon-rust\/horizon\/issues\/9`/);
   assert.doesNotMatch(s, /\d{6,}/); // no Discord IDs
   assert.match(s, /\(a member\).*\(a channel\).*\(a role\) :pog:/);
 });
@@ -105,7 +105,7 @@ test('answers: a burst of comments within 10 minutes is one message with one pin
   assert.equal(kit.takeAnswers(e, t0 + 9 * M), null);
   const items = kit.takeAnswers(e, t0 + 10 * M);
   assert.equal(items.length, 2);
-  const msg = kit.mentionPayload('42', kit.answerText(items, 'horizon#7 · <https://github.com/ludovic111/horizon/issues/7>'));
+  const msg = kit.mentionPayload('42', kit.answerText(items, 'horizon#7 · <https://github.com/horizon-rust/horizon/issues/7>'));
   assert.equal(msg.content.match(/<@\d+>/g).length, 1);
   assert.match(msg.content, /Looking at it[\s\S]*Found it/);
   assert.equal(kit.takeAnswers(e, t0 + 30 * M), null);
@@ -187,7 +187,7 @@ const OPEN = `
   const { state } = await import('../src/core.js');
   state.channels.horizonbugs = 'forum1';
   const posts = [];
-  _test.setGitHub({ dryRun: false, get: async () => ({}), write: async (m, p, b) => { if (p.endsWith('/issues')) posts.push(b); return { number: 7, html_url: 'https://github.com/ludovic111/horizon/issues/7' }; } });
+  _test.setGitHub({ dryRun: false, get: async () => ({}), write: async (m, p, b) => { if (p.endsWith('/issues')) posts.push(b); return { number: 7, html_url: 'https://github.com/horizon-rust/horizon/issues/7' }; } });
   const sent = [];
   const thread = { id: 't1', name: 'Water black on AMD', parentId: 'forum1', appliedTags: [], parent: { name: 'horizon-bugs', availableTags: [] }, send: async (m) => sent.push(m) };
   const starter = { content: 'What I did: x', author: { id: 'u1', username: 'zoe' }, member: { displayName: 'Zoé' }, attachments: new Map() };
