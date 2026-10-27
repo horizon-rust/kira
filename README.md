@@ -60,7 +60,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | `#updates` | One feed generated from the hub's journal: merged work grouped by roadmap item, releases (pointing to `#releases`), shipped items, the weekly summary; the board's summary on top: see below |
 | Work board | The board behind the hub's kanban, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/goodfirst`, `/notify`: see below |
 | Contributors | `/verify-github` proves a linked GitHub account is the member's; a merged pull request in Horizon then gives 🛠️ Contributor: see [Contributors](#contributors) |
-| Triage | `/gh label|close|reopen|duplicate|pause|resume` for Ludovic's trusted reviewers, through Kira's GitHub token: see [Triage through Kira](#triage-through-kira) |
+| Triage | `/gh` (`label`, `close`, `reopen`, `duplicate`, `pause`, `resume`) for Ludovic's trusted reviewers, through Kira's GitHub token: see [Triage through Kira](#triage-through-kira) |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
 | Info | `/help` (what Kira does, its commands), `/links`, `/horizon`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
