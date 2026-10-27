@@ -22,6 +22,7 @@ import * as agents from './features/agents.js';
 import * as hub from './features/hub.js';
 import * as updates from './features/updates.js';
 import * as x from './features/x.js';
+import * as kiraAi from './features/ai.js';
 import { startServer } from './mcp.js';
 import { adminRoutes } from './admin.js';
 import { rateLimiter } from './agents.js';
@@ -29,7 +30,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, triage, agents, hub, updates, x];
+const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, triage, agents, hub, updates, x, kiraAi];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
@@ -160,6 +161,7 @@ client.on('messageCreate', async (msg) => {
   try {
     if (await moderation.moderate(msg)) return; // removed: no XP, no thread
     await levels.onMessage(msg);
+    if (await kiraAi.onMessage(msg)) return; // a question to Kira (when KIRA_AI is on)
     if (await hub.onMessage(msg)) return; // "@Kira <verb>"
     await community.onMessage(msg);
     await github.onMessage(msg);

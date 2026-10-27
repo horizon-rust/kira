@@ -473,3 +473,19 @@ export const AGENTS = {
   maxOpenCards: 10, // Kira cards a member may have open
   ludovicLogin: 'ludovic111',
 };
+
+// Kira answering on her own with the Claude API (src/ai.js, src/features/ai.js). KIRA_AI: unset or 0, off;
+// `mentions` (or 1), a message that mentions Kira or replies to her; `all`, also a question in AI.helpChannels.
+// It also needs ANTHROPIC_API_KEY. `/kira-ai off` (Ludovic and the mods) stops it without a deploy.
+export const AI = {
+  mode: (() => {
+    const v = (process.env.KIRA_AI ?? '').trim().toLowerCase();
+    return v === 'all' ? 'all' : ['1', 'on', 'mentions'].includes(v) ? 'mentions' : null;
+  })(),
+  dailyUsd: Number(process.env.KIRA_AI_DAILY_USD) > 0 ? Number(process.env.KIRA_AI_DAILY_USD) : 3, // then she passes questions to the team until midnight UTC
+  perMemberHour: 5, // questions answered per member an hour
+  helpChannels: [], // LAYOUT keys where a question needs no mention (mode `all`); none yet: added once the #mod-log lines are read
+  contextMessages: 4, // the reply chain the model sees (the messages being replied to), at most
+  handoffsKept: 200, // questions passed to the team that the orchestrator can read (MCP ai_handoffs)
+  daysKept: 62, // daily usage kept for GET /ai-usage
+};

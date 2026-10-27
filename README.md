@@ -62,6 +62,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | Contributors | `/verify-github` proves a linked GitHub account is the member's; a merged pull request in Horizon then gives 🛠️ Contributor: see [Contributors](#contributors) |
 | Triage | `/gh` (`label`, `close`, `reopen`, `duplicate`, `pause`, `resume`) for Ludovic's trusted reviewers, through Kira's GitHub token: see [Triage through Kira](#triage-through-kira) |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
+| AI answers | A message that mentions Kira or replies to her gets one answer from Claude, grounded in the FAQ, Horizon's docs and release notes; what she can't answer goes to the team. Off unless `KIRA_AI` is set; `/kira-ai off\|on\|status`: see [AI answers](#ai-answers) |
 | Info | `/help` (what Kira does, its commands), `/links`, `/horizon`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
 ## Running it
@@ -274,6 +275,27 @@ ludovic111/horizon. Members don't pick it any more (no button, not an Onboarding
   set, `POST /admin/contributors-cleanup` starts a **dry run** (nothing changes) and `{"dry": false}` the real one;
   `GET /admin/contributors-cleanup` returns the last result: counts, and the `matches` (Discord name and the GitHub
   login it was matched to) for the staff to read.
+
+## AI answers
+
+Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`src/ai-kit.js`](src/ai-kit.js), [`src/features/ai.js`](src/features/ai.js)).
+
+- **When:** a message that mentions Kira, or replies to one of her messages, gets one answer. A reply in a `#horizon-bugs` or `#horizon-ideas` post counts only with a mention, because those posts get Kira's template notices. `@Kira <verb>` and a bare `@Kira` stay the hub's. `KIRA_AI=all` also answers questions (with a `?`) in `AI.helpChannels`; that list is empty for now.
+- **From what:**
+  - the FAQ in `config.js`;
+  - from ludovic111/horizon main, the README and `docs/*.md` (refreshed daily) and the notes of the latest published releases (hourly).
+  - All of it is read through `github.js`, so it counts against the shared budget; a doc is fetched again only when its sha changes.
+  - When sources disagree, the FAQ wins, then the release notes, known issues, the README and the docs.
+- **Models:** `claude-haiku-5-5`. `claude-sonnet-5-5` only when Haiku says it is unsure, or for a reply chain of 4 messages or more. The model's only tool is `read_doc` (read-only). Its output is JSON: answer, pass, or unsure.
+- **Safety:**
+  - Member text goes in as data inside `<member_message>`/`<context>` tags, and our own tags inside it are defused.
+  - Every reply goes through `checkReply()` before it is posted. It allows links only to playhorizon.dev, github.com/ludovic111/*, the server invite and microsoft.com/link (the FAQ's sign-in page). It blocks code blocks, commands, dates and promises, strips pings, and caps the length. A reply that fails is replaced by "passed to the team".
+  - Replies go out with `allowedMentions: { parse: [] }`.
+- **Limits:** 5 questions per member an hour, and `KIRA_AI_DAILY_USD` dollars a day (default 3, UTC days), counted from each response's `usage`. Over the budget, Kira says she has passed the question to the team.
+- **Logs:** every answer goes in `#mod-log`: the question link, the reply, the model, the tokens, the cost and the day's total. Questions passed to the team are kept in `state.kiraAi.handoffs`.
+- **Off switch:** `/kira-ai off` (Ludovic and the mods) stops it at once, `/kira-ai on` restarts it, and `/kira-ai status` shows the day's use. Removing `KIRA_AI` (or setting it to `0`) turns it off for good.
+- **Variables:** `KIRA_AI`, `ANTHROPIC_API_KEY` (1Password `Horizon Claude API Key ludo47j`, set on Railway with the CLI, never printed), `KIRA_AI_DAILY_USD`.
+- **Cost, measured** on 38 real questions from the server's history: $0.0013 per answer with Haiku and a warm cache. The 21K-token sources block is cached for an hour as the first block of the user turn: a breakpoint on the system prompt was never read back on this account.
 
 ## Hosting (Railway)
 

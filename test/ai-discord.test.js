@@ -1,0 +1,171 @@
+// Kira's AI answers on Discord (src/features/ai.js): when she answers, the limits, the off switch, the #mod-log line
+// and the hand-offs to the team. A fake answerer stands in for the model; no Discord connection, no network.
+import { test, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+process.env.KIRA_STATE = join(mkdtempSync(join(tmpdir(), 'kira-ai-discord-')), 'state.json');
+process.env.KIRA_AI = 'mentions';
+process.env.ANTHROPIC_API_KEY = 'test-key-not-used';
+const { AI, GUILD_ID, OWNER_ID } = await import('../src/config.js');
+const core = await import('../src/core.js');
+const f = await import('../src/features/ai.js');
+const kit = await import('../src/ai-kit.js');
+
+const ME = '1559239271271891004';
+core.client.user = { id: ME };
+const logs = [];
+core.state.channels.modlog = 'ml';
+core.state.channels.horizonbugs = 'bugs';
+core.client.channels.cache.set('ml', { send: async (m) => { logs.push(m); return m; } });
+
+const asked = [];
+let next = { status: 'answer', reply: 'No, Horizon is an unofficial fan project.', models: ['claude-haiku-5-5'], cost: 0.0013, input: 2, output: 300, cacheRead: 21000, cacheWrite: 1000, lookups: [] };
+f._test.set({
+  sources: { refresh: async () => true, ready: () => true },
+  answer: async (q) => { asked.push(q); return { ...next }; },
+});
+
+let n = 0;
+function message(content, o = {}) {
+  const replies = [];
+  const msg = {
+    id: `m${++n}`, content, guildId: GUILD_ID, channelId: 'chat', url: `https://discord.com/channels/${GUILD_ID}/chat/m${n}`,
+    author: { id: o.user ?? 'u1', username: 'player', bot: !!o.bot }, member: { displayName: 'Player' },
+    channel: { name: 'horizon-chat', parentId: o.parent ?? null, sendTyping: async () => {} },
+    mentions: { repliedUser: o.repliedTo ? { id: o.repliedTo } : null },
+    reference: o.ref ? { messageId: o.ref.id } : null,
+    fetchReference: async () => o.ref,
+    reply: async (p) => { replies.push(p); return p; },
+    replies,
+  };
+  return msg;
+}
+
+beforeEach(() => {
+  asked.length = 0;
+  logs.length = 0;
+  f._test.store.on = true;
+  f._test.store.days = {};
+  f._test.store.handoffs = [];
+  f._test.limits.prune(Date.now() + 10 * 3_600_000);
+});
+
+test('who gets an answer: a mention or a reply to Kira; not bots, not other servers, not the hub\'s verbs, not a bare mention', async () => {
+  const yes = [message(`<@${ME}> is this official?`), message(`hey <@!${ME}> how do I zoom`), message('and on Linux?', { repliedTo: ME, ref: { id: 'k1', content: 'Earlier answer', author: { id: ME } } })];
+  for (const m of yes) assert.equal(await f.onMessage(m), true, m.content);
+  assert.equal(asked.length, 3);
+  assert.equal(asked[0].text, 'is this official?', 'the mention is stripped');
+  assert.deepEqual(asked[2].context, [{ author: 'Kira (you)', text: 'Earlier answer' }]);
+
+  const no = [
+    message('is this official?'), // nobody asked Kira
+    message(`<@${ME}> roadmap servers`), // the hub's verb
+    message(`<@${ME}>`), // bare: the hub's help
+    message(`<@${ME}> hi`, { bot: true }),
+    Object.assign(message(`<@${ME}> hi`), { guildId: 'other' }),
+    message('here is my OS', { repliedTo: ME, parent: 'bugs', ref: { id: 'k2', content: 'What is missing: OS', author: { id: ME } } }), // a template notice
+    message('thanks', { repliedTo: 'someone-else', ref: { id: 'x', content: 'hi', author: { id: 'someone-else' } } }),
+  ];
+  for (const m of no) assert.equal(await f.onMessage(m), false, m.content);
+  assert.equal(asked.length, 3);
+});
+
+test('one answer, no pings, logged in #mod-log with the model, tokens and cost; the day\'s totals count it', async () => {
+  const m = message(`<@${ME}> is this official?`);
+  await f.onMessage(m);
+  await f.onMessage(m); // the same message again
+  assert.equal(m.replies.length, 1);
+  assert.deepEqual(m.replies[0].allowedMentions, { parse: [], repliedUser: false });
+  assert.equal(m.replies[0].content, 'No, Horizon is an unofficial fan project.');
+  const embed = logs[0].embeds[0].data;
+  assert.equal(embed.title, '🤖 Kira answered');
+  assert.ok(embed.description.includes(m.url));
+  const field = (k) => embed.fields.find((x) => x.name === k)?.value;
+  assert.equal(field('Model'), 'claude-haiku-5-5');
+  assert.match(field('Tokens'), /in 2 · out 300 · cache read 21000 · cache write 1000/);
+  assert.match(field('Cost'), /^\$0\.0013 \(today \$0\.00 of \$3\)$/);
+  assert.deepEqual(logs[0].allowedMentions, { parse: [] });
+  const day = Object.values(f._test.store.days)[0];
+  assert.deepEqual(day, { cost_usd: 0.0013, answers: 1, passed_to_team: 0, models: { 'claude-haiku-5-5': 1 } });
+});
+
+test('passed to the team: Kira says so, and the question waits in the hand-offs until it is closed', async () => {
+  next = { status: 'pass', reply: "I've passed your question to the team.", reason: 'not in the sources', models: ['claude-haiku-5-5', 'claude-sonnet-5-5'], cost: 0.02, input: 1, output: 1, cacheRead: 0, cacheWrite: 0, lookups: ['docs/mods.md'] };
+  const m = message(`<@${ME}> will 26.3 mods run on 26.4?`);
+  await f.onMessage(m);
+  assert.equal(m.replies[0].content, "I've passed your question to the team.");
+  assert.equal(logs[0].embeds[0].data.title, '🤖 Kira passed a question to the team');
+  const open = f.openHandoffs();
+  assert.equal(open.length, 1);
+  assert.deepEqual({ id: open[0].id, question: open[0].question, reason: open[0].reason, author: open[0].author }, { id: m.id, question: 'will 26.3 mods run on 26.4?', reason: 'not in the sources', author: 'Player' });
+  assert.equal(f.closeHandoffs([m.id, 'nope']), 1);
+  assert.equal(f.openHandoffs().length, 0);
+  assert.deepEqual(Object.values(f._test.store.days)[0].models, { 'claude-haiku-5-5': 1, 'claude-sonnet-5-5': 1 });
+  next = { status: 'answer', reply: 'No, Horizon is an unofficial fan project.', models: ['claude-haiku-5-5'], cost: 0.0013, input: 2, output: 300, cacheRead: 21000, cacheWrite: 1000, lookups: [] };
+});
+
+test('the per-member limit: five an hour, then one notice, then silence; others still get answers', async () => {
+  for (let i = 0; i < AI.perMemberHour; i++) await f.onMessage(message(`<@${ME}> question ${i}`));
+  assert.equal(asked.length, AI.perMemberHour);
+  const over = message(`<@${ME}> one more`);
+  await f.onMessage(over);
+  assert.match(over.replies[0].content, /5 questions an hour/);
+  const again = message(`<@${ME}> and another`);
+  await f.onMessage(again);
+  assert.equal(again.replies.length, 0);
+  assert.equal(asked.length, AI.perMemberHour, 'no model call over the limit');
+  await f.onMessage(message(`<@${ME}> hi`, { user: 'u2' }));
+  assert.equal(asked.length, AI.perMemberHour + 1);
+});
+
+test('the daily budget: once spent, no model call; Kira passes the question to the team', async () => {
+  f._test.store.days[new Date().toISOString().slice(0, 10)] = { cost_usd: AI.dailyUsd, answers: 900, passed_to_team: 0, models: {} };
+  const m = message(`<@${ME}> is this official?`);
+  await f.onMessage(m);
+  assert.equal(asked.length, 0);
+  assert.equal(m.replies[0].content, kit.BUDGET_SPENT);
+  assert.equal(f.openHandoffs()[0].reason, 'daily budget spent');
+});
+
+test('no sources yet: no model call, passed to the team', async () => {
+  f._test.set({ sources: { refresh: async () => false, ready: () => false } });
+  const m = message(`<@${ME}> is this official?`);
+  await f.onMessage(m);
+  assert.equal(asked.length, 0);
+  assert.equal(m.replies[0].content, kit.PASSED);
+  f._test.set({ sources: { refresh: async () => true, ready: () => true } });
+});
+
+test('/kira-ai: Ludovic and the mods only; off stops every answer at once, on brings them back', async () => {
+  const replies = [];
+  const interaction = (user, staff, action) => ({
+    user: { id: user }, member: { permissions: { has: () => staff } },
+    options: { getString: () => action }, reply: async (p) => { replies.push(p); return p; },
+  });
+  await f.handlers['kira-ai'](interaction('random', false, 'off'));
+  assert.match(replies.at(-1).content, /Only Ludovic and the mods/);
+  assert.equal(f._test.store.on, true);
+
+  await f.handlers['kira-ai'](interaction('mod', true, 'off'));
+  assert.equal(f._test.store.on, false);
+  assert.match(replies.at(-1).content, /AI answers: \*\*off\*\*/);
+  assert.equal(await f.onMessage(message(`<@${ME}> anyone?`)), false, 'off: the hub answers as before');
+  assert.equal(asked.length, 0);
+
+  await f.handlers['kira-ai'](interaction(OWNER_ID, false, 'on'));
+  assert.equal(f._test.store.on, true);
+  await f.handlers['kira-ai'](interaction(OWNER_ID, false, 'status'));
+  assert.match(replies.at(-1).content, /KIRA_AI=mentions/);
+  assert.equal(await f.onMessage(message(`<@${ME}> anyone?`)), true);
+  assert.deepEqual(f.commands[0].toJSON().default_member_permissions, String(1n << 13n), 'hidden from members (Manage Messages)');
+});
+
+test('the day\'s totals keep the last AI.daysKept days', () => {
+  for (let i = 0; i < AI.daysKept + 5; i++) f.record({ status: 'answer', cost: 0.001, models: ['claude-haiku-5-5'] }, Date.UTC(2026, 0, 1) + i * 86_400_000);
+  const days = Object.keys(f._test.store.days).sort();
+  assert.equal(days.length, AI.daysKept);
+  assert.equal(days[0], new Date(Date.UTC(2026, 0, 6)).toISOString().slice(0, 10));
+});
