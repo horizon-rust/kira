@@ -9,7 +9,10 @@ import { join } from 'node:path';
 process.env.KIRA_STATE = join(mkdtempSync(join(tmpdir(), 'kira-ai-discord-')), 'state.json');
 process.env.KIRA_AI = 'mentions';
 process.env.ANTHROPIC_API_KEY = 'test-key-not-used';
+process.env.KIRA_USAGE_TOKEN = 'u'.repeat(64);
 const { AI, GUILD_ID, OWNER_ID } = await import('../src/config.js');
+const { startServer } = await import('../src/mcp.js');
+const { rateLimiter } = await import('../src/agents.js');
 const core = await import('../src/core.js');
 const f = await import('../src/features/ai.js');
 const kit = await import('../src/ai-kit.js');
@@ -168,4 +171,45 @@ test('the day\'s totals keep the last AI.daysKept days', () => {
   const days = Object.keys(f._test.store.days).sort();
   assert.equal(days.length, AI.daysKept);
   assert.equal(days[0], new Date(Date.UTC(2026, 0, 6)).toISOString().slice(0, 10));
+});
+
+test('GET /ai-usage: 401 without the token or with a wrong one; per-day and month totals, the budget; no text, no ids', async () => {
+  f._test.store.days = {};
+  const at = (d) => Date.UTC(2026, 9, d, 12);
+  f.record({ status: 'answer', cost: 0.0013, models: ['claude-haiku-5-5'] }, at(26));
+  f.record({ status: 'answer', cost: 0.0011, models: ['claude-haiku-5-5'] }, at(27));
+  f.record({ status: 'pass', cost: 0.03, models: ['claude-haiku-5-5', 'claude-sonnet-5-5'] }, at(27));
+  f.record({ status: 'answer', cost: 0.5, models: ['claude-haiku-5-5'] }, Date.UTC(2026, 8, 30, 12)); // last month
+  f._test.store.handoffs = [{ id: 'm1', url: 'https://discord.com/x', channel: 'horizon-chat', author: 'Player', question: 'secret question text', reason: 'x', at: 0, done: false }];
+  assert.deepEqual(f.usageRoutes({ token: '' }), {}, 'no token, no route');
+  assert.deepEqual(f.usageRoutes({ token: 'short' }), {}, 'a weak token, no route');
+
+  const routes = f.usageRoutes({ limiter: rateLimiter(), now: () => at(27) });
+  const api = { snapshot: () => null };
+  const server = await startServer(0, { store: { tokens: {} }, api, routes });
+  const url = `http://127.0.0.1:${server.address().port}/ai-usage`;
+  try {
+    for (const headers of [{}, { Authorization: 'Bearer wrong' }, { Authorization: 'u'.repeat(64) }]) {
+      const res = await fetch(url, { headers });
+      assert.equal(res.status, 401);
+      assert.deepEqual(await res.json(), { error: 'unauthorized' });
+    }
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${'u'.repeat(64)}` } });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+    const body = await res.json();
+    assert.deepEqual(body, {
+      daily_budget_usd: 3, enabled: true, on: true, mode: 'mentions', today: '2026-10-27',
+      days: [
+        { day: '2026-09-30', cost_usd: 0.5, answers: 1, passed_to_team: 0, models: { 'claude-haiku-5-5': 1 } },
+        { day: '2026-10-26', cost_usd: 0.0013, answers: 1, passed_to_team: 0, models: { 'claude-haiku-5-5': 1 } },
+        { day: '2026-10-27', cost_usd: 0.0311, answers: 1, passed_to_team: 1, models: { 'claude-haiku-5-5': 2, 'claude-sonnet-5-5': 1 } },
+      ],
+      month: { month: '2026-10', cost_usd: 0.0324, answers: 2, passed_to_team: 1, models: { 'claude-haiku-5-5': 3, 'claude-sonnet-5-5': 1 } },
+    });
+    const text = JSON.stringify(body);
+    assert.ok(!text.includes('secret question') && !text.includes('Player') && !/\d{17,20}/.test(text), 'no message text, no names, no ids');
+  } finally {
+    server.close();
+  }
 });

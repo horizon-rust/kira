@@ -8,6 +8,7 @@ import { dataFile } from '../store.js';
 import { openStore, issue, listFor, revoke, revokeAll, untrusted, oneLine, rateLimiter } from '../agents.js';
 import * as board from '../board.js';
 import * as wb from './workboard.js';
+import * as kiraAi from './ai.js';
 import { columnText } from '../workkit.js';
 
 export const store = openStore(process.env.KIRA_AGENTS || dataFile('agents.json'));
@@ -94,6 +95,11 @@ export const api = {
       comments: (comments ?? []).slice(-8).map((c) => ({ author: c.user?.login, at: c.created_at, body: untrusted(c.body.slice(0, 2000), 'github') })),
       pullRequest: pr ? { draft: pr.draft, mergeable: pr.mergeable_state, head: pr.head?.ref == null ? null : untrusted(pr.head.ref, 'github'), base: pr.base?.ref == null ? null : untrusted(pr.base.ref, 'github'), additions: pr.additions, deletions: pr.deletions, changedFiles: pr.changed_files } : null,
     };
+  },
+  // The questions Kira passed to the team (src/features/ai.js); `close`: the message ids now answered.
+  aiHandoffs(close = []) {
+    const closed = close.length ? kiraAi.closeHandoffs(close) : 0;
+    return { closed, open: kiraAi.handoffsOut() };
   },
   async ludovic() {
     const s = wb.current();

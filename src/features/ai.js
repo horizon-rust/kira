@@ -3,12 +3,13 @@
 // stops it at once. Limits: AI.perMemberHour questions per member, AI.dailyUsd dollars a day (UTC), counted from each
 // response's usage. Every answer is logged in #mod-log (the question, the model, tokens, cost). A question Kira can't
 // answer is passed to the team: she says so, and it is kept in state.kiraAi.handoffs for the orchestrator.
+import { createHash, timingSafeEqual } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { SlashCommandBuilder, PermissionFlagsBits as P, MessageFlags } from 'discord.js';
 import { AI, GUILD_ID, OWNER_ID } from '../config.js';
 import { client, state, save, isStaff, modlog, clip } from '../core.js';
 import { makeGitHub } from '../github.js';
-import { rateLimiter } from '../agents.js';
+import { rateLimiter, clientIp, untrusted } from '../agents.js';
 import { parseVerb } from '../hub.js';
 import * as ai from '../ai.js';
 import * as kit from '../ai-kit.js';
@@ -125,6 +126,48 @@ export async function onMessage(msg) {
   if (seen.size > 1000) seen.delete(seen.values().next().value);
   await respond(msg, text).catch((e) => console.error('kira ai', e));
   return true;
+}
+
+// What the orchestrator reads over MCP (ai_handoffs, maintainers): the open hand-offs, member text marked untrusted.
+export const handoffsOut = () => openHandoffs().map((h) => ({
+  id: h.id, url: h.url, channel: h.channel, at: new Date(h.at).toISOString(), reason: h.reason,
+  author: untrusted(h.author, 'discord'), question: untrusted(h.question, 'discord'),
+}));
+
+// GET /ai-usage, for the LifeOS control center: the spending per UTC day, the month's totals and the daily budget.
+// Counts and dollars only: no message text, no user ids.
+export function usage(now = Date.now()) {
+  const round = (x) => Math.round(x * 1e6) / 1e6;
+  const days = Object.keys(store.days).sort().map((day) => ({ day, ...store.days[day], cost_usd: round(store.days[day].cost_usd) }));
+  const month = today(now).slice(0, 7);
+  const total = { month, cost_usd: 0, answers: 0, passed_to_team: 0, models: {} };
+  for (const d of days.filter((x) => x.day.startsWith(month))) {
+    total.cost_usd += d.cost_usd;
+    total.answers += d.answers;
+    total.passed_to_team += d.passed_to_team;
+    for (const [m, n] of Object.entries(d.models)) total.models[m] = (total.models[m] ?? 0) + n;
+  }
+  total.cost_usd = round(total.cost_usd);
+  return { daily_budget_usd: AI.dailyUsd, enabled, on: store.on, mode: AI.mode, today: today(now), days, month: total };
+}
+
+// The route, behind a bearer token (KIRA_USAGE_TOKEN; 1Password "Kira usage token"). No token set, no route. Failed
+// attempts count in the "auth" rate limit, like the admin routes.
+export function usageRoutes({ token = process.env.KIRA_USAGE_TOKEN?.trim(), limiter, now = Date.now } = {}) {
+  if (!token || token.length < 32) return {};
+  const want = createHash('sha256').update(token).digest();
+  const send = (res, code, body) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
+  return {
+    'GET /ai-usage': (req, res) => {
+      const auth = String(req.headers.authorization ?? '');
+      const got = createHash('sha256').update(auth.startsWith('Bearer ') ? auth.slice(7).trim() : '').digest();
+      if (!timingSafeEqual(got, want)) {
+        const limited = !limiter.take(clientIp(req), 'auth');
+        return send(res, limited ? 429 : 401, { error: limited ? 'too many attempts' : 'unauthorized' });
+      }
+      return send(res, 200, usage(now()));
+    },
+  };
 }
 
 const statusText = () => {
