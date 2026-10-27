@@ -244,7 +244,7 @@ test('a GitHub error leaves the holder alone', async () => {
   hub.down = true;
   const r = await c.cleanup({ dry: false });
   hub.down = false;
-  assert.equal(r.unknown, 7); // keep, nudge, closed, nopr, levz: looked up; dave, kacp: no list of authors, so no guess
+  assert.equal(r.unknown, 6); // keep, nudge, closed, nopr, levz: looked up; dave: no list of authors, so no guess (kacp is protected by id: no GitHub needed)
   assert.equal(members.get('nopr').roles.cache.has('ROLE'), true);
 });
 
