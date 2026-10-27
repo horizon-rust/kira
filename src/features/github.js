@@ -2,12 +2,14 @@
 // reported with /report, becomes an issue; the reporter's later replies become comments; Kira polls the issues and tells the reporter, in their
 // post, when the issue is closed or a maintainer comments. Off unless GITHUB_TOKEN is set.
 import { SlashCommandBuilder, PermissionFlagsBits as P, MessageFlags, ChannelType } from 'discord.js';
-import { GITHUB, GUILD_ID } from '../config.js';
+import { GITHUB, GUILD_ID, AI } from '../config.js';
 import { client, state, save, isStaff, modlog } from '../core.js';
 import { makeGitHub } from '../github.js';
 import { onTemplateOk, followsTemplate } from './forums.js';
 import * as kit from '../issuekit.js';
 import { isOwnPost } from '../adopt.js';
+import { reviewBug } from './ai.js';
+import { searchTerms, yesNo, missingAsk } from '../ai-kit.js';
 
 const TOKEN = process.env.GITHUB_TOKEN?.trim();
 const DRY = process.env.KIRA_GITHUB_DRY_RUN === '1';
@@ -18,8 +20,9 @@ const full = (repo) => `${OWNER}/${repo}`;
 
 // threadId → { repo, number, url, kind, owner, author, state, lastCommentId, votes, followups, answers }.
 // In a dry run it lives in memory only, so nothing reaches data/state.json.
-const blank = () => ({ issues: {}, created: [], polled: {}, labels: {} });
+const blank = () => ({ issues: {}, created: [], polled: {}, labels: {}, pending: {} });
 const store = !enabled ? blank() : DRY ? blank() : (state.github ??= blank());
+store.pending ??= {}; // threadId → a report that may be the same bug as an open issue, waiting for the reporter's answer
 const busy = new Set(); // threads being opened right now: one issue per post, even with two events at once
 
 const forumKey = (thread) => Object.keys(GITHUB.forums).find((k) => state.channels[k] === thread.parentId);
@@ -68,28 +71,92 @@ export function reportIssue(thread, { authorId, author, text }) {
 
 async function fileIssue(thread, src, { manual = false, target }) {
   if (store.issues[thread.id] || busy.has(thread.id)) return store.issues[thread.id] ?? null;
+  if (store.pending[thread.id]) return null; // waiting for the reporter: same bug as an open issue or not
   if (!manual && !kit.allow(store.created, src.authorId, Date.now(), GITHUB.rate)) {
     await modlog('🐙 Not sent to GitHub (rate limit)', `<#${thread.id}> by <@${src.authorId}>. A mod can send it with \`/issue\`.`);
     return null;
   }
   busy.add(thread.id);
   try {
-    await ensureLabels(target.repo);
-    const body = kit.issueBody({
-      text: src.text, author: src.author, forum: thread.parent?.name ?? 'forum', threadUrl: threadUrl(thread), tags: tagNames(thread),
-      attachments: src.attachments, votes: src.votes,
-    });
-    const issue = await gh.write('POST', `/repos/${full(target.repo)}/issues`, { title: kit.safeTitle(thread.name), body, labels: [GITHUB.labels[target.kind], GITHUB.labels.from] });
-    if (!issue) return null; // dry run: logged
-    const entry = store.issues[thread.id] = {
-      repo: target.repo, number: issue.number, url: issue.html_url, kind: target.kind, owner: src.authorId, author: src.author,
-      state: 'open', lastCommentId: 0, votes: src.votes, createdAt: Date.now(),
-    };
-    save();
-    await say(thread, `📌 Sent to GitHub as ${ref(entry)}. You'll be pinged here when there's an answer.`).catch(console.error);
-    return entry;
+    // A bug, with KIRA_AI_BUGS on: the model reads it next to the open issues GitHub finds for its title.
+    const draft = !manual && target.kind === 'bug' ? await review(thread, src, target) : null;
+    if (draft?.match?.same) return await addToIssue(thread, src, target, draft);
+    if (draft?.match) {
+      store.pending[thread.id] = { src, target, draft, at: Date.now() };
+      save();
+      await say(thread, `🔁 This looks like ${ref({ repo: target.repo, number: draft.match.number, url: draft.match.url })} (**${kit.safeTitle(draft.match.title)}**). <@${src.authorId}>, is it the same bug? Reply **yes** and I'll add your report there, or **no** and I'll file it as a new issue. With no answer, it's filed as new in ${Math.round(AI.pendingMs / 60_000)} minutes.`).catch(console.error);
+      return null;
+    }
+    return await createIssue(thread, src, target, draft);
   } finally {
     busy.delete(thread.id);
+  }
+}
+
+// The open issues GitHub's search finds for the post's title (the search API's own limit, not the hourly budget),
+// then the model's draft; null without KIRA_AI_BUGS or when anything fails (the report is filed as it is).
+async function review(thread, src, target) {
+  try {
+    const terms = searchTerms(thread.name);
+    const q = `repo:${full(target.repo)} is:issue is:open ${terms.join(' OR ')}`;
+    const found = terms.length ? (await gh.get(`/search/issues?q=${encodeURIComponent(q)}&per_page=8`, { cache: false }))?.items ?? [] : [];
+    const candidates = found.filter((i) => !i.pull_request).map((i) => ({ number: i.number, title: i.title, body: String(i.body ?? '').slice(0, 600), url: i.html_url }));
+    return await reviewBug({ title: thread.name, text: src.text, files: src.attachments.length, candidates, url: threadUrl(thread) });
+  } catch (e) {
+    console.error('github bug review', e.message);
+    return null;
+  }
+}
+
+async function createIssue(thread, src, target, draft = null, { related = null } = {}) {
+  await ensureLabels(target.repo);
+  const body = kit.issueBody({
+    text: src.text, author: src.author, forum: thread.parent?.name ?? 'forum', threadUrl: threadUrl(thread), tags: tagNames(thread),
+    attachments: src.attachments, votes: src.votes, notes: draft?.notes, related,
+  });
+  const issue = await gh.write('POST', `/repos/${full(target.repo)}/issues`, { title: kit.safeTitle(draft?.title || thread.name), body, labels: [GITHUB.labels[target.kind], GITHUB.labels.from] });
+  if (!issue) return null; // dry run: logged
+  const entry = store.issues[thread.id] = {
+    repo: target.repo, number: issue.number, url: issue.html_url, kind: target.kind, owner: src.authorId, author: src.author,
+    state: 'open', lastCommentId: 0, votes: src.votes, createdAt: Date.now(),
+  };
+  save();
+  await say(thread, `📌 Sent to GitHub as ${ref(entry)}. You'll be pinged here when there's an answer.${draft?.missing.length ? `\n${missingAsk(draft.missing)}` : ''}`).catch(console.error);
+  return entry;
+}
+
+// The same bug as an open issue: the report goes on it as a comment, and the post follows that issue.
+async function addToIssue(thread, src, target, draft) {
+  const { number } = draft.match;
+  const issue = await gh.get(`/repos/${full(target.repo)}/issues/${number}`);
+  if (!issue || issue.pull_request || issue.state !== 'open') return createIssue(thread, src, target, draft);
+  const c = await gh.write('POST', `/repos/${full(target.repo)}/issues/${number}/comments`, { body: kit.reportComment({ author: src.author, threadUrl: threadUrl(thread), text: src.text, attachments: src.attachments }) });
+  if (!c) return null; // dry run: logged
+  await gh.write('POST', `/repos/${full(target.repo)}/issues/${number}/labels`, { labels: [GITHUB.labels.from] }).catch((e) => console.error('github label', e.message));
+  const entry = store.issues[thread.id] = {
+    repo: target.repo, number, url: issue.html_url, kind: target.kind, owner: src.authorId, author: src.author,
+    state: 'open', lastCommentId: c.id ?? 0, votes: null, createdAt: Date.now(),
+  };
+  delete store.polled[target.repo]; // look at it from now on
+  save();
+  await say(thread, `📌 This is the same bug as ${ref(entry)}: I added your report there. You'll be pinged here when there's an answer.${draft.missing.length ? `\n${missingAsk(draft.missing)}` : ''}`).catch(console.error);
+  return entry;
+}
+
+// The reporter's answer to "is it the same bug?", or the time running out (same = null: filed as new, the
+// possible duplicate named in the issue).
+async function settle(threadId, same, thread = null) {
+  const p = store.pending[threadId];
+  if (!p || busy.has(threadId)) return null;
+  delete store.pending[threadId];
+  save();
+  thread ??= await client.channels.fetch(threadId).catch(() => null);
+  if (!thread) return null;
+  busy.add(threadId);
+  try {
+    return same ? await addToIssue(thread, p.src, p.target, p.draft) : await createIssue(thread, p.src, p.target, p.draft, { related: same === null ? p.draft.match.number : null });
+  } finally {
+    busy.delete(threadId);
   }
 }
 
@@ -99,6 +166,13 @@ export const reportsOf = (userId) => Object.entries(store.issues).filter(([, e])
 
 // A reply from the reporter in their post: queued, and sent as a comment if it adds something.
 export async function onMessage(msg) {
+  const p = enabled && store.pending[msg.channelId];
+  if (p && msg.author.id === p.src.authorId) {
+    const answer = yesNo(msg.content);
+    if (!answer) return;
+    await settle(msg.channelId, answer === 'yes', msg.channel).catch((e) => console.error('github settle', e.message));
+    if (String(msg.content ?? '').trim().split(/\s+/).length <= 3) return; // a bare yes or no adds nothing to the issue
+  }
   const entry = enabled && store.issues[msg.channelId];
   if (!entry || msg.author.id !== entry.owner || msg.id === msg.channelId) return;
   if (kit.isNoise(msg.content, msg.attachments.size)) return;
@@ -215,6 +289,7 @@ async function refreshVotes() {
 let lastPoll = 0;
 let lastVotes = 0;
 async function tick(now = Date.now()) {
+  for (const [threadId, p] of Object.entries(store.pending)) if (now - p.at >= AI.pendingMs) await settle(threadId, null).catch((e) => console.error('github settle', e.message));
   await sendFollowups(now);
   for (const [threadId, entry] of Object.entries(store.issues)) {
     const items = kit.takeAnswers(entry, now);

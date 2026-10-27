@@ -22,7 +22,10 @@ store.days ??= {}; // 'YYYY-MM-DD' → { cost_usd, answers, passed_to_team, mode
 store.handoffs ??= []; // [{ id, url, channel, author, question, reason, at, done }]
 
 let sources = ai.makeSources({ gh: makeGitHub({ token: process.env.GITHUB_TOKEN?.trim() }) });
-let answer = enabled ? ai.makeAnswerer({ client: new Anthropic({ maxRetries: 2, timeout: 60_000 }), sources }) : null;
+const anthropic = KEY ? new Anthropic({ maxRetries: 2, timeout: 60_000 }) : null;
+let answer = enabled ? ai.makeAnswerer({ client: anthropic, sources }) : null;
+export const bugsEnabled = AI.bugs && KEY;
+let reviewer = bugsEnabled ? ai.makeBugReviewer({ client: anthropic }) : null;
 const limits = rateLimiter({ ask: [AI.perMemberHour, 3_600_000], notice: [1, 3_600_000] });
 const seen = new Set(); // messages answered or being answered: one answer each
 
@@ -33,7 +36,8 @@ export const spentToday = (now) => store.days[today(now)]?.cost_usd ?? 0;
 export function record(r, now = Date.now()) {
   const d = (store.days[today(now)] ??= { cost_usd: 0, answers: 0, passed_to_team: 0, models: {} });
   d.cost_usd += r.cost ?? 0;
-  if (r.status === 'answer') d.answers++;
+  if (r.kind === 'bug') d.bug_reviews = (d.bug_reviews ?? 0) + 1;
+  else if (r.status === 'answer') d.answers++;
   else d.passed_to_team++;
   for (const m of r.models ?? []) d.models[m] = (d.models[m] ?? 0) + 1;
   for (const k of Object.keys(store.days).sort().slice(0, -AI.daysKept)) delete store.days[k];
@@ -138,17 +142,18 @@ export const handoffsOut = () => openHandoffs().map((h) => ({
 // Counts and dollars only: no message text, no user ids.
 export function usage(now = Date.now()) {
   const round = (x) => Math.round(x * 1e6) / 1e6;
-  const days = Object.keys(store.days).sort().map((day) => ({ day, ...store.days[day], cost_usd: round(store.days[day].cost_usd) }));
+  const days = Object.keys(store.days).sort().map((day) => ({ day, ...store.days[day], bug_reviews: store.days[day].bug_reviews ?? 0, cost_usd: round(store.days[day].cost_usd) }));
   const month = today(now).slice(0, 7);
-  const total = { month, cost_usd: 0, answers: 0, passed_to_team: 0, models: {} };
+  const total = { month, cost_usd: 0, answers: 0, passed_to_team: 0, bug_reviews: 0, models: {} };
   for (const d of days.filter((x) => x.day.startsWith(month))) {
     total.cost_usd += d.cost_usd;
     total.answers += d.answers;
     total.passed_to_team += d.passed_to_team;
+    total.bug_reviews += d.bug_reviews ?? 0;
     for (const [m, n] of Object.entries(d.models)) total.models[m] = (total.models[m] ?? 0) + n;
   }
   total.cost_usd = round(total.cost_usd);
-  return { daily_budget_usd: AI.dailyUsd, enabled, on: store.on, mode: AI.mode, today: today(now), days, month: total };
+  return { daily_budget_usd: AI.dailyUsd, enabled, on: store.on, mode: AI.mode, bugs: bugsEnabled, today: today(now), days, month: total };
 }
 
 // The route, behind a bearer token (KIRA_USAGE_TOKEN; 1Password "Kira usage token"). No token set, no route. Failed
@@ -175,6 +180,7 @@ const statusText = () => {
   return [
     `AI answers: **${!enabled ? 'unavailable' : store.on ? 'on' : 'off'}** (KIRA_AI=${AI.mode ?? 'unset'}${KEY ? '' : ', no ANTHROPIC_API_KEY'})`,
     `Today: $${spentToday().toFixed(2)} of $${AI.dailyUsd}, ${d.answers} answered, ${d.passed_to_team} passed to the team`,
+    `Bug reports read before filing: ${bugsEnabled ? `on, ${d.bug_reviews ?? 0} today` : 'off (KIRA_AI_BUGS)'}`,
     `Waiting for the team: ${openHandoffs().length} · sources ${sources.ready() ? 'loaded' : 'not loaded yet'}`,
   ].join('\n');
 };
@@ -201,8 +207,36 @@ export const handlers = {
 };
 
 export function setup() {
+  console.log(`kira ai bug reports: ${bugsEnabled ? 'read before filing' : 'off'}`);
   console.log(`kira ai: ${enabled ? `${store.on ? 'on' : 'off (/kira-ai)'}, ${AI.mode}, $${AI.dailyUsd} a day` : `off (${AI.mode ? 'no ANTHROPIC_API_KEY' : 'KIRA_AI is not set'})`}`);
   if (enabled) client.once('clientReady', () => sources.refresh().catch((e) => console.error('kira ai sources', e.message)));
 }
 
-export const _test = { store, limits, seen, set: (o) => { if (o.sources) sources = o.sources; if (o.answer) answer = o.answer; } };
+// A bug report before it's filed (src/features/github.js): the checked draft (ai-kit's checkBugDraft), or null when
+// the model isn't used (KIRA_AI_BUGS unset, /kira-ai off, the day's budget spent, an API error): the report is then
+// filed as it is, as before. `report`: { title, text, files, candidates, url }.
+export async function reviewBug(report) {
+  if (!reviewer || !store.on || spentToday() >= AI.dailyUsd) return null;
+  let r;
+  try {
+    r = await reviewer(report);
+  } catch (e) {
+    console.error('kira ai bug review', e.status ?? '', e.message);
+    return null;
+  }
+  record({ kind: 'bug', cost: r.cost, models: [r.model] });
+  save();
+  const d = r.draft;
+  const outcome = !d ? `filed as it is (${r.reason ?? 'no draft'})` : d.match?.same ? `same as #${d.match.number}` : d.match ? `maybe #${d.match.number}: asking the reporter` : 'new issue';
+  await modlog('🤖 Kira read a bug report', `[The post](${report.url}) · ${outcome}`, 0x5865f2, [
+    ...(d ? [{ name: 'Title', value: clip(d.title, 200) }] : []),
+    ...(d?.missing.length ? [{ name: 'Asked for', value: d.missing.join(', ') }] : []),
+    { name: 'Candidates', value: report.candidates?.length ? report.candidates.map((c) => `#${c.number}`).join(' ') : 'none' },
+    { name: 'Model', value: r.model, inline: true },
+    { name: 'Tokens', value: `in ${r.input} · out ${r.output}`, inline: true },
+    { name: 'Cost', value: `$${r.cost.toFixed(4)} (today $${spentToday().toFixed(2)} of $${AI.dailyUsd})`, inline: true },
+  ]).catch(() => {});
+  return d;
+}
+
+export const _test = { store, limits, seen, set: (o) => { if (o.sources) sources = o.sources; if (o.answer) answer = o.answer; if (o.reviewer !== undefined) reviewer = o.reviewer; } };

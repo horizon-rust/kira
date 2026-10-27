@@ -43,13 +43,17 @@ export function withVotes(body, n) {
 
 // The body of a new issue: the post quoted, who posted it (display name only), the thread, the
 // attachments as links.
-export function issueBody({ text, author, forum, threadUrl, tags = [], attachments = [], votes = null }) {
+// `notes`: the version and OS Kira copied word for word from the report (src/ai-kit.js checkBugDraft), shown above
+// it; `related`: an open issue that may be the same bug (the reporter didn't say).
+export function issueBody({ text, author, forum, threadUrl, tags = [], attachments = [], votes = null, notes = null, related = null }) {
   const lines = [
+    ...(notes?.version || notes?.os ? [`**Version:** ${neutralise(notes.version, 120) || 'not given'} · **OS:** ${neutralise(notes.os, 120) || 'not given'} <sub>(copied from the report)</sub>`, ''] : []),
     quote(neutralise(text, 6000) || '(no text)'),
     '',
     `Reported on Discord by **${neutralise(author, 64).replace(/[*_~|]/g, '') || 'a member'}** in #${forum} · [Discord thread](${threadUrl})`,
   ];
   if (tags.length) lines.push(`Tags: ${tags.map((t) => neutralise(t, 40)).join(', ')}`);
+  if (related) lines.push(`Kira's search found an open issue that might be related: #${Number(related)} (the reporter didn't say).`);
   if (attachments.length) {
     lines.push('', '**Attachments** (Discord links expire after a while; the thread keeps them)');
     for (const a of attachments.slice(0, 10)) lines.push(`- [${neutralise(a.name, 100).replace(/[[\]]/g, '')}](${a.url})`);
@@ -66,6 +70,12 @@ export function followupComment(author, items) {
     return [quote(neutralise(i.text, 3000) || '(no text)'), ...(files.length ? ['', ...files] : [])].join('\n');
   });
   return [`**${neutralise(author, 64).replace(/[*_~|]/g, '')}** added on Discord:`, '', parts.join('\n\n'), '', MARK].join('\n');
+}
+
+// A report added to an existing issue (the same bug): the post quoted, with its attachments.
+export function reportComment({ author, threadUrl, text, attachments = [] }) {
+  const files = attachments.slice(0, 10).map((a) => `- [${neutralise(a.name, 100).replace(/[[\]]/g, '')}](${a.url})`);
+  return [`Also reported on Discord by **${neutralise(author, 64).replace(/[*_~|]/g, '')}**: [Discord thread](${threadUrl})`, '', quote(neutralise(text, 4000) || '(no text)'), ...(files.length ? ['', ...files] : []), '', MARK].join('\n');
 }
 
 export const linkComment = (author, threadUrl) =>

@@ -225,3 +225,20 @@ test('lookups are capped: a model that keeps reading is stopped', async () => {
   assert.deepEqual(r.lookups, ['docs/hosting.md'], 'a doc read twice is sent once');
   assert.equal(client.calls[2].messages.at(-1).content[0].content, 'docs/hosting.md is already above.');
 });
+
+test('a bug report read before filing: one Haiku call, no tools, the report as data, JSON out; a refusal or garbage gives no draft', async () => {
+  const report = { title: 'Water is black', text: 'Horizon 0.2.60 on Linux. Water is black.', files: 0, candidates: [{ number: 40, title: 'Black water', body: 'x', url: 'u' }] };
+  const client = fakeClient({ 'claude-haiku-5-5': [say({ title: 'Water renders black', version: 'Horizon 0.2.60', os: 'Linux', missing: ['steps'], match: 'maybe', match_number: 40 }), { stop_reason: 'refusal', usage, content: [] }, { stop_reason: 'end_turn', usage, content: [{ type: 'text', text: 'nope' }] }] });
+  const review = ai.makeBugReviewer({ client });
+  const r = await review(report);
+  const req = client.calls[0];
+  assert.equal(req.model, 'claude-haiku-5-5');
+  assert.equal(req.tools, undefined);
+  assert.equal(req.system, kit.BUG_RULES);
+  assert.deepEqual(req.output_config.format.schema, kit.BUG_SCHEMA);
+  assert.match(req.messages[0].content, /^<report title="Water is black" attachments="0">/);
+  assert.deepEqual(r.draft, { title: 'Water renders black', notes: { version: 'Horizon 0.2.60', os: 'Linux' }, missing: ['steps'], match: { number: 40, title: 'Black water', url: 'u', same: false } });
+  assert.ok(r.cost > 0);
+  assert.equal((await review(report)).draft, null);
+  assert.match((await review(report)).reason, /unreadable/);
+});
