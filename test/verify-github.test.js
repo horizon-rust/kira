@@ -11,6 +11,8 @@ process.env.GITHUB_TOKEN = 'test-token-not-used';
 const { GUILD_ID, OWNER_ID, CONTRIBUTORS } = await import('../src/config.js');
 CONTRIBUTORS.searchPaceMs = 0; // no wait between searches in tests
 CONTRIBUTORS.protectedMembers.kacp = 'kacpherek'; // found by hand: his Discord names don't look like his login
+CONTRIBUTORS.protectedMembers.rdbtid = 'rdbtCVS';
+const TRUSTED = Object.keys(CONTRIBUTORS.protectedMembers);
 const core = await import('../src/core.js');
 const c = await import('../src/features/contributors.js');
 
@@ -266,4 +268,26 @@ test('sweep: a verified member with a merged PR gets the role; grace over withou
   assert.ok(work.sweepAt > 0);
   const welcomes = sent.contributors.filter((m) => /<@outsider>/.test(m.content)).length;
   assert.equal(welcomes, 1);
+});
+
+test('the trusted reviewers keep the role: not at the end of the 7 days, not when the link changes', async () => {
+  assert.ok(['kacpherek', 'rdbtCVS', 'levzzz5154'].every((l) => Object.values(CONTRIBUTORS.protectedMembers).includes(l)), 'all three are listed by id');
+  const m = member('rdbtid', { roles: ['ROLE'], username: 'rdbt' });
+  work.links.rdbtid = 'rdbtCVS'; // linked, never verified
+  work.grace.rdbtid = { until: Date.now() - 1 };
+  await c.sweep();
+  assert.equal(m.roles.cache.has('ROLE'), true, 'the sweep does not remove it');
+  assert.equal(work.grace.rdbtid, undefined);
+  work.verified.rdbtid = 'rdbtCVS';
+  work.links.rdbtid = 'other-account';
+  await c.relinked('rdbtid');
+  assert.equal(m.roles.cache.has('ROLE'), true, 'a changed link does not remove it');
+  // the clean-up: linked with no merged PR, or unlinked with an unrelated name: a DM and 7 days, never removal
+  work.links.rdbtid = 'rdbtCVS';
+  delete work.grace.rdbtid;
+  const dry = await c.cleanup({ dry: true });
+  assert.ok(dry.graceDm >= 1 && TRUSTED.length >= 3);
+  await c.cleanup({ dry: false });
+  assert.equal(m.roles.cache.has('ROLE'), true);
+  assert.ok(work.grace.rdbtid);
 });
