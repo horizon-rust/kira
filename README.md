@@ -243,10 +243,16 @@ ludovic111/horizon. Members don't pick it any more (no button, not an Onboarding
   the verification goes.
 - **The role clean-up** (one-off, 2026-10-27, `cleanup()` in the feature): holders who are staff keep it; verified with
   a merged pull request keep it; a linked login with a merged pull request that isn't verified gets a DM and 7 days to
-  run `/verify-github` (the daily sweep removes the role after that); everyone else loses it, and Kira posts one line
-  without a ping in `#announcements`. It runs inside Kira (it needs the state), through the admin routes: with
-  `KIRA_ADMIN_TOKEN_SHA256` set, `POST /admin/contributors-cleanup` starts a **dry run** (counts only, nothing changes)
-  and `{"dry": false}` the real one; `GET /admin/contributors-cleanup` returns the last counts (never names or ids).
+  run `/verify-github` (the daily sweep removes the role after that). A holder who never linked GitHub is compared with
+  every author of a merged pull request in Horizon (the search API, split by merge date because it shows 1000 results
+  at most): the Discord username, global name and server nickname, without spaces, dots and underscores, equal to a
+  login or containing it (or the other way round) when both have at least 5 characters. A match gets a DM and the same 7
+  days to `/link-github` and `/verify-github`. Ludovic's trusted reviewers (`CONTRIBUTORS.protectedLogins`) are never
+  removed without that DM and 7 days. Everyone else loses the role, and Kira posts one line without a ping in
+  `#announcements`. It runs inside Kira (it needs the state), through the admin routes: with `KIRA_ADMIN_TOKEN_SHA256`
+  set, `POST /admin/contributors-cleanup` starts a **dry run** (nothing changes) and `{"dry": false}` the real one;
+  `GET /admin/contributors-cleanup` returns the last result: counts, and the `matches` (Discord name and the GitHub
+  login it was matched to) for the staff to read.
 
 ## Hosting (Railway)
 

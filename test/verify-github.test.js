@@ -16,10 +16,10 @@ const c = await import('../src/features/contributors.js');
 // A server with members; a member has roles, can be DMed and has permissions.
 const sent = { contributors: [], announcements: [], dms: [] };
 const members = new Collection();
-const member = (id, { roles = [], staff = false, bot = false, dmOpen = true } = {}) => {
+const member = (id, { roles = [], staff = false, bot = false, dmOpen = true, username = id, globalName = null, nickname = null } = {}) => {
   const set = new Set(roles);
   const m = {
-    id, user: { bot }, permissions: { has: () => staff },
+    id, nickname, displayName: nickname ?? globalName ?? username, user: { bot, username, globalName }, permissions: { has: () => staff },
     roles: { cache: set, add: async (r) => void set.add(r), remove: async (r) => void set.delete(r) },
     send: async (text) => { if (!dmOpen) throw new Error('closed'); sent.dms.push([id, text]); },
   };
@@ -34,10 +34,12 @@ core.client.channels.cache.set('C1', { send: async (m) => sent.contributors.push
 core.client.channels.cache.set('C2', { send: async (m) => sent.announcements.push(m) });
 
 // GitHub: bios, gists and merged counts by login.
-const hub = { bio: {}, merged: {}, down: false };
+const hub = { bio: {}, merged: {}, down: false, authors: [] };
 c._test.setGitHub({
   get: async (path) => {
     if (hub.down) throw new Error('HTTP 500');
+    if (path === '/repos/ludovic111/horizon') return { created_at: new Date().toISOString() };
+    if (decodeURIComponent(path).includes('merged:')) return { total_count: hub.authors.length, items: hub.authors.map((login) => ({ user: { login } })) };
     const user = path.match(/^\/users\/([^/?]+)$/)?.[1];
     if (user) return { login: user, bio: hub.bio[user] ?? '' };
     if (path.includes('/gists')) return [];
@@ -189,6 +191,10 @@ function holders() {
   member('staff', { ...has, staff: true });
   member(OWNER_ID, has);
   member('bot', { ...has, bot: true });
+  hub.authors = ['davethedev', 'Keep-Gh'];
+  member('dave', { ...has, username: 'dave.the_dev' }); // never linked, but this is davethedev's name
+  member('kacp', { ...has, nickname: 'Kacpherek' }); // a trusted reviewer, unlinked and with no merged PR in the list
+  member('levz', has); work.links.levz = 'levzzz5154'; // a trusted reviewer, linked, no merged PR
   member('outsider'); work.links.outsider = 'outsider-gh'; hub.merged['outsider-gh'] = 2; // linked, no role, qualifies
   member('plain');
 }
@@ -197,24 +203,29 @@ test('dry run: counts only, nothing changes, nobody is told', async () => {
   holders();
   const snapshot = JSON.stringify(work);
   const r = await c.cleanup({ dry: true });
-  assert.deepEqual(r, { dry: true, holders: 7, staff: 2, keepVerified: 1, graceDm: 2, graceAlready: 0, removeNoLink: 1, removeNoMergedPr: 1, unknown: 0, linked: 5, linkedQualify: 4, linkedQualifyNeedVerify: 3, dmFailed: 0, removeFailed: 0 });
+  assert.deepEqual(r, { dry: true, holders: 10, staff: 2, keepVerified: 1, graceDm: 3, graceAlready: 0, graceUnlinkedMatch: 2, removeNoLink: 1, removeNoMergedPr: 1, unknown: 0, authors: 5, linked: 6, linkedQualify: 4, linkedQualifyNeedVerify: 3, dmFailed: 0, removeFailed: 0, matches: [{ discord: 'dave.the_dev (dave.the_dev)', github: 'davethedev' }, { discord: 'Kacpherek (kacp)', github: 'kacpherek' }] });
   assert.equal(JSON.stringify(work), snapshot);
-  for (const m of members.values()) assert.equal(m.roles.cache.has('ROLE'), m.user.bot || ['keep', 'nudge', 'closed', 'nopr', 'nolink', 'staff', OWNER_ID].includes(m.id));
+  for (const m of members.values()) assert.equal(m.roles.cache.has('ROLE'), m.user.bot || ['keep', 'nudge', 'closed', 'nopr', 'nolink', 'staff', OWNER_ID, 'dave', 'kacp', 'levz'].includes(m.id));
   assert.equal(sent.dms.length, 0);
   assert.equal(sent.announcements.length, 0);
-  assert.ok(!JSON.stringify(r).match(/gh|\d{5}/), 'no names or ids in the counts');
+  assert.ok(!JSON.stringify({ ...r, matches: 0 }).match(/gh|\d{5}/), 'no names or ids in the counts, only in the matches list');
 });
 
-test('real run: unlinked and no-PR holders lose the role, the others get 7 days and a DM, one announcement', async () => {
+test('real run: unlinked and no-PR holders lose the role, matches and reviewers get 7 days and a DM, one announcement', async () => {
   const r = await c.cleanup({ dry: false });
   assert.equal(r.removeNoLink, 1);
   assert.equal(r.removeNoMergedPr, 1);
-  assert.equal(r.graceDm, 2);
+  assert.equal(r.graceDm, 3);
+  assert.equal(r.graceUnlinkedMatch, 2);
   assert.equal(r.dmFailed, 1);
   const has = (id) => members.get(id).roles.cache.has('ROLE');
-  assert.deepEqual(['keep', 'nudge', 'closed', 'nopr', 'nolink', 'staff', OWNER_ID].map(has), [true, true, true, false, false, true, true]);
-  assert.equal(sent.dms.length, 1);
-  assert.match(sent.dms[0][1], /\/verify-github.*within|before <t:/);
+  assert.deepEqual(['keep', 'nudge', 'closed', 'nopr', 'nolink', 'staff', OWNER_ID, 'dave', 'kacp', 'levz'].map(has), [true, true, true, false, false, true, true, true, true, true]);
+  assert.equal(sent.dms.length, 4);
+  const dm = Object.fromEntries(sent.dms);
+  assert.match(dm.nudge, /Your GitHub account \*\*nudge-gh\*\*.*\/verify-github.*before <t:/s);
+  assert.match(dm.dave, /\/link-github <your GitHub username>.*\/verify-github.*before <t:/s, 'the DM of an unlinked member covers linking');
+  assert.match(dm.levz, /is linked, so you keep the role/);
+  assert.ok(dm.kacp);
   assert.ok(work.grace.nudge.until > Date.now() + 6.9 * 86_400_000);
   assert.equal(work.grace.closed.dmFailed, true);
   assert.equal(sent.announcements.length, 1);
@@ -222,8 +233,8 @@ test('real run: unlinked and no-PR holders lose the role, the others get 7 days 
   assert.deepEqual(sent.announcements[0].allowedMentions, { parse: [] });
   // Run again: nobody is told twice, no second announcement.
   const again = await c.cleanup({ dry: false });
-  assert.equal(again.graceAlready, 2);
-  assert.equal(sent.dms.length, 1);
+  assert.equal(again.graceAlready, 5);
+  assert.equal(sent.dms.length, 4);
   assert.equal(sent.announcements.length, 1);
 });
 
@@ -232,7 +243,7 @@ test('a GitHub error leaves the holder alone', async () => {
   hub.down = true;
   const r = await c.cleanup({ dry: false });
   hub.down = false;
-  assert.equal(r.unknown, 4); // keep, nudge, closed, nopr: all looked up
+  assert.equal(r.unknown, 7); // keep, nudge, closed, nopr, levz: looked up; dave, kacp: no list of authors, so no guess
   assert.equal(members.get('nopr').roles.cache.has('ROLE'), true);
 });
 

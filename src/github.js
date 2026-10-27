@@ -15,12 +15,12 @@ export const _budget = budget; // for tests
 
 export function makeGitHub({ token, dryRun = false, fetchImpl = fetch, log = console.log } = {}) {
   const cache = new Map(); // GET path → { etag, body }
-  async function call(method, path, body) {
+  async function call(method, path, body, { cache: keep = true } = {}) {
     const get = method === 'GET';
     if (get && token && budget.remaining < KEEP && Date.now() < budget.reset) {
       throw new Error(`GitHub GET ${path}: holding back, ${budget.remaining} calls left until ${new Date(budget.reset).toISOString()}`);
     }
-    const cached = get ? cache.get(path) : undefined;
+    const cached = get && keep ? cache.get(path) : undefined;
     const res = await fetchImpl(`https://api.github.com${path}`, {
       method,
       headers: {
@@ -46,7 +46,7 @@ export function makeGitHub({ token, dryRun = false, fetchImpl = fetch, log = con
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`GitHub ${method} ${path}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
     const data = res.status === 204 ? {} : await res.json();
-    const etag = get ? res.headers?.get?.('etag') : null;
+    const etag = get && keep ? res.headers?.get?.('etag') : null;
     if (etag) {
       cache.delete(path); // re-inserted last: the oldest entry goes first when the cache is full
       cache.set(path, { etag, body: data });
@@ -56,7 +56,8 @@ export function makeGitHub({ token, dryRun = false, fetchImpl = fetch, log = con
   }
   return {
     dryRun,
-    get: (path) => call('GET', path),
+    // `cache: false`: big one-off answers (a long search) are not kept for conditional requests.
+    get: (path, opts) => call('GET', path, undefined, opts),
     async write(method, path, body) {
       if (dryRun) {
         log(`github dry-run: ${method} ${path} ${body ? JSON.stringify(body).slice(0, 600) : ''}`);

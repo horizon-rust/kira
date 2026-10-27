@@ -348,6 +348,8 @@ export const CONTRIBUTORS = {
   sweepEveryMs: 24 * 60 * 60_000, // the daily look for members who qualify and were missed
   verifyPerHour: 6,             // /verify-github answers per member an hour (each check reads GitHub)
   searchPaceMs: 2_200,          // between two searches (the search API allows 30 a minute)
+  // Ludovic's trusted reviewers: the clean-up never removes their role without a DM and 7 days (kacpherek, rdbtCVS, levzzz5154).
+  protectedLogins: ['kacpherek', 'rdbtCVS', 'levzzz5154'],
 };
 
 // Moderation knobs.
