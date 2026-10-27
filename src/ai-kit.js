@@ -30,11 +30,6 @@ export function costOf(model, usage = {}) {
   return dollars / 1e6;
 }
 
-// The day's spending, kept in Kira's state as { day: 'YYYY-MM-DD', usd } (UTC days).
-const today = (now) => new Date(now).toISOString().slice(0, 10);
-export const spentToday = (spend, now = Date.now()) => (spend?.day === today(now) ? spend.usd : 0);
-export const addSpend = (spend, usd, now = Date.now()) => ({ day: today(now), usd: spentToday(spend, now) + usd });
-
 // ── What the model reads ─────────────────────────────────────────────────────
 
 // Member text as data: our own tags inside it are defused, so it can't close the block it sits in.
