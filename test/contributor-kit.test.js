@@ -78,3 +78,40 @@ test('grace: 7 days from the first notice, kept if asked again', () => {
   assert.deepEqual(kit.graceOver(work, g.until - 1), []);
   assert.deepEqual(kit.graceOver(work, g.until), ['1']);
 });
+
+test('names against logins: spaces, dots and underscores do not count; contains only from 5 characters; the best match wins', () => {
+  assert.equal(kit.squash(' Dave_The.Dev '), 'davethedev');
+  const logins = ['davethedev', 'gus', 'gustavo-fring', 'bobby', 'kacpherek'];
+  assert.equal(kit.matchLogin(['dave.the_dev'], logins), 'davethedev');
+  assert.equal(kit.matchLogin(['DAVE THE DEV', null], logins), 'davethedev');
+  assert.equal(kit.matchLogin(['xx_gustavo-fring_xx'], logins), 'gustavo-fring', 'contains, both long enough');
+  assert.equal(kit.matchLogin(['gus'], logins), 'gus', 'equal is enough at any length');
+  assert.equal(kit.matchLogin(['gust'], ['gustavo-fring']), null, 'four characters are too short to be contained');
+  assert.equal(kit.matchLogin(['bob'], logins), null);
+  assert.equal(kit.matchLogin(['the bobby show'], logins), 'bobby');
+  assert.equal(kit.matchLogin(['kacpherek', 'Kacp'], ['kacp', 'kacpherek']), 'kacpherek', 'equal beats contains');
+  assert.equal(kit.matchLogin([undefined, '', null], logins), null);
+});
+
+test('merged authors: every page, bots left out, a window of more than 1000 is split by dates', async () => {
+  const calls = [];
+  const day = (q) => decodeURIComponent(q).match(/merged:(\S+?)\.\.(\S+?)(&|$)/).slice(1, 3);
+  const gh = {
+    get: async (path, opts) => {
+      calls.push([path, opts]);
+      if (path.startsWith('/repos/')) return { created_at: '2026-10-01T10:00:00Z' };
+      const [a, b] = day(path.split('?q=')[1]);
+      const page = Number(path.match(/&page=(\d+)/)[1]);
+      if (a === '2026-10-01' && b === '2026-10-04') return { total_count: 1500, items: [] }; // too many: halves
+      if (a === '2026-10-01' && b === '2026-10-02') return { total_count: 250, items: Array.from({ length: page === 3 ? 50 : 100 }, (_, i) => ({ user: { login: `u${page}-${i}` } })) };
+      if (a === '2026-10-03') return { total_count: 2, items: [{ user: { login: 'Ana-GH' } }, { user: { login: 'dependabot[bot]' } }] };
+      return { total_count: 0, items: [] };
+    },
+  };
+  const authors = await kit.mergedAuthors(gh, 'ludovic111', 'horizon', { today: new Date('2026-10-04T12:00:00Z') });
+  assert.equal(authors.size, 251, '250 from the first window and Ana');
+  assert.equal(authors.get('ana-gh'), 'Ana-GH');
+  assert.ok(!authors.has('dependabot[bot]'));
+  assert.ok(calls.filter(([p]) => p.includes('search')).every(([, o]) => o?.cache === false), 'long searches are not cached');
+  assert.equal(calls.filter(([p]) => p.includes('&page=3')).length, 1);
+});

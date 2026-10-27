@@ -81,6 +81,60 @@ export async function mergedCount(gh, owner, repo, login) {
   return Number(found?.total_count) || 0;
 }
 
+// Every distinct GitHub login that has a merged pull request in owner/repo, bots left out. The search API shows only
+// the first 1000 results of a query, so the merge dates are split into windows (halved while one holds more than 1000).
+export async function mergedAuthors(gh, owner, repo, { today = new Date(), sleep = async () => {}, paceMs = 0 } = {}) {
+  const day = (d) => d.toISOString().slice(0, 10);
+  const created = (await gh.get(`/repos/${owner}/${repo}`))?.created_at;
+  const first = new Date(Date.parse(created ?? '') || Date.parse('2026-01-01'));
+  const authors = new Map(); // lowercase login → login as GitHub writes it
+  const search = async (from, to, page) => {
+    const q = encodeURIComponent(`repo:${owner}/${repo} is:pr is:merged merged:${day(from)}..${day(to)}`);
+    await sleep(paceMs);
+    return (await gh.get(`/search/issues?q=${q}&per_page=100&page=${page}`, { cache: false })) ?? { total_count: 0, items: [] };
+  };
+  const window = async (from, to) => {
+    const head = await search(from, to, 1);
+    const total = Number(head.total_count) || 0;
+    if (total > 1000 && to - from >= 86_400_000) {
+      const mid = new Date(from.getTime() + Math.floor((to - from) / 2 / 86_400_000) * 86_400_000);
+      await window(from, mid);
+      return window(new Date(mid.getTime() + 86_400_000), to);
+    }
+    for (let page = 1; (page - 1) * 100 < Math.min(total, 1000); page++) {
+      const found = page === 1 ? head : await search(from, to, page);
+      for (const item of found.items ?? []) {
+        const login = item.user?.login;
+        if (login && LOGIN.test(login) && item.user?.type !== 'Bot') authors.set(login.toLowerCase(), login);
+      }
+    }
+  };
+  await window(first, today);
+  return authors;
+}
+
+// ── Who is who: Discord names against GitHub logins ──────────────────────────
+
+// "Ana_B.", "ana b" → "anab": lowercase, without spaces, dots and underscores.
+export const squash = (name) => String(name ?? '').toLowerCase().replace(/[\s._]+/g, '');
+
+// The GitHub login a member's names point to, or null: a name equal to a login once squashed, else one containing the
+// other when both are at least 5 characters. The best match wins (equal first, then the longest login).
+export function matchLogin(names, logins) {
+  const wanted = names.map(squash).filter(Boolean);
+  let best = null;
+  for (const login of logins) {
+    const l = squash(login);
+    let rank = 0;
+    for (const n of wanted) {
+      if (n === l) rank = Math.max(rank, 2);
+      else if (n.length >= 5 && l.length >= 5 && (n.includes(l) || l.includes(n))) rank = Math.max(rank, 1);
+    }
+    if (rank && (!best || rank > best.rank || (rank === best.rank && l.length > best.length))) best = { login, rank, length: l.length };
+  }
+  return best?.login ?? null;
+}
+
 // ── Grace ────────────────────────────────────────────────────────────────────
 
 export function startGrace(work, id, now, days) {
@@ -93,7 +147,9 @@ export const graceOver = (work, now) => Object.entries(work.grace ?? {}).filter(
 
 export const MEANING = '🛠️ Contributor now means a merged PR in Horizon, verified with `/verify-github`; it opens #contributors.';
 
-export const graceDm = (login, until) => `🛠️ **Contributor** now means a merged pull request in Horizon, verified with \`/verify-github\`. Your GitHub account **${login}** has one, so you keep the role if you run \`/verify-github\` in the server before <t:${Math.floor(until / 1000)}:D> (it gives you a code to put in your GitHub bio, takes a minute). After that date the role is removed.`;
+export const graceDmUnlinked = (until) => `🛠️ **Contributor** now means a merged pull request in Horizon, verified with \`/verify-github\`. If you have one, keep the role: run \`/link-github <your GitHub username>\` in the server, then \`/verify-github\` (it gives you a code to put in your GitHub bio, takes a minute), before <t:${Math.floor(until / 1000)}:D>. After that date the role is removed if no verified GitHub account of yours has a merged pull request.`;
+
+export const graceDm = (login, until, hasPr = true) => `🛠️ **Contributor** now means a merged pull request in Horizon, verified with \`/verify-github\`. ${hasPr ? `Your GitHub account **${login}** has one, so you keep the role` : `Your GitHub account **${login}** is linked, so you keep the role`} if you run \`/verify-github\` in the server before <t:${Math.floor(until / 1000)}:D> (it gives you a code to put in your GitHub bio, takes a minute). After that date the role is removed${hasPr ? '' : ' unless an account of yours has a merged pull request'}.`;
 
 export const codeInstructions = (login, challenge) => [
   `To prove **${login}** is yours, put this code in your GitHub profile bio (or in a public gist named \`${GIST_FILE}\`):`,
