@@ -455,6 +455,17 @@ export const FAQ = [
   ['Why can\'t I post links?', 'Accounts younger than 3 days can\'t post links: that\'s how most scams arrive. It goes away by itself.'],
 ];
 
+// The questions asked most in #horizon-chat and #general (2026-10-27): a second FAQ embed, under the first's 4096 characters.
+export const FAQ_MORE = [
+  ['Do Java mods work? Fabric, Forge, OptiFine?', 'No: Horizon is not the Java game, so Java mods don\'t run in it. Horizon has its own mods: open **Mods** in the launcher, or browse https://playhorizon.dev/mods. Modders can port a Java mod to Horizon (with its author\'s licence or permission).'],
+  ['Shaders?', 'Java shader packs (Iris, OptiFine) don\'t run in Horizon. Horizon\'s own shader support is being built: follow #updates.'],
+  ['Can I play on servers (2b2t, Hypixel…)?', 'Horizon is Minecraft Java Edition 26.3: it joins servers that accept 26.3 clients. Online-mode servers need Microsoft sign-in (see above). A server\'s own rules and anti-cheat still apply: check them before you join with a different client.'],
+  ['Which computers? Linux, Mac, Windows?', 'Windows (x64), macOS (Apple Silicon) and Linux (x86_64), from https://playhorizon.dev. Phones, consoles, Bedrock and app stores: no, Horizon is Java Edition for computers.'],
+  ['It crashes or closes when I click Play', 'Post it in #horizon-bugs with the template (your system, the launcher version, what happened). Kira turns it into a GitHub issue and pings you when it\'s fixed.'],
+  ['Is it legal? Does Mojang approve it?', 'Horizon ships none of Mojang\'s code or files, and you need your own copy of Minecraft: Java Edition. Microsoft sign-in working doesn\'t mean Mojang or Microsoft endorse Horizon: it\'s an unofficial fan project.'],
+  ['Where do I get help?', 'Ask in #horizon-chat, or mention @Kira with your question. For something private, DM Kira: it reaches the mods.'],
+];
+
 export const HORIZON = {
   description: [
     '**Horizon** is Minecraft: Java Edition rewritten from scratch in Rust, with AI agents, and checked against the real game with differential tests so it behaves exactly like vanilla.',

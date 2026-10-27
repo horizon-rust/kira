@@ -7,7 +7,7 @@ import {
   ForumLayoutType, SortOrderType, ChannelFlags,
   AutoModerationRuleTriggerType as T, AutoModerationRuleEventType, AutoModerationActionType as A, AutoModerationRuleKeywordPresetType as Preset,
 } from 'discord.js';
-import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, HORIZON, HOWTO, DEFAULT_CHANNELS } from './config.js';
+import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, FAQ_MORE, HORIZON, HOWTO, DEFAULT_CHANNELS } from './config.js';
 import { screeningBody, screeningUpToDate } from './screening.js';
 import { overwrites as permissionOverwrites } from './permissions.js';
 import { load, save, claim } from './store.js';
@@ -275,7 +275,7 @@ async function posts(guild) {
     components: linkRows([['Discord Community Guidelines', 'https://discord.com/guidelines']]),
   });
   await upsert(guild, 'faq', 'faq', {
-    embeds: [new EmbedBuilder().setColor(COLOR).setTitle('❓ FAQ').setDescription(L(FAQ.map(([q, a]) => `**${q}**\n${a}`).join('\n\n')).slice(0, 4096))],
+    embeds: [FAQ, FAQ_MORE].map((list, i) => new EmbedBuilder().setColor(COLOR).setTitle(i ? '❓ More questions' : '❓ FAQ').setDescription(L(list.map(([q, a]) => `**${q}**\n${a}`).join('\n\n')).slice(0, 4096))),
   });
   for (const group of LAYOUT) for (const spec of group.channels) {
     if (spec.pin) {
@@ -354,7 +354,7 @@ async function onboarding(guild) {
             option('💡', 'Ideas', 'Suggest and vote on what comes next', [], [c.horizonideas]),
             // No role: 🛠️ Contributor is earned with a merged PR and /verify-github (src/features/contributors.js).
             option('🛠️', 'Contributing code', 'Claim an issue, follow what gets merged, connect your AI agent', [], [c.updates, c.horizoninfo, c.contributors]),
-            option('🧩', 'Modding', 'Mods for Horizon, when modding support lands', [r.modder], [c.horizonideas]),
+            option('🧩', 'Modding', 'Make or use mods for Horizon', [r.modder], [c.horizonideas]),
             option('👀', 'Just following', 'News and hanging out', [], [c.general, c.announcements]),
           ],
         },
