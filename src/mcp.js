@@ -167,6 +167,12 @@ export function buildServer(principal, api, limiter) {
     input: { issue: NUMBER, member: z.string().regex(/^\d{17,20}$/) },
   }, async ({ issue, member }) => json({ result: await api.assign(principal, issue, member) }));
 
+  tool('ai_handoffs', {
+    scope: 'maintain', bucket: 'write',
+    description: "Maintainers: the questions Kira's AI passed to the team (it told the member so), oldest first, with the Discord link to answer them. `close`: the message ids you have answered.",
+    input: { close: z.array(z.string().regex(/^\d{17,20}$/)).max(50).default([]) },
+  }, async ({ close }) => json(api.aiHandoffs(close)));
+
   tool('card_close', {
     scope: 'maintain', bucket: 'write',
     description: "Maintainers: mark one of Kira's own cards done (GitHub issues and pull requests close on GitHub).",

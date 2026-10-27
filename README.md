@@ -182,6 +182,7 @@ actions in [`src/features/agents.js`](src/features/agents.js).
 | `card_add` | write | a card of Kira's own (`card#N`) for work that is not a GitHub issue or pull request |
 | `ask` | write | a question in #horizon-chat, as "<name>'s agent", 5 an hour |
 | `task_assign`, `card_close` | maintain | claim for someone else; close Kira's cards; move any card |
+| `ai_handoffs` | maintain | the questions Kira's AI passed to the team (member text marked untrusted); `close` the ones answered |
 
 **Tokens.** `/agent connect scope: days: label:` answers with the token once, ephemerally, with the config
 snippets; Kira keeps only its SHA-256 (`data/agents.json`, mode 600). `kira_<id>_<secret>`: the 8-character
@@ -292,9 +293,10 @@ Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`
   - Every reply goes through `checkReply()` before it is posted. It allows links only to playhorizon.dev, github.com/ludovic111/*, the server invite and microsoft.com/link (the FAQ's sign-in page). It blocks code blocks, commands, dates and promises, strips pings, and caps the length. A reply that fails is replaced by "passed to the team".
   - Replies go out with `allowedMentions: { parse: [] }`.
 - **Limits:** 5 questions per member an hour, and `KIRA_AI_DAILY_USD` dollars a day (default 3, UTC days), counted from each response's `usage`. Over the budget, Kira says she has passed the question to the team.
-- **Logs:** every answer goes in `#mod-log`: the question link, the reply, the model, the tokens, the cost and the day's total. Questions passed to the team are kept in `state.kiraAi.handoffs`.
+- **Logs:** every answer goes in `#mod-log`: the question link, the reply, the model, the tokens, the cost and the day's total. Questions passed to the team are kept in `state.kiraAi.handoffs`; the orchestrator reads them, and closes them once answered, with the MCP tool `ai_handoffs` (maintainers).
+- **Usage:** `GET /ai-usage` with `Authorization: Bearer <KIRA_USAGE_TOKEN>` (1Password `Kira usage token`; no variable, no route) returns the spending per UTC day (`cost_usd`, `answers`, `passed_to_team`, `models`: calls per model), the current month's totals, and `daily_budget_usd`. It has no message text and no user ids. The LifeOS control center reads it.
 - **Off switch:** `/kira-ai off` (Ludovic and the mods) stops it at once, `/kira-ai on` restarts it, and `/kira-ai status` shows the day's use. Removing `KIRA_AI` (or setting it to `0`) turns it off for good.
-- **Variables:** `KIRA_AI`, `ANTHROPIC_API_KEY` (1Password `Horizon Claude API Key ludo47j`, set on Railway with the CLI, never printed), `KIRA_AI_DAILY_USD`.
+- **Variables:** `KIRA_AI`, `ANTHROPIC_API_KEY` (1Password `Horizon Claude API Key ludo47j`, set on Railway with the CLI, never printed), `KIRA_AI_DAILY_USD`, `KIRA_USAGE_TOKEN`.
 - **Cost, measured** on 38 real questions from the server's history: $0.0013 per answer with Haiku and a warm cache. The 21K-token sources block is cached for an hour as the first block of the user turn: a breakpoint on the system prompt was never read back on this account.
 
 ## Hosting (Railway)
