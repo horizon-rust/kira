@@ -2,7 +2,7 @@
 // noise, rate limits, batching, close reasons, release lookup. The Discord side is features/github.js.
 
 export const MINUTE = 60_000;
-const MARK = '<!-- kira -->'; // on every comment Kira writes, so they're never relayed back to Discord
+export const MARK = '<!-- kira -->'; // on every comment Kira writes, so they're never relayed back to Discord
 const VOTES = '<!-- kira:votes -->';
 
 // Discord text made safe to put in an issue: no HTML, no @mentions, no #refs or issue links (no
