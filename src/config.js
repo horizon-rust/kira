@@ -151,12 +151,21 @@ export const LAYOUT = [
   {
     key: 'general', category: '💬 general',
     channels: [
-      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything. English please, so everyone can follow. Horizon talk is welcome here too.' },
+      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything. English please, so everyone can follow; Russian, Portuguese and Spanish have their own channels in 🌍 languages. Horizon talk is welcome here too.' },
       { key: 'introductions', name: 'introductions', type: 'text', pin: 'intro', topic: 'Say hi once, with the template in the pinned message. One introduction per person.' },
       { key: 'offtopic', name: 'off-topic', type: 'text', topic: "Everything that isn't Horizon: other games, music, AI coding, Ludovic's other projects, life. Any language." },
       { key: 'memes', name: 'memes', type: 'text', topic: 'Memes and funny stuff (Minecraft ones welcome). SFW only. No XP here.' },
       { key: 'halloffame', name: 'hall-of-fame', type: 'text', readonly: true, topic: 'Messages that got 5 ⭐. React ⭐ to a message you love to send it here.' },
       { key: 'botcommands', name: 'bot-commands', type: 'text', topic: 'Use Kira here: /rank, /leaderboard, /working, /remind, /userinfo… Level-ups are announced here. No XP here.' },
+    ],
+  },
+  {
+    // Ludovic, 2026-10-28: players asked for their language (Russian speakers say they are ~40 %).
+    key: 'languages', category: '🌍 languages',
+    channels: [
+      { key: 'russian', name: 'русский', type: 'text', topic: 'Общение на русском: Horizon и всё остальное. Баги — в #horizon-bugs, идеи — в #horizon-ideas.' },
+      { key: 'portuguese', name: 'português', type: 'text', topic: 'Conversa em português: o Horizon e tudo mais. Bugs vão em #horizon-bugs e ideias em #horizon-ideas.' },
+      { key: 'spanish', name: 'español', type: 'text', topic: 'Charla en español: Horizon y todo lo demás. Los bugs van en #horizon-bugs y las ideas en #horizon-ideas.' },
     ],
   },
   {
@@ -438,7 +447,7 @@ export const RULES = [
   ['Keep it SFW', 'No NSFW, gore or shock content, anywhere: names, avatars and statuses included.'],
   ['Right channel, right format', 'Every channel says what it\'s for in its description. Bugs and ideas have a template in their 📌 How to post here post, pinned at the top: posts without it are closed after an hour.'],
   ['Contributing', 'Working on an issue? `/claim` it first, so two people don\'t do the same work. Pull requests go to github.com/horizon-rust/horizon.'],
-  ['English in the main channels', 'So everyone can follow. Any language is fine in #off-topic.'],
+  ['English in the main channels', 'So everyone can follow. Any language is fine in #off-topic, and Russian, Portuguese and Spanish have their own channels: #русский, #português, #español.'],
   ['No drama with the mods in public', 'Disagree with a decision? DM Kira: it reaches the mods privately.'],
   ["Discord's rules apply", 'Follow the Discord Terms of Service and Community Guidelines (13+).'],
 ];

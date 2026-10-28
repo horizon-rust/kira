@@ -31,7 +31,7 @@ const READ = {
 test('no text names a channel that is gone (#work-board, #dev-log) or one that does not exist', () => {
   for (const [where, text] of Object.entries(READ)) {
     assert.doesNotMatch(text, /work-board|dev-log|<#undefined>/, where);
-    for (const [, name] of text.matchAll(/(?<![\w/&])#([a-z][a-z0-9-]+)/g)) assert.ok(names.has(name), `${where}: #${name}`);
+    for (const [, name] of text.matchAll(/(?<![\w/&])#(\p{Ll}[\p{Ll}\p{N}-]+)/gu)) assert.ok(names.has(name), `${where}: #${name}`);
   }
 });
 
