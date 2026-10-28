@@ -19,7 +19,8 @@ function fakeGitHub() {
   const releases = [
     { tag_name: 'v0.2.90', name: 'Horizon 0.2.90', body: '### Fixed\n- Decorated pot', published_at: '2026-10-27T18:10:00Z' },
     { tag_name: 'v0.2.89', name: 'Horizon 0.2.89', body: '### Fixed\n- Riptide', published_at: '2026-10-27T17:45:00Z' },
-    { tag_name: 'nightly', name: 'Nightly', body: '- unreleased thing', prerelease: true, published_at: '2026-10-27T18:09:00Z' },
+    { tag_name: 'nightly', name: 'Nightly', body: '### Fixed\n- Nightly fix', prerelease: true, published_at: '2026-10-27T18:09:00Z' },
+    { tag_name: 'v0.3.0-alpha', name: 'Alpha', body: '- unreleased thing', prerelease: true, published_at: '2026-10-27T18:08:00Z' },
     { tag_name: 'v0.2.91', name: 'Draft', body: '- draft thing', draft: true, published_at: null },
     { tag_name: 'launcher@0.2.16', name: 'Launcher 0.2.16', body: '### New\n- Microsoft sign-in', published_at: '2026-10-27T10:00:00Z' },
   ];
@@ -49,8 +50,8 @@ test('sources: docs, README and published releases only; unchanged docs are not 
   assert.equal(await s.refresh(t0), true);
   assert.deepEqual(s.names(), ['docs/hosting.md', 'docs/known-issues.md']);
   const system = s.text();
-  for (const piece of ['Q: Q?\nA: A.', 'Minecraft in Rust.', '- docs/hosting.md: Hosting. Run a server.', 'Shader packs are removed', 'Decorated pot', 'Riptide', 'Launcher: Launcher 0.2.16', 'Microsoft sign-in']) assert.ok(system.includes(piece), piece);
-  assert.ok(!system.includes('unreleased thing') && !system.includes('draft thing'), 'no pre-releases, no drafts');
+  for (const piece of ['Q: Q?\nA: A.', 'Minecraft in Rust.', '- docs/hosting.md: Hosting. Run a server.', 'Shader packs are removed', 'Decorated pot', 'Riptide', 'Launcher: Launcher 0.2.16', 'Microsoft sign-in', 'Nightly fix']) assert.ok(system.includes(piece), piece);
+  assert.ok(!system.includes('unreleased thing') && !system.includes('draft thing'), 'the Nightly, but no other pre-release and no draft');
   assert.ok(system.indexOf('0.2.90') < system.indexOf('0.2.89'), 'newest first');
   assert.equal(s.readDoc('docs/hosting.md'), '# Hosting\n\nRun a server.');
   assert.equal(s.readDoc('README.md'), '# Horizon\nMinecraft in Rust.');

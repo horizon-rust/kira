@@ -21,7 +21,7 @@ const ROUNDS = { fast: 3, careful: 2 };
 const LONG_CONTEXT = { messages: 4, chars: 3_000 }; // a thread this long goes to the careful model
 
 const decode = (blob) => (blob?.content ? Buffer.from(blob.content, blob.encoding === 'base64' ? 'base64' : 'utf8').toString('utf8') : null);
-const isGame = (r) => /^v\d/.test(r.tag_name);
+const isGame = (r) => /^v\d/.test(r.tag_name) || /^nightly(?:-|$)/.test(r.tag_name);
 const isLauncher = (r) => /^launcher[@-]v?\d/.test(r.tag_name);
 
 export function makeSources({ gh, faq = FAQ, log = console.error }) {
@@ -45,7 +45,8 @@ export function makeSources({ gh, faq = FAQ, log = console.error }) {
 
   async function refreshReleases() {
     const list = (await gh.get(`/repos/${REPO}/releases?per_page=100`)) ?? [];
-    const published = list.filter((r) => !r.draft && !r.prerelease && r.published_at)
+    // The Nightly is Horizon's release since 2026-10-28: its pre-releases count, the old Alpha ones don't.
+    const published = list.filter((r) => !r.draft && (!r.prerelease || /^nightly(?:-|$)/.test(r.tag_name)) && r.published_at)
       .sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at));
     const out = [];
     let size = 0;

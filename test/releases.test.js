@@ -305,3 +305,21 @@ test('no repost cascade: a listed stable release stays announced while newer one
     listed.push(list[0]);
   }
 });
+
+test('the Nightly is the game\'s release: posted once, pinging once a day like a release', () => {
+  const at = '2026-10-28T20:40:00Z';
+  const nightly = { id: 900, tag_name: 'nightly', name: 'Nightly 2026-10-28 · 9b772b2', prerelease: true, draft: false,
+    published_at: at, html_url: 'https://github.com/horizon-rust/horizon/releases/tag/nightly',
+    body: 'Nightly 2026-10-28 · 9b772b2: main (8a2a31e).\n\n### Fixed\n- Water flows (#2)\n\n### Not merged yet (1)\n- Pistons (#3) by dev3, at abc1234, picked by kacpherek' };
+  const dated = { ...nightly, id: 899, tag_name: 'nightly-2026-10-27', name: 'Nightly 2026-10-27 · 7954902' };
+  assert.deepEqual(rel.fresh([nightly, dated], []).map((r) => r.tag_name), ['nightly']);
+  const decision = rel.pingDecision('horizon', nightly, { lastAt: Date.parse('2026-10-27T20:30:00Z'), since: [] });
+  assert.equal(decision.ping, true);
+  const later = rel.pingDecision('horizon', { ...nightly, published_at: '2026-10-28T22:00:00Z' }, decision.pings);
+  assert.deepEqual(later.pings.since, ['**Nightly 2026-10-28 · 9b772b2**']);
+  const m = rel.releaseMessage('horizon', nightly, ROLE);
+  assert.match(m.content, /\*\*Nightly 2026-10-28 · 9b772b2\*\* is out/);
+  const fields = Object.fromEntries(m.embeds[0].fields.map((f) => [f.name, f.value]));
+  assert.equal(fields.Fixed, '• Water flows (#2)');
+  assert.match(fields['Picked by the Team, not merged yet'], /Pistons \(#3\)/);
+});

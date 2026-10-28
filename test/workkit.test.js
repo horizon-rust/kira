@@ -76,7 +76,8 @@ test('a column: one line per card with link, people, labels, pull requests; cut 
 test('#releases: only the Horizon game and launcher', () => {
   assert.equal(announced('horizon', { tag_name: 'v2026.10.13.1' }), true);
   assert.equal(announced('horizon', { tag_name: 'launcher-v0.1.4' }), true);
-  assert.equal(announced('horizon', { tag_name: 'nightly' }), false);
+  assert.equal(announced('horizon', { tag_name: 'nightly' }), true); // the game's release since 2026-10-28
+  assert.equal(announced('horizon', { tag_name: 'nightly-2026-10-27' }), false); // posted when it was `nightly`
   assert.equal(announced('lsuite', { tag_name: 'v1.0.0' }), false);
 });
 

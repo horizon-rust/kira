@@ -1,8 +1,9 @@
 // GitHub releases → #releases. The source is the REST API (`GET /repos/<owner>/<repo>/releases`), not
 // the Atom feed: the feed lists bare tags and drafts, so Kira once announced a launcher still being built.
 // Published releases are posted by release id (a draft keeps its id when it is published), each one once.
-// Horizon has one release channel since 2026-10-23 (Ludovic: no more Alpha and Stable): every game release is
-// the release, published many times a day. One post per release; @Releases is pinged at most once a day, by the
+// Horizon has one release channel since 2026-10-23 (Ludovic: no more Alpha and Stable), and since 2026-10-28 it is the
+// Nightly (Ludovic: Horizon ships only the Nightly): each Nightly, the `nightly` pre-release, is the game's release,
+// published a few times a day (its earlier builds are renamed `nightly-<date>`, keeping their id, so never reposted). One post per release; @Releases is pinged at most once a day, by the
 // first game release published after 20:00 UTC, and that post lists what came out since the last ping. Every
 // other post is @silent. This file is pure (no Discord, no network) so it can be tested; bot.js sends.
 import { COLOR, LINKS, GITHUB } from './config.js';
@@ -32,13 +33,16 @@ export function fresh(list, announced = [], since = SINCE, earlier = [], repo = 
 // Records a posted release; returns the new list of ids.
 export const remember = (announced = [], id) => [id, ...announced.filter((x) => x !== id)].slice(0, KEEP);
 
-// Horizon's tags: `v0.2.5` (before 0.2: `v2026.10.13.1`) is the game, `launcher@0.2.5` (before: `launcher-v0.1.2`) the launcher.
+// Horizon's tags: `nightly` (and before 2026-10-28 `v0.2.5`, before 0.2 `v2026.10.13.1`) is the game,
+// `launcher@0.2.5` (before: `launcher-v0.1.2`) the launcher. The last week's `nightly-<date>` were posted as `nightly`.
 export function kind(repo, tag) {
   if (repo !== 'horizon') return 'generic';
   if (/^launcher(?:@|-v)/.test(tag)) return 'launcher';
-  if (/^v\d/.test(tag)) return 'game';
+  if (tag === NIGHTLY || /^v\d/.test(tag)) return 'game';
   return 'generic';
 }
+
+export const NIGHTLY = 'nightly';
 
 // Whether #releases announces it: Horizon's game and launcher releases only.
 export const announced = (repo, release) => kind(repo, release.tag_name) !== 'generic';
@@ -108,6 +112,7 @@ export function pingWindow(t) {
 
 // A game release in the ping's list: "**0.2.13** Beds, mobs and 3 more fixes".
 export function sinceLine(release) {
+  if (release.tag_name === NIGHTLY) return clipTo(`**${(release.name || NIGHTLY).trim()}**`, 110);
   const version = release.tag_name.replace(/^v/, '');
   const name = (release.name || '').trim();
   const line = name.includes(': ') ? name.slice(name.indexOf(': ') + 2) : '';
@@ -118,7 +123,8 @@ export function sinceLine(release) {
 // { lastAt, since }). Only Horizon's game releases count; pre-releases, launcher and other releases never ping
 // and leave the state as it is. `at`: when the release was published, so a catch-up after a restart decides alike.
 export function pingDecision(repo, release, pings = {}, at = Date.parse(release.published_at) || Date.now()) {
-  if (repo !== 'horizon' || kind(repo, release.tag_name) !== 'game' || release.prerelease) return { ping: false, since: [], pings };
+  const game = kind(repo, release.tag_name) === 'game' && (!release.prerelease || release.tag_name === NIGHTLY);
+  if (repo !== 'horizon' || !game) return { ping: false, since: [], pings };
   const since = pings.since ?? [];
   if (pings.lastAt == null || pings.lastAt < pingWindow(at)) return { ping: true, since, pings: { lastAt: at, since: [] } };
   return { ping: false, since: [], pings: { lastAt: pings.lastAt, since: [...since, sinceLine(release)].slice(-MAX_SINCE) } };
@@ -141,6 +147,8 @@ export function releaseMessage(repo, release, role, since = []) {
       const fields = [];
       if (added.length) fields.push({ name: 'New', value: bulletField(added) });
       if (fixed.length) fields.push({ name: 'Fixed', value: bulletField(fixed) });
+      const picked = bullets(release.body, 'Not merged yet');
+      if (picked.length) fields.push({ name: 'Picked by the Team, not merged yet', value: bulletField(picked, 700) });
       if (since.length) fields.push({ name: 'Out since the last ping', value: bulletField(since, 700) });
       const summary = fields.length ? '' : firstLines(release.body, 1200) + '\n\n';
       fields.push({ name: 'Links', value: `[Release notes](${release.html_url}) · [playhorizon.dev](${LINKS.horizonSite}) · [Download the launcher](${LINKS.horizonLauncher})` });
