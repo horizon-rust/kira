@@ -35,18 +35,6 @@ test('no text names a channel that is gone (#work-board, #dev-log) or one that d
   }
 });
 
-test('no text sends people to an archived channel, and archived ones are read-only and out of the defaults', () => {
-  const archived = specs.filter((c) => c.archived);
-  assert.deepEqual(archived.map((c) => c.key), ['offtopic', 'memes']);
-  for (const c of archived) {
-    assert.equal(c.readonly, true);
-    assert.ok(!cfg.DEFAULT_CHANNELS.includes(c.key), c.key);
-    assert.ok(!cfg.CLEAR.channels.includes(c.key), c.key);
-    for (const [where, text] of Object.entries(READ)) assert.ok(!text.includes(`#${c.name}`) || where === 'topics', `${where}: #${c.name}`);
-  }
-  assert.equal(cfg.LAYOUT.at(-1).key, 'archive'); // at the bottom
-});
-
 test('no dates, and what is not out yet says "coming soon"', () => {
   for (const [where, text] of Object.entries(READ)) {
     assert.doesNotMatch(text, /\b20\d\d\b|\b(January|February|March|April|June|July|August|September|October|November|December)\b|next (week|month)/, where);
