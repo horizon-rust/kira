@@ -5,10 +5,10 @@ import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Routes,
   GuildVerificationLevel, GuildExplicitContentFilter, GuildDefaultMessageNotifications,
   ForumLayoutType, SortOrderType, ChannelFlags,
-  AutoModerationRuleTriggerType as T, AutoModerationRuleEventType, AutoModerationActionType as A, AutoModerationRuleKeywordPresetType as Preset,
 } from 'discord.js';
 import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, FAQ_MORE, HORIZON, HOWTO, DEFAULT_CHANNELS } from './config.js';
 import { screeningBody, screeningUpToDate } from './screening.js';
+import { applyAutomod } from './automod.js';
 import { overwrites as permissionOverwrites } from './permissions.js';
 import { load, save, claim } from './store.js';
 import { unique, isCopy, ensureThread } from './adopt.js';
@@ -302,37 +302,7 @@ async function posts(guild) {
   save();
 }
 
-async function automod(guild) {
-  const existing = await guild.autoModerationRules.fetch();
-  const alert = { type: A.SendAlertMessage, metadata: { channel: state.channels.modlog } };
-  const block = (msg) => ({ type: A.BlockMessage, metadata: { customMessage: msg } });
-  const exempt = { exemptRoles: [state.roles.mod, state.roles.team].filter(Boolean) };
-  const rules = [
-    { name: 'Kira · spam', triggerType: T.Spam, actions: [block('Kira blocked this as spam.'), alert], ...exempt },
-    { name: 'Kira · slurs and sexual content', triggerType: T.KeywordPreset, triggerMetadata: { presets: [Preset.Slurs, Preset.SexualContent] }, actions: [block('That word is not allowed here (rule 1 and 5).'), alert], ...exempt },
-    { name: 'Kira · mention spam', triggerType: T.MentionSpam, triggerMetadata: { mentionTotalLimit: 5, mentionRaidProtectionEnabled: true }, actions: [block('Too many mentions.'), alert, { type: A.Timeout, metadata: { durationSeconds: 600 } }], ...exempt },
-    {
-      name: 'Kira · invites and scams', triggerType: T.Keyword,
-      triggerMetadata: {
-        regexPatterns: [
-          'discord(?:app)?\\.(?:gg|com/invite|io|me|li)/\\S+',
-          '(?i)free\\s*nitro', '(?i)nitro\\s*(?:for\\s*)?free', '(?i)steam\\s*gift',
-          'd[il1][sz]c[o0]r[dcl][a-z]*\\.(?:gift|ru|xyz|top|click|link)',
-        ],
-      },
-      actions: [block('Server invites and gift links are not allowed (rule 2 and 4).'), alert], ...exempt,
-    },
-    { name: 'Kira · bad names', triggerType: T.MemberProfile, triggerMetadata: { keywordFilter: ['*nigg*', '*fagg*', '*hitler*', '*nazi*', '*discord.gg*'] }, actions: [{ type: A.BlockMemberInteraction }], ...exempt },
-  ];
-  for (const r of rules) {
-    const data = { ...r, eventType: r.triggerType === T.MemberProfile ? AutoModerationRuleEventType.MemberUpdate : AutoModerationRuleEventType.MessageSend, enabled: true };
-    const found = existing.find((e) => e.name === r.name);
-    try {
-      if (found) await found.edit(data);
-      else { await guild.autoModerationRules.create(data); log('automod rule', r.name); }
-    } catch (e) { log('automod', r.name, e.message); }
-  }
-}
+const automod = (guild) => applyAutomod(guild, { modlog: state.channels.modlog, modchat: state.channels.modchat, mod: state.roles.mod, team: state.roles.team }, log);
 
 async function onboarding(guild) {
   let n = 0;

@@ -90,7 +90,7 @@ export const ROLES = [
 // (renamed by nobody) until it can go without taking something away from someone.
 export const RETIRED_ROLES = ['videos', 'beatmaker', 'rapper', 'singer', 'youtuber', 'editor', 'designer'];
 
-// Channel types: text, voice, forum, announcement.
+// Channel types: text, voice, forum, announcement. slowmode: seconds between two messages of a member (setup sets it).
 // readonly: everyone reads, only staff and Kira post. writers: everyone reads, only staff, Kira and these roles post. staff: only mods see it. posts: 'staff' → only staff open forum posts.
 // locked: a voice channel nobody joins by themselves (Ludovic or a mod moves people in). lobby: join it to get your own room.
 // Forums: `guide` is the post guidelines Discord shows above the forum (with the template) and the text of the
@@ -102,6 +102,18 @@ export const RETIRED_ROLES = ['videos', 'beatmaker', 'rapper', 'singer', 'youtub
 // `was` on a category: the name it had, so setup moves it instead of making a new one.
 
 const LINK_OR_FILE = 'a file or a link';
+
+// Regular chat clears (Ludovic, 2026-10-28: "fais un clear du chat souvent"): #horizon-chat and #general get thousands
+// of messages a day, so every 6 hours Kira deletes their messages older than a day (src/features/chatclear.js). Pinned
+// messages and messages that started a thread stay; nothing else is touched. /clear-chat (mods) runs it now.
+export const CLEAR = {
+  channels: ['horizonchat', 'general'], // LAYOUT keys
+  olderThanHours: 24,
+  everyMs: 6 * 60 * 60_000,
+  checkEveryMs: 10 * 60_000, // how often Kira looks whether a clear is due (the last one is state.chatClear.lastRun)
+  singlePaceMs: 300,         // between two single deletes (messages over 14 days old can't be bulk-deleted)
+};
+const CLEARED = ' Messages older than a day are cleared every 6 hours; pins stay.';
 
 export const LAYOUT = [
   {
@@ -119,7 +131,7 @@ export const LAYOUT = [
     key: 'horizon', was: 'mine', category: '🌅 horizon',
     channels: [
       { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the disclaimer.' },
-      { key: 'horizonchat', name: 'horizon-chat', type: 'text', topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' },
+      { key: 'horizonchat', name: 'horizon-chat', type: 'text', slowmode: 10, topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' + CLEARED },
       // writers: everyone reads; only the mods and these roles write, open threads and write in them (src/permissions.js).
       { key: 'contributors', name: 'contributors', type: 'text', writers: ['contributor', 'team'], topic: "Where Horizon's contributors talk. Everyone can read. To write: have a merged PR, then `/link-github` + `/verify-github`." },
       {
@@ -158,7 +170,7 @@ export const LAYOUT = [
   {
     key: 'general', category: '💬 general',
     channels: [
-      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything. English please, so everyone can follow; Russian, Portuguese and Spanish have their own channels in 🌍 languages. Horizon talk is welcome here too.' },
+      { key: 'general', name: 'general', type: 'text', slowmode: 10, topic: 'Talk about anything. English please, so everyone can follow; Russian, Portuguese and Spanish have their own channels in 🌍 languages. Horizon talk is welcome here too.' + CLEARED },
       { key: 'introductions', name: 'introductions', type: 'text', pin: 'intro', topic: 'Say hi once, with the template in the pinned message. One introduction per person.' },
       { key: 'offtopic', name: 'off-topic', type: 'text', topic: "Everything that isn't Horizon: other games, music, AI coding, Ludovic's other projects, life. Any language." },
       { key: 'memes', name: 'memes', type: 'text', topic: 'Memes and funny stuff (Minecraft ones welcome). SFW only. No XP here.' },
@@ -405,9 +417,34 @@ export const MOD = {
   // Raids are bursts of brand-new accounts, not a busy evening: 15 accounts younger than 7 days
   // joining within 2 minutes → raid mode (verified phone needed, DMs between members paused) for an hour.
   raidYoungDays: 7, raidJoins: 15, raidWindowMs: 120_000, raidHoldMs: 60 * 60_000,
-  // No slowmode anywhere (Ludovic, 2026-10-14): channels have none and none is added when busy.
-  // [[messages per minute, seconds of slowmode], …] turns the automatic one back on.
+  // Links: more than 5 in one message is removed; 5 messages with links in 30 s is a flood (deleted, spam timeout).
+  linkMax: 5, linkFloodMessages: 5, linkWindowMs: 30_000,
+  // Slowmode: 10 s on #horizon-chat and #general (Ludovic, 2026-10-28; `slowmode` in LAYOUT), none elsewhere, and
+  // none added when busy. [[messages per minute, seconds of slowmode], …] turns the automatic one on.
   autoSlowmode: [],
+  // Piracy (rule 3): a Discord AutoMod rule blocks these and alerts #mod-chat; mods and the Horizon Team are exempt
+  // (src/automod.js). `keywords` use Discord's wildcards (`word`: the whole word, `word*`: a word that starts with it,
+  // `*word*`: anywhere). `patterns` are the Rust regexes Discord runs (10 at most, no lookaround), written so JavaScript
+  // reads them the same: test/automod.test.js checks what they catch and what they must not. "crack" and "cracked"
+  // alone are not here: they hit crackers and cracked deepslate.
+  piracy: {
+    keywords: ['tlauncher*', 't-launcher*', 'sklauncher*', 'sk-launcher*', 'tl legacy', 'ultimmc', 'pollymc', 'warez', 'тлаунчер*', 'пиратк*'],
+    patterns: [
+      // cracked minecraft, crack for mc, cracked version / launcher / account
+      '(?i)\\bcrack(?:ed|ing|s)?\\s+(?:for\\s+|of\\s+|an?\\s+)?(?:minecraft|mc|horizon|launchers?|java|versions?|accounts?|clients?|copy)\\b',
+      // minecraft cracked (at the end, or followed by version, launcher…)
+      '(?i)\\b(?:minecraft|mc)\\s+(?:java\\s+)?crack(?:ed)?\\s*(?:$|[?!.,]|versions?\\b|launchers?\\b|download|accounts?\\b|clients?\\b|free\\b)',
+      // offline mode + a way around buying the game
+      '(?i)\\boffline[\\s-]*mode\\b.{0,40}\\b(?:bypass|crack|without\\s+(?:buying|paying|owning|an?\\s+account|an?\\s+licen[cs]e)|no\\s+(?:account|licen[cs]e)|for\\s+free)',
+      // bypass the licence / premium / authentication / offline mode
+      '(?i)\\b(?:bypass(?:ing)?|get\\s+around)\\b.{0,30}\\b(?:licen[cs]e|premium|ownership|account\\s+check|drm|authenticat|online[\\s-]*mode|offline[\\s-]*mode)',
+      // shared or generated accounts
+      '(?i)\\bfree\\s+(?:minecraft|mc|premium|java)\\s+accounts?\\b|\\b(?:minecraft|mc)\\s+(?:alts?|accounts?)\\s+gen(?:erator)?\\b',
+      // Spanish and Portuguese: minecraft pirata, versión crackeada, no premium
+      '(?i)\\b(?:minecraft|mc|launcher)\\s+(?:pirata|pirateado|crackeado|non?[\\s-]*premium)\\b|\\b(?:versi[oó]n|vers[aã]o|launcher)\\s+(?:pirata|crackead[oa])\\b',
+    ],
+    message: 'Piracy is not allowed here (rule 3): Horizon needs your own copy of Minecraft: Java Edition.',
+  },
   // Greetings and join logs are grouped when many people arrive at once.
   joinBatchMs: 60_000,
   // Forum posts that don't follow the template are closed after this long.

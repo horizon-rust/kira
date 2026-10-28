@@ -5,9 +5,10 @@ import {
   MessageFlags, GuildVerificationLevel, EmbedBuilder,
 } from 'discord.js';
 import { GUILD_ID, MOD, LAYOUT } from '../config.js';
-import { client, state, save, channel, isStaff, clip, ago, modlog, parseDuration, human } from '../core.js';
+import { client, state, save, channel, isStaff, clip, ago, modlog, parseDuration, human, quietDeletes } from '../core.js';
 
 const URL_RE = /(https?:\/\/|www\.|discord\.gg\/)\S+/i;
+const URLS = new RegExp(URL_RE.source, 'gi');
 const recent = new Map(); // userId → [{ id, channelId, at, content }]
 const youngJoins = [];    // timestamps of recent joins by young accounts, for raid detection
 const traffic = new Map(); // channelId → messages in the current minute
@@ -214,6 +215,9 @@ async function moderate(msg) {
   if (URL_RE.test(msg.content) && Date.now() - msg.author.createdTimestamp < MOD.newAccountDays * 86_400_000) {
     return remove(msg, `accounts younger than ${MOD.newAccountDays} days can't post links yet (rule 4).`, '🔗 Link from a new account');
   }
+  // A wall of links.
+  const links = (msg.content.match(URLS) ?? []).length;
+  if (links > MOD.linkMax) return remove(msg, `${MOD.linkMax} links per message at most (rule 2).`, '🔗 Too many links');
   // Shouting: a long message almost all in capitals.
   const letters = msg.content.replace(/[^a-zA-Z]/g, '');
   if (letters.length >= MOD.capsMin && letters.replace(/[^A-Z]/g, '').length / letters.length >= MOD.capsRatio) {
@@ -223,18 +227,19 @@ async function moderate(msg) {
   const emojis = (msg.content.match(/<a?:\w+:\d+>|\p{Extended_Pictographic}/gu) ?? []).length;
   if (emojis > MOD.emojiMax) return remove(msg, `too many emojis in one message (${MOD.emojiMax} at most).`);
 
-  // Floods and copy-pasted messages.
+  // Floods, copy-pasted messages and link floods.
   const now = Date.now();
-  const list = (recent.get(msg.author.id) ?? []).filter((x) => now - x.at < Math.max(MOD.floodWindowMs, MOD.repeatWindowMs));
-  list.push({ id: msg.id, channelId: msg.channel.id, at: now, content: msg.content.trim().toLowerCase() });
+  const list = (recent.get(msg.author.id) ?? []).filter((x) => now - x.at < Math.max(MOD.floodWindowMs, MOD.repeatWindowMs, MOD.linkWindowMs));
+  list.push({ id: msg.id, channelId: msg.channel.id, at: now, content: msg.content.trim().toLowerCase(), links });
   recent.set(msg.author.id, list);
   const burst = list.filter((x) => now - x.at < MOD.floodWindowMs);
   const same = msg.content.trim() ? list.filter((x) => x.content === list.at(-1).content) : [];
-  const why = burst.length >= MOD.floodMessages ? `${burst.length} messages in ${MOD.floodWindowMs / 1000} s`
-    : same.length >= MOD.repeatCount ? `the same message ${same.length} times` : null;
+  const linked = list.filter((x) => x.links && now - x.at < MOD.linkWindowMs);
+  const [why, offending] = burst.length >= MOD.floodMessages ? [`${burst.length} messages in ${MOD.floodWindowMs / 1000} s`, burst]
+    : same.length >= MOD.repeatCount ? [`the same message ${same.length} times`, same]
+    : linked.length >= MOD.linkFloodMessages ? [`${linked.length} messages with links in ${MOD.linkWindowMs / 1000} s`, linked] : [];
   if (!why) return false;
   recent.delete(msg.author.id);
-  const offending = burst.length >= MOD.floodMessages ? burst : same;
   for (const x of offending) await client.channels.cache.get(x.channelId)?.messages.delete(x.id).catch(() => {});
   const { ms, strike } = await spamTimeout(m, `spam (${why})`);
   await msg.channel.send({ content: `<@${msg.author.id}> timed out for ${human(ms)}: spam (${why}).`, allowedMentions: { parse: [] } });
@@ -322,6 +327,7 @@ export function setup() {
     if (before.nickname !== after.nickname && !before.partial) modlog('🏷️ Nickname', `<@${after.id}>: ${before.nickname ?? '(none)'} → ${after.nickname ?? '(none)'}`);
   });
   client.on('messageDelete', async (msg) => {
+    if (quietDeletes.delete(msg.id)) return; // a chat clear
     if (msg.guildId !== GUILD_ID || msg.author?.bot || msg.partial || [state.channels.modlog, state.channels.reports].includes(msg.channelId)) return;
     const files = msg.attachments.map((a) => a.name).join(', ');
     await modlog('🗑️ Message deleted', `<@${msg.author.id}> in <#${msg.channelId}>:\n${clip(msg.content)}${files ? `\n📎 ${files}` : ''}`);
