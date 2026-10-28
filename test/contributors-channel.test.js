@@ -54,7 +54,7 @@ test('the other kinds of channel keep their overwrites', () => {
   const chat = specs.find((c) => c.key === 'horizonchat');
   assert.equal(overwrites(ids, chat, false).length, 1, 'a normal channel: only Kira');
   const rules = specs.find((c) => c.key === 'rules');
-  assert.deepEqual(overwrites(ids, rules, false).slice(1).map((o) => o.id), ['EVERYONE', 'MOD']);
+  assert.deepEqual(overwrites(ids, rules, false).slice(1).map((o) => o.id), ['EVERYONE', 'MOD', 'TEAM']);
   const staff = specs.find((c) => c.key === 'modlog');
   assert.deepEqual(overwrites(ids, staff, true).slice(1).map((o) => o.id), ['EVERYONE', 'MOD', 'TEAM']);
   assert.deepEqual(overwrites(ids, specs.find((c) => c.key === 'ludovic'), false).slice(1).map((o) => o.id), ['EVERYONE', 'OWNER']);
@@ -90,4 +90,18 @@ test('the Horizon Team moderates: the mods\' permissions, the staff channels, an
   assert.equal(can(['TEAM'], P.ViewChannel, ow), true);
   assert.equal(can(['MOD'], P.ViewChannel, ow), true);
   assert.equal(can([], P.ViewChannel, ow), false);
+});
+
+test('read-only channels: everyone reads, the mods and the 🌌 Horizon Team post (the Team has the mods\' permissions)', () => {
+  const readonly = specs.filter((c) => c.readonly);
+  assert.ok(readonly.some((c) => c.key === 'rules') && readonly.some((c) => c.key === 'releases'));
+  for (const spec of readonly) {
+    const ow = overwrites(ids, spec, false);
+    assert.equal(can([], P.SendMessages, ow), false, spec.key);
+    assert.equal(can([], P.ViewChannel, ow), true, spec.key);
+    assert.equal(can(['MOD'], P.SendMessages, ow), true, spec.key);
+    assert.equal(can(['TEAM'], P.SendMessages, ow), true, spec.key);
+  }
+  // Without a Team role yet (a first setup), the overwrite is the mods' alone.
+  assert.equal(overwrites({ ...ids, roles: {} }, readonly[0], false).filter((o) => o.allow?.length === 1).length, 1);
 });

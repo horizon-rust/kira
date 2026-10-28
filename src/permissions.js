@@ -11,9 +11,10 @@ export function overwrites(ids, spec, staffCategory) {
     // The staff channels: the mods and the Horizon Team (who moderate too).
     ow.push(role(everyone, { deny: [P.ViewChannel] }), ...[mod, roles.team].filter(Boolean).map((id) => role(id, { allow: [P.ViewChannel, P.SendMessages] })));
   } else if (spec.readonly) {
+    // The mods and the Horizon Team (who have the mods' permissions, Ludovic 2026-10-28) post; everyone else reads.
     ow.push(
       role(everyone, { deny: [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads] }),
-      role(mod, { allow: [P.SendMessages] }),
+      ...[mod, roles.team].filter(Boolean).map((id) => role(id, { allow: [P.SendMessages] })),
     );
   } else if (spec.members) {
     // Private to these roles: nobody else sees it.
@@ -28,7 +29,7 @@ export function overwrites(ids, spec, staffCategory) {
       ...[mod, ...spec.writers.map((key) => roles[key])].filter(Boolean).map((id) => role(id, { allow: [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads] })),
     );
   } else if (spec.posts === 'staff') {
-    ow.push(role(everyone, { deny: [P.SendMessages], allow: [P.SendMessagesInThreads] }), role(mod, { allow: [P.SendMessages] }));
+    ow.push(role(everyone, { deny: [P.SendMessages], allow: [P.SendMessagesInThreads] }), ...[mod, roles.team].filter(Boolean).map((id) => role(id, { allow: [P.SendMessages] })));
   } else if (spec.locked) {
     // Everyone sees it, nobody joins by themselves: Ludovic (and mods) move people in.
     ow.push(role(everyone, { deny: [P.Connect] }), { id: owner, type: OverwriteType.Member, allow: [P.Connect, P.Speak, P.MoveMembers] });
