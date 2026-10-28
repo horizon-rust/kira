@@ -34,6 +34,9 @@ projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no pai
   by [`src/screening.js`](src/screening.js) and sent by setup, which only ever turns it on), Discord AutoMod rules,
   a permanent invite.
 
+Only the AutoMod rules or the slowmode changed? `node scripts/apply-moderation.js [--dry-run]` (with `DISCORD_TOKEN`)
+applies just those, finding channels and roles by name.
+
 Run it again after changing `config.js`: it updates what it made (IDs in `data/state.json`), moves
 channels, and deletes the empty categories it made earlier. If the IDs are ever lost it finds its
 channels, roles, messages, guides and posts again by name instead of making new ones, and it stops if it finds
@@ -44,7 +47,8 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 
 | | |
 | --- | --- |
-| Moderation | Floods / copy-paste → messages deleted, timeout of 10 min, then 1 h, then 1 day the same day. All-caps, emoji walls and executables removed. Accounts under 3 days can't post links. Raids (15 accounts younger than 7 days in 2 minutes) → raid mode for an hour: verified phone, DMs between members paused. No slowmode (none set, none automatic; `MOD.autoSlowmode` turns the automatic one back on). Verification level high (10 minutes on the server before talking); @everyone can't ping everyone, open threads or use outside apps. `/warn` (3 in 30 days → 1 h timeout), `/warnings`, `/clearwarnings`, `/timeout`, `/untimeout`, `/kick`, `/ban`, `/unban`, `/purge`, `/slowmode`, `/lock`, `/unlock`, `/raidmode` |
+| Moderation | Floods / copy-paste / link floods (5 messages with links in 30 s) → messages deleted, timeout of 10 min, then 1 h, then 1 day the same day. All-caps, emoji walls, more than 5 links in a message and executables removed. Accounts under 3 days can't post links. Discord AutoMod (`src/automod.js`, applied by setup): spam, slurs, mention spam, invites and scams, bad names, and piracy (rule 3: TLauncher, SKlauncher, cracked Minecraft, offline mode + bypass, warez… `MOD.piracy` in `config.js`; blocked, alert in #mod-chat; mods and the Horizon Team exempt). Raids (15 accounts younger than 7 days in 2 minutes) → raid mode for an hour: verified phone, DMs between members paused. 10 s slowmode on #horizon-chat and #general (`slowmode` in `LAYOUT`), none elsewhere and none automatic (`MOD.autoSlowmode` turns that on). Verification level high (10 minutes on the server before talking); @everyone can't ping everyone, open threads or use outside apps. `/warn` (3 in 30 days → 1 h timeout), `/warnings`, `/clearwarnings`, `/timeout`, `/untimeout`, `/kick`, `/ban`, `/unban`, `/purge`, `/clear-chat`, `/slowmode`, `/lock`, `/unlock`, `/raidmode` |
+| Chat clears | Every 6 hours the messages older than 24 h in #horizon-chat and #general are deleted (bulk deletes under 14 days, one by one beyond, paced); pins and messages that started a thread stay, nothing else is touched. One line in `#mod-log` per run. `/clear-chat [older_than:<hours>]` (Manage Messages) does it now in the current chat channel. `CLEAR` in `config.js`; [`src/features/chatclear.js`](src/features/chatclear.js) |
 | Logs (`#mod-log`) | Joins (account age, **which invite**) and leaves grouped every minute, deleted and edited messages, nicknames, bans, timeouts, AutoMod |
 | Reports | `/report-member` and "Report to mods" (right-click a message → Apps) → `#reports` (`/report` is the bug form: below) |
 | Mod-mail | DM kira → a thread in `#mod-mail`; mods answer in the thread (`//` for notes, `//close`) |

@@ -25,6 +25,9 @@ export const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User, Partials.GuildMember],
 });
 
+// Message ids Kira deletes on purpose in bulk (src/features/chatclear.js): no "Message deleted" line each in #mod-log.
+export const quietDeletes = new Set();
+
 export const channel = (key) => client.channels.cache.get(state.channels[key]);
 export const isStaff = (member) => !!member?.permissions?.has(P.ManageMessages);
 export const clip = (s, n = 1000) => ((s ?? '').length > n ? s.slice(0, n - 1) + '…' : s) || '*(no text)*';
