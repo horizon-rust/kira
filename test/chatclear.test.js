@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sortForClear, oldestId, batches, clearAllowed, clearLine, BULK_MAX_AGE_MS } from '../src/clear-kit.js';
-import { CLEAR, LAYOUT } from '../src/config.js';
+import { CLEAR, LAYOUT, MOD } from '../src/config.js';
 
 const H = 3_600_000, D = 24 * H;
 const now = Date.parse('2026-10-28T12:00:00Z');
@@ -46,7 +46,7 @@ test('chat clear: /clear-chat works in chat channels only', () => {
   assert.equal(clearAllowed({ isText: false, spec: spec('general') }), false); // threads, forums, voice
 });
 
-test('chat clear: the schedule is #horizon-chat and #general, a day, every 6 hours, and they have 10 s of slowmode', () => {
+test('chat clear: the schedule is #horizon-chat and #general, a day, every 6 hours, and no channel has slowmode', () => {
   assert.deepEqual(CLEAR.channels, ['horizonchat', 'general']);
   assert.equal(CLEAR.olderThanHours, 24);
   assert.equal(CLEAR.everyMs, 6 * H);
@@ -54,11 +54,11 @@ test('chat clear: the schedule is #horizon-chat and #general, a day, every 6 hou
   for (const key of CLEAR.channels) {
     const c = text.find((x) => x.key === key);
     assert.ok(c && c.type === 'text', key);
-    assert.equal(c.slowmode, 10);
     assert.match(c.topic, /older than a day are cleared every 6 hours/);
     assert.ok(c.topic.length <= 1024);
   }
-  assert.deepEqual(text.filter((c) => c.slowmode).map((c) => c.key), ['horizonchat', 'general']);
+  assert.deepEqual(text.filter((c) => c.slowmode).map((c) => c.key), []); // Ludovic, 2026-10-28
+  assert.deepEqual(MOD.autoSlowmode, []);
 });
 
 test('chat clear: one line for #mod-log', () => {

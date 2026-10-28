@@ -74,14 +74,14 @@ export const ROLES = [
   { key: 'sponsor', name: '💚 Sponsor', color: 0x2ecc40, hoist: true },
   {
     key: 'mod', name: '🛡️ Mod', color: 0x2ecc71, hoist: true,
-    permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers'],
+    permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode'],
   },
   // The core contributors who review and merge (GitHub team horizon-team). Ludovic, 2026-10-28: they moderate too, with
   // the mods' permissions and the staff channels, and show above the mods. Writes in #contributors; the only role in
   // #horizon-team.
   {
     key: 'team', name: '🌌 Horizon Team', color: 0x9b59b6, hoist: true,
-    permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers'],
+    permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode'],
   },
   { key: 'owner', name: '👑 ludovic', color: 0xf2a33a, hoist: true, owner: true },
 ];
@@ -128,7 +128,7 @@ export const LAYOUT = [
       { key: 'ludovicvideos', name: 'ludovic-videos', type: 'text', readonly: true, topic: 'Ludovic\'s new YouTube videos, posted by Kira as they come out.' },
       // In 👋 start here (Team, 2026-10-28). Ludovic, 2026-10-28: one channel for every way to support him: the Sculk affiliate link, his GitHub Sponsors (also the
       // org-wide Sponsor button) and, later, a crypto address.
-      { key: 'sponsors', name: 'support-horizon', type: 'text', readonly: true, topic: 'Every way to support Horizon: Sculk server hosting (affiliate link), GitHub Sponsors, and crypto donations (coming soon).' },
+      { key: 'sponsors', name: 'support-horizon', type: 'text', readonly: true, topic: 'Every way to support Horizon: Sculk server hosting (affiliate link), GitHub Sponsors, and crypto (Bitcoin, Solana, Ethereum and EVM chains).' },
     ],
   },
   {
@@ -150,7 +150,7 @@ export const LAYOUT = [
         template: '**The idea:**\n**Why:** what it makes better\n**How it could work:** (optional)',
         check: { min: 40, needs: [['The idea', /the idea|idea/i], ['Why', /why/i]] },
       },
-      { key: 'horizonchat', name: 'horizon-chat', type: 'text', slowmode: 10, topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' + CLEARED },
+      { key: 'horizonchat', name: 'horizon-chat', type: 'text', topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' + CLEARED },
       {
         key: 'showcase', was: 'videofeedback', name: 'showcase', type: 'forum', gallery: true, reaction: '🔥', react: ['🔥'],
         topic: 'Your Horizon creations: YouTube videos, clips, screenshots, builds, worlds, redstone, benchmarks. One post each, with the template.',
@@ -177,7 +177,7 @@ export const LAYOUT = [
   {
     key: 'general', category: '💬 general',
     channels: [
-      { key: 'general', name: 'general', type: 'text', slowmode: 10, topic: 'Talk about anything. English please, so everyone can follow; other languages have their own channels in 🌍 languages, and #off-topic takes any language. Horizon talk is welcome here too.' + CLEARED },
+      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything. English please, so everyone can follow; other languages have their own channels in 🌍 languages, and #off-topic takes any language. Horizon talk is welcome here too.' + CLEARED },
       { key: 'introductions', name: 'introductions', type: 'text', pin: 'intro', topic: 'Say hi once, with the template in the pinned message. One introduction per person.' },
       { key: 'halloffame', name: 'hall-of-fame', type: 'text', readonly: true, topic: 'Messages that got 5 ⭐. React ⭐ to a message you love to send it here.' },
       // Ludovic kept these two in 💬 general (2026-10-28: he deleted the 🗄️ archive category setup had just made for them).
@@ -448,8 +448,8 @@ export const MOD = {
   raidYoungDays: 7, raidJoins: 15, raidWindowMs: 120_000, raidHoldMs: 60 * 60_000,
   // Links: more than 5 in one message is removed; 5 messages with links in 30 s is a flood (deleted, spam timeout).
   linkMax: 5, linkFloodMessages: 5, linkWindowMs: 30_000,
-  // Slowmode: 10 s on #horizon-chat and #general (Ludovic, 2026-10-28; `slowmode` in LAYOUT), none elsewhere, and
-  // none added when busy. [[messages per minute, seconds of slowmode], …] turns the automatic one on.
+  // No slowmode (Ludovic, 2026-10-28): none set (`slowmode` in LAYOUT would set one), none added when busy.
+  // [[messages per minute, seconds of slowmode], …] turns the automatic one on.
   autoSlowmode: [],
   // Piracy (rule 3): a Discord AutoMod rule blocks these and alerts #mod-chat; mods and the Horizon Team are exempt
   // (src/automod.js). `keywords` use Discord's wildcards (`word`: the whole word, `word*`: a word that starts with it,
