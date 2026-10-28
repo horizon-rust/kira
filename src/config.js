@@ -72,11 +72,15 @@ export const ROLES = [
   { key: 'tester', name: '🧪 Horizon Tester', color: 0xffd166, hoist: true },
   // Given by Ludovic by hand. 💚 Sponsor: who sponsors Horizon (Sculk Hosting's owner, 2026-10-27).
   { key: 'sponsor', name: '💚 Sponsor', color: 0x2ecc40, hoist: true },
-  // The core contributors who review and merge (GitHub team horizon-team): above everyone but the mods; writes in
-  // #contributors and is the only role in #horizon-team.
-  { key: 'team', name: '🌌 Horizon Team', color: 0x9b59b6, hoist: true },
   {
     key: 'mod', name: '🛡️ Mod', color: 0x2ecc71, hoist: true,
+    permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers'],
+  },
+  // The core contributors who review and merge (GitHub team horizon-team). Ludovic, 2026-10-28: they moderate too, with
+  // the mods' permissions and the staff channels, and show above the mods. Writes in #contributors; the only role in
+  // #horizon-team.
+  {
+    key: 'team', name: '🌌 Horizon Team', color: 0x9b59b6, hoist: true,
     permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers'],
   },
   { key: 'owner', name: '👑 ludovic', color: 0xf2a33a, hoist: true, owner: true },

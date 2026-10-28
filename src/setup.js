@@ -306,7 +306,7 @@ async function automod(guild) {
   const existing = await guild.autoModerationRules.fetch();
   const alert = { type: A.SendAlertMessage, metadata: { channel: state.channels.modlog } };
   const block = (msg) => ({ type: A.BlockMessage, metadata: { customMessage: msg } });
-  const exempt = { exemptRoles: [state.roles.mod] };
+  const exempt = { exemptRoles: [state.roles.mod, state.roles.team].filter(Boolean) };
   const rules = [
     { name: 'Kira · spam', triggerType: T.Spam, actions: [block('Kira blocked this as spam.'), alert], ...exempt },
     { name: 'Kira · slurs and sexual content', triggerType: T.KeywordPreset, triggerMetadata: { presets: [Preset.Slurs, Preset.SexualContent] }, actions: [block('That word is not allowed here (rule 1 and 5).'), alert], ...exempt },

@@ -8,7 +8,8 @@ export function overwrites(ids, spec, staffCategory) {
   const { everyone, mod, kira, owner, roles = {} } = ids;
   const ow = [{ id: kira, type: OverwriteType.Member, allow: [P.ViewChannel, P.SendMessages, P.ManageMessages, P.ManageThreads, P.EmbedLinks, P.AddReactions, P.Connect, P.MoveMembers, P.ManageChannels] }];
   if (spec.staff || staffCategory) {
-    ow.push(role(everyone, { deny: [P.ViewChannel] }), role(mod, { allow: [P.ViewChannel, P.SendMessages] }));
+    // The staff channels: the mods and the Horizon Team (who moderate too).
+    ow.push(role(everyone, { deny: [P.ViewChannel] }), ...[mod, roles.team].filter(Boolean).map((id) => role(id, { allow: [P.ViewChannel, P.SendMessages] })));
   } else if (spec.readonly) {
     ow.push(
       role(everyone, { deny: [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads] }),
