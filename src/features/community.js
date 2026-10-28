@@ -42,7 +42,7 @@ const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Ki
   '• `/claim <issue>` before you start, `/unclaim` · `/status`: your claims and reports, an issue, a roadmap item, or set what you are on',
   `**What changed**: <#${state.channels.updates}> (merged work, the week, the board at a glance) · releases in <#${state.channels.releases}>`,
   '**Contributing**: `/goodfirst` · `/working` · `/board` · `/mytasks` · `/link-github` (`credit:True` lists you on the hub) · `/verify-github` proves the account is yours, and with a merged PR it gives you 🛠️ Contributor · `/notify` DMs when CI fails · `/agent connect` gives your AI coding agent the board (setup in #horizon-info). Maintainers: `/move`.',
-  '**Horizon**: `/horizon` what it is and where to get it · `/links`',
+  '**Horizon**: `/horizon` what it is and where to get it · `/links` · `/sponsor github:<you>`: you sponsor Horizon on GitHub? Get 💚 Sponsor',
   '**You**: `/rank`, `/leaderboard`, `/remind`, `/userinfo`, `/avatar`, `/room` (your own voice channel: join ➕ create your room).',
   '**The mods**: DM me to reach them privately, `/report-member` or right-click a message → Apps → Report to mods. `/modmail`.',
 ].join('\n\n'));

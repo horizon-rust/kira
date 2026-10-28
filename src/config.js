@@ -407,6 +407,19 @@ export const CONTRIBUTORS = {
   protectedMembers: { '437262688930889730': 'kacpherek', '777346923232886784': 'rdbtCVS', '1531466016054444261': 'Online5277' },
 };
 
+// 💚 Sponsor for GitHub sponsors of GITHUB.maintainer (src/features/sponsors.js, src/sponsor-kit.js). Ludovic,
+// 2026-10-28: any sponsor gets it, one-time ones included. /sponsor proves the account is the member's (a code in its
+// bio or a public gist, like /verify-github) and asks GitHub's isSponsoredBy; a daily check takes the role back from
+// the members Kira gave it to once GitHub stops reporting them. Private sponsorships read false: the mods use
+// /sponsor-grant. A role given by hand (or held before /sponsor) is never taken away by Kira.
+export const SPONSORS = {
+  role: 'sponsor',
+  codeTtlMs: 30 * 60_000,
+  perHour: 6,                     // /sponsor and Verify presses per member an hour (each reads GitHub)
+  recheckEveryMs: 24 * 60 * 60_000,
+  paceMs: 1_000,                  // between two GitHub checks in the daily recheck
+};
+
 // Triage through Kira (src/features/triage.js): GitHub has no Triage role on a personal account's repo, and write
 // access would let a branch push run workflows with the repo's secrets. So Ludovic's trusted reviewers label, close,
 // reopen and mark duplicates in GITHUB.owner/WORK.repo with `/gh`, using Kira's token. Ludovic edits this list: a
