@@ -11,10 +11,9 @@ projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no pai
 - **Categories** (since 2026-10-28): 👋 start here (welcome, #new-members, #horizon-info with the download, FAQ, rules,
   announcements, #ludovic-videos, #support-horizon) · 🌅 horizon (#horizon-bugs, #horizon-ideas, #horizon-chat, #showcase for
   videos/clips/screenshots/builds made in Horizon, #releases, #updates) · 🛠️ contributing (#contributors: everyone reads, only
-  🛠️ Contributor, the Team and mods write; #horizon-team) · 💬 general (#general for everything that isn't Horizon,
-  #introductions, #hall-of-fame, #bot-commands) · 🌍 languages (nine channels, opt-in: Onboarding's language question,
-  `LANGUAGES` in `config.js`; re-measured 2026-11-11, fewer than ~5 people writing → archived) · 🔊 voice · 🛡️ staff · 🗄️ archive (read-only, kept for their messages:
-  #off-topic and #memes since 2026-10-28; no text may point there). The old channels (#projects, #resources, #help, #beats, …) were deleted
+  🛠️ Contributor, the Team and mods write; #horizon-team) · 💬 general (#general,
+  #introductions, #hall-of-fame, #off-topic, #memes, #bot-commands) · 🌍 languages (nine channels, opt-in: Onboarding's language question,
+  `LANGUAGES` in `config.js`; re-measured 2026-11-11, fewer than ~5 people writing → proposed for removal) · 🔊 voice · 🛡️ staff. The old channels (#projects, #resources, #help, #beats, …) were deleted
   on 2026-10-14 after their messages were exported (`scratch/deleted-channels-2026-10-14/`, not committed).
   #work-board and #dev-log are replaced by #updates (`REPLACED` in `config.js`): setup exports every message of
   each to `scratch/replaced-channels-<date>/<name>.json` and `.md` (not committed), then deletes the channel; a
