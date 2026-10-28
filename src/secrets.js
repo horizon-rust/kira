@@ -28,7 +28,7 @@ export function unseal(dir, env = process.env) {
     if (!name.endsWith('_SEALED') || !value) continue;
     const plain = name.slice(0, -'_SEALED'.length);
     try {
-      env[plain] ??= privateDecrypt({ key, ...OAEP }, Buffer.from(value, 'base64')).toString('utf8');
+      env[plain] ??= value.split('.').map((part) => privateDecrypt({ key, ...OAEP }, Buffer.from(part, 'base64')).toString('utf8')).join('');
       opened.push(plain);
     } catch {
       console.error(`sealed secrets: ${name} doesn't open with this volume's key (seal it again)`);
@@ -38,4 +38,12 @@ export function unseal(dir, env = process.env) {
   return publicKey;
 }
 
-export const seal = (publicPem, secret) => publicEncrypt({ key: publicPem, ...OAEP }, Buffer.from(secret, 'utf8')).toString('base64');
+// RSA-OAEP holds at most 318 bytes with a 3072-bit key: a longer secret (a PEM key) is sealed in parts, joined by '.'.
+const PART = 300;
+export function seal(publicPem, secret) {
+  const parts = [];
+  for (let i = 0; i < secret.length; i += PART) {
+    parts.push(publicEncrypt({ key: publicPem, ...OAEP }, Buffer.from(secret.slice(i, i + PART), 'utf8')).toString('base64'));
+  }
+  return parts.join('.');
+}

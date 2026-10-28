@@ -310,7 +310,9 @@ Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`
 
 Kira runs on Railway (project **kira**, service **kira**, volume `kira-data` at `/data`: `state.json`,
 `board.json`, `agents.json`, `seal-key.pem`), built from this repo's `Dockerfile` on every push to `main`.
-Variables: `KIRA_STATE=/data/state.json`, `DISCORD_TOKEN_SEALED`, `GITHUB_TOKEN_SEALED`, `HUB_TOKEN_SEALED`,
+Variables: `KIRA_STATE=/data/state.json`, `DISCORD_TOKEN_SEALED`, `GITHUB_TOKEN_SEALED`, `GITHUB_APP_ID` +
+`GITHUB_APP_PRIVATE_KEY_SEALED` (the GitHub App kira-horizon: Kira's own hour of calls; `/sponsor` keeps
+`GITHUB_TOKEN`; key in 1Password `GitHub App Kira`, a document: `op document get`), `HUB_TOKEN_SEALED`,
 `ROADMAP_SUGGESTIONS_CHANNEL_ID`,
 `KIRA_AGENT_ISSUANCE` (`on` opens `/agent connect`), and for tests `KIRA_DISCORD=off` (no Discord: board and
 MCP server only) and `KIRA_GITHUB_DRY_RUN=1`. Health: `GET /health`.

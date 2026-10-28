@@ -7,6 +7,7 @@ import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
 import { releaseMessage, remember, announced, pingDecision } from './releases.js';
 import { makeGitHub } from './github.js';
+import { githubToken } from './github-app.js';
 import * as videos from './videos.js';
 import { linkify } from './texts.js';
 import * as moderation from './features/moderation.js';
@@ -40,7 +41,7 @@ const commands = FEATURES.flatMap((f) => f.commands);
 // New Horizon releases → #releases, each once by release id (state.releases). One channel since 2026-10-23: every
 // release gets one post, @silent except the day's ping (pingDecision, state.releasePings). state.nightlies holds the
 // ids posted as Alpha before that; it no longer grows, and those ids are never posted again.
-const releasesGh = makeGitHub({ token: process.env.GITHUB_TOKEN });
+const releasesGh = makeGitHub({ token: githubToken() });
 async function checkReleases() {
   state.releases ??= {};
   state.nightlies ??= {};
