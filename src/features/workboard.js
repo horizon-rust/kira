@@ -9,13 +9,14 @@ import { WORK, GITHUB, HUB } from '../config.js';
 import { client, state, save, channel, isStaff } from '../core.js';
 import { dataFile } from '../store.js';
 import { makeGitHub } from '../github.js';
+import { githubToken } from '../github-app.js';
 import * as board from '../board.js';
 import * as wk from '../workkit.js';
 import { summaryText } from '../journal.js';
 import * as contributors from './contributors.js';
 import { writeFileSync, renameSync, readFileSync } from 'node:fs';
 
-const TOKEN = process.env.GITHUB_TOKEN?.trim();
+const TOKEN = githubToken();
 export const enabled = !!TOKEN; // claims write labels and comments: no token, no board
 // KIRA_GITHUB_DRY_RUN=1: GitHub writes (labels, comments) are only logged, for a test deployment.
 let gh = makeGitHub({ token: TOKEN, dryRun: process.env.KIRA_GITHUB_DRY_RUN === '1' });

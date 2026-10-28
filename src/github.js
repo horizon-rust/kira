@@ -1,7 +1,8 @@
 // A small GitHub REST client for Kira's issues feature. Writes are only logged in dry-run mode.
 //
-// The token is a fine-grained one of Ludovic's, so every call Kira makes comes out of his 5000 an hour, which his
-// agents and merge scripts need too. Two things keep Kira's share small:
+// With GITHUB_TOKEN only (a fine-grained one of Ludovic's), every call Kira makes comes out of his 5000 an hour, which
+// his agents and merge scripts need too; the GitHub App (src/github-app.js) has an hour of its own. Two things keep
+// the share small:
 // - GETs are conditional (If-None-Match with the last ETag): GitHub doesn't count a 304 answer, so a board refresh
 //   that finds nothing new is almost free.
 // - Below KEEP calls left in the hour, GETs stop until the hour resets (writes still go: they are a person's
@@ -9,17 +10,23 @@
 export const KEEP = Number(process.env.KIRA_GITHUB_KEEP ?? 1500);
 const CACHE_MAX = 2000;
 
-// Shared by every client in the process: they all spend the same token's hour.
-const budget = { remaining: Infinity, reset: 0 };
-export const _budget = budget; // for tests
+// Shared by every client in the process that uses the same identity: they all spend the same hour. `token` is a
+// string (Ludovic's token) or a function giving the GitHub App's current installation token (src/github-app.js),
+// which has an hour of its own.
+const userBudget = { remaining: Infinity, reset: 0 };
+const appBudget = { remaining: Infinity, reset: 0 };
+export const _budget = userBudget; // for tests
+export const _appBudget = appBudget;
 
 export function makeGitHub({ token, dryRun = false, fetchImpl = fetch, log = console.log } = {}) {
   const cache = new Map(); // GET path → { etag, body }
+  const budget = typeof token === 'function' ? appBudget : userBudget;
   async function call(method, path, body, { cache: keep = true } = {}) {
     const get = method === 'GET';
     if (get && token && budget.remaining < KEEP && Date.now() < budget.reset) {
       throw new Error(`GitHub GET ${path}: holding back, ${budget.remaining} calls left until ${new Date(budget.reset).toISOString()}`);
     }
+    const auth = typeof token === 'function' ? await token() : token;
     const cached = get && keep ? cache.get(path) : undefined;
     const res = await fetchImpl(`https://api.github.com${path}`, {
       method,
@@ -27,7 +34,7 @@ export function makeGitHub({ token, dryRun = false, fetchImpl = fetch, log = con
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
         'User-Agent': 'Kira (Discord bot of ludovic\'s server)',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(auth ? { Authorization: `Bearer ${auth}` } : {}),
         ...(body ? { 'Content-Type': 'application/json' } : {}),
         ...(cached ? { 'If-None-Match': cached.etag } : {}),
       },

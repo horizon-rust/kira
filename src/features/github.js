@@ -5,13 +5,14 @@ import { SlashCommandBuilder, PermissionFlagsBits as P, MessageFlags, ChannelTyp
 import { GITHUB, GUILD_ID, AI } from '../config.js';
 import { client, state, save, isStaff, modlog } from '../core.js';
 import { makeGitHub } from '../github.js';
+import { githubToken } from '../github-app.js';
 import { onTemplateOk, followsTemplate } from './forums.js';
 import * as kit from '../issuekit.js';
 import { isOwnPost } from '../adopt.js';
 import { reviewBug, onBugPostMention } from './ai.js';
 import { searchTerms, yesNo, missingAsk } from '../ai-kit.js';
 
-const TOKEN = process.env.GITHUB_TOKEN?.trim();
+const TOKEN = githubToken();
 const DRY = process.env.KIRA_GITHUB_DRY_RUN === '1';
 export const enabled = !!TOKEN || DRY; // a dry run works without a token (public repos, read only)
 let gh = makeGitHub({ token: TOKEN, dryRun: DRY });

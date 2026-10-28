@@ -7,10 +7,11 @@ import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { TRIAGE, GITHUB, WORK, OWNER_ID } from '../config.js';
 import { state, save, isStaff, modlog } from '../core.js';
 import { makeGitHub } from '../github.js';
+import { githubToken } from '../github-app.js';
 import * as kit from '../triage-kit.js';
 import * as contributors from '../contributor-kit.js';
 
-const TOKEN = process.env.GITHUB_TOKEN?.trim();
+const TOKEN = githubToken();
 export const enabled = !!TOKEN;
 let gh = makeGitHub({ token: TOKEN, dryRun: process.env.KIRA_GITHUB_DRY_RUN === '1' });
 const REPO = `/repos/${GITHUB.owner}/${WORK.repo}`;

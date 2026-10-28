@@ -7,10 +7,11 @@ import { rateLimiter } from '../agents.js';
 import { CONTRIBUTORS, GITHUB, GUILD_ID, OWNER_ID, WORK } from '../config.js';
 import { client, state, save, channel, isStaff, modlog } from '../core.js';
 import { makeGitHub } from '../github.js';
+import { githubToken } from '../github-app.js';
 import { linkify } from '../texts.js';
 import * as kit from '../contributor-kit.js';
 
-const TOKEN = process.env.GITHUB_TOKEN?.trim();
+const TOKEN = githubToken();
 export const enabled = !!TOKEN;
 let gh = makeGitHub({ token: TOKEN, dryRun: process.env.KIRA_GITHUB_DRY_RUN === '1' });
 const limiter = rateLimiter({ verify: [CONTRIBUTORS.verifyPerHour, 3_600_000] });
