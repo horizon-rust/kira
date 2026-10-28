@@ -12,8 +12,7 @@ projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no pai
   announcements, #ludovic-videos, #support-horizon) · 🌅 horizon (#horizon-bugs, #horizon-ideas, #horizon-chat, #showcase for
   videos/clips/screenshots/builds made in Horizon, #releases, #updates) · 🛠️ contributing (#contributors: everyone reads, only
   🛠️ Contributor, the Team and mods write; #horizon-team) · 💬 general (#general,
-  #introductions, #hall-of-fame, #off-topic, #memes, #bot-commands) · 🌍 languages (nine channels, opt-in: Onboarding's language question,
-  `LANGUAGES` in `config.js`; re-measured 2026-11-11, fewer than ~5 people writing → proposed for removal) · 🔊 voice · 🛡️ staff. The old channels (#projects, #resources, #help, #beats, …) were deleted
+  #introductions, #hall-of-fame, #off-topic, #memes, #bot-commands) · 🌍 languages (nine channels everyone sees: default channels; re-measured 2026-11-11, fewer than ~5 people writing → proposed for removal) · 🔊 voice · 🛡️ staff. The old channels (#projects, #resources, #help, #beats, …) were deleted
   on 2026-10-14 after their messages were exported (`scratch/deleted-channels-2026-10-14/`, not committed).
   #work-board and #dev-log are replaced by #updates (`REPLACED` in `config.js`): setup exports every message of
   each to `scratch/replaced-channels-<date>/<name>.json` and `.md` (not committed), then deletes the channel; a
