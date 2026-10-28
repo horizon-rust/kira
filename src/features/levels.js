@@ -28,7 +28,7 @@ async function grant(member, amount, where) {
     if (others.length) await member.roles.remove(others, 'new level role').catch(console.error);
   }
   const reward = earned && earned.level === after ? ` and the **${earned.name}** role` : '';
-  await (channel('botcommands') ?? where)?.send({ content: `🎉 <@${member.id}> reached **level ${after}**${reward}!`, allowedMentions: { users: [member.id] } }).catch(() => {});
+  await (channel('botcommands') ?? where)?.send({ content: `🎉 <@${member.id}> reached **level ${after}**${reward}!`, allowedMentions: { parse: [] } }).catch(() => {});
 }
 
 export const commands = [
