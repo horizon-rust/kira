@@ -74,7 +74,7 @@ export const ROLES = [
   { key: 'sponsor', name: '💚 Sponsor', color: 0x2ecc40, hoist: true },
   // The core contributors who review and merge (GitHub team horizon-team): above everyone but the mods; writes in
   // #contributors and is the only role in #horizon-team.
-  { key: 'team', name: '🌌 Horizon Team', color: 0x9b59b6, hoist: true, mentionable: true },
+  { key: 'team', name: '🌌 Horizon Team', color: 0x9b59b6, hoist: true },
   {
     key: 'mod', name: '🛡️ Mod', color: 0x2ecc71, hoist: true,
     permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers'],

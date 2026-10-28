@@ -71,6 +71,9 @@ async function contextOf(msg) {
   return out;
 }
 
+// A Horizon Team member or a mod: "passed to the team" would point them at themselves.
+export const isTeam = (member) => !!member && (isStaff(member) || (!!state.roles.team && !!member.roles?.cache?.has(state.roles.team)));
+
 function handoff(msg, text, reason) {
   store.handoffs.push({ id: msg.id, url: msg.url, channel: channelName(msg), author: name(msg), question: text.slice(0, 1000), reason, at: Date.now(), done: false });
   store.handoffs = store.handoffs.slice(-AI.handoffsKept);
@@ -111,6 +114,7 @@ async function respond(msg, text) {
     r = await answer({ author: name(msg), channel: channelName(msg), text, context: await contextOf(msg) });
   }
   record(r);
+  if (r.status === 'pass' && isTeam(msg.member)) r.reply = kit.PASSED_TEAM;
   if (r.status === 'ignore') return save(); // chatter or a jailbreak: no reply, nothing for the team
   if (r.status !== 'answer') handoff(msg, text, r.reason ?? 'not in the sources');
   save();

@@ -151,6 +151,8 @@ export function checkReply(text, { invite = 'HcTeMZxe5E' } = {}) {
 
 // What Kira says when she passes a question on and the model's own sentence can't be used.
 export const PASSED = "I don't have a sure answer to this one. I've passed this to the team; they'll answer here.";
+// To a member of the Team or a mod: they are the team, so the question goes to Ludovic's agent instead.
+export const PASSED_TEAM = "I can't settle this one myself. I've noted it for Ludovic's agent; it reads these and will answer here.";
 export const BUDGET_SPENT = "I've reached my limit of answers for today, so I've passed this to the team; they'll answer here.";
 
 // ── Bug reports in #horizon-bugs (src/features/github.js files them) ─────────
