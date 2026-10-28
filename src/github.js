@@ -58,6 +58,8 @@ export function makeGitHub({ token, dryRun = false, fetchImpl = fetch, log = con
     dryRun,
     // `cache: false`: big one-off answers (a long search) are not kept for conditional requests.
     get: (path, opts) => call('GET', path, undefined, opts),
+    // A GraphQL read (never a dry run: it changes nothing). The answer as GitHub sends it: { data, errors }.
+    graphql: (query, variables) => call('POST', '/graphql', { query, variables }, { cache: false }),
     async write(method, path, body) {
       if (dryRun) {
         log(`github dry-run: ${method} ${path} ${body ? JSON.stringify(body).slice(0, 600) : ''}`);
