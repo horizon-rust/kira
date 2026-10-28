@@ -3,6 +3,7 @@
 // stops it at once. Limits: AI.perMemberHour questions per member, AI.dailyUsd dollars a day (UTC), counted from each
 // response's usage. Every answer is logged in #mod-log (the question, the model, tokens, cost). A question Kira can't
 // answer is passed to the team: she says so, and it is kept in state.kiraAi.handoffs for the orchestrator.
+// The same client and budget read messages for moderation in every language (moderateBatch, used by moderation.js).
 import { createHash, timingSafeEqual } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { SlashCommandBuilder, PermissionFlagsBits as P, MessageFlags } from 'discord.js';
@@ -18,8 +19,9 @@ import * as kit from '../ai-kit.js';
 const KEY = !!process.env.ANTHROPIC_API_KEY?.trim();
 export const enabled = !!AI.mode && KEY;
 const store = (state.kiraAi ??= {});
-store.on ??= true; // /kira-ai on|off
-store.days ??= {}; // 'YYYY-MM-DD' → { cost_usd, answers, passed_to_team, models: { model: calls } }
+store.on ??= true; // /kira-ai on|off: everything below
+store.modOn ??= true; // /kira-ai mod on|off: moderation only
+store.days ??= {}; // 'YYYY-MM-DD' → { cost_usd, answers, passed_to_team, bug_reviews, moderated, models: { model: calls } }
 store.handoffs ??= []; // [{ id, url, channel, author, question, reason, at, done }]
 
 let sources = ai.makeSources({ gh: makeGitHub({ token: githubToken() }) });
@@ -27,6 +29,9 @@ const anthropic = KEY ? new Anthropic({ maxRetries: 2, timeout: 60_000 }) : null
 let answer = enabled ? ai.makeAnswerer({ client: anthropic, sources }) : null;
 export const bugsEnabled = AI.bugs && KEY;
 let reviewer = bugsEnabled ? ai.makeBugReviewer({ client: anthropic }) : null;
+export const modEnabled = !!AI.mode && AI.mod && KEY;
+let moderator = modEnabled ? ai.makeModerator({ client: anthropic }) : null;
+let modPausedUntil = 0; // after an API error
 const limits = rateLimiter({ ask: [AI.perMemberHour, 3_600_000], notice: [1, 3_600_000] });
 const seen = new Set(); // messages answered or being answered: one answer each
 
@@ -38,6 +43,7 @@ export function record(r, now = Date.now()) {
   const d = (store.days[today(now)] ??= { cost_usd: 0, answers: 0, passed_to_team: 0, models: {} });
   d.cost_usd += r.cost ?? 0;
   if (r.kind === 'bug') d.bug_reviews = (d.bug_reviews ?? 0) + 1;
+  else if (r.kind === 'mod') d.moderated = (d.moderated ?? 0) + (r.count ?? 0);
   else if (r.status === 'ignore') d.ignored = (d.ignored ?? 0) + 1;
   else if (r.status === 'answer') d.answers++;
   else d.passed_to_team++;
@@ -157,18 +163,19 @@ export const handoffsOut = () => openHandoffs().map((h) => ({
 // Counts and dollars only: no message text, no user ids.
 export function usage(now = Date.now()) {
   const round = (x) => Math.round(x * 1e6) / 1e6;
-  const days = Object.keys(store.days).sort().map((day) => ({ day, ...store.days[day], bug_reviews: store.days[day].bug_reviews ?? 0, cost_usd: round(store.days[day].cost_usd) }));
+  const days = Object.keys(store.days).sort().map((day) => ({ day, ...store.days[day], bug_reviews: store.days[day].bug_reviews ?? 0, moderated: store.days[day].moderated ?? 0, cost_usd: round(store.days[day].cost_usd) }));
   const month = today(now).slice(0, 7);
-  const total = { month, cost_usd: 0, answers: 0, passed_to_team: 0, bug_reviews: 0, models: {} };
+  const total = { month, cost_usd: 0, answers: 0, passed_to_team: 0, bug_reviews: 0, moderated: 0, models: {} };
   for (const d of days.filter((x) => x.day.startsWith(month))) {
     total.cost_usd += d.cost_usd;
     total.answers += d.answers;
     total.passed_to_team += d.passed_to_team;
     total.bug_reviews += d.bug_reviews ?? 0;
+    total.moderated += d.moderated;
     for (const [m, n] of Object.entries(d.models)) total.models[m] = (total.models[m] ?? 0) + n;
   }
   total.cost_usd = round(total.cost_usd);
-  return { daily_budget_usd: AI.dailyUsd, enabled, on: store.on, mode: AI.mode, bugs: bugsEnabled, today: today(now), days, month: total };
+  return { daily_budget_usd: AI.dailyUsd, enabled, on: store.on, mode: AI.mode, bugs: bugsEnabled, moderation: modEnabled && store.modOn, today: today(now), days, month: total };
 }
 
 // The route, behind a bearer token (KIRA_USAGE_TOKEN; 1Password "Kira usage token"). No token set, no route. Failed
@@ -196,6 +203,7 @@ const statusText = () => {
     `AI answers: **${!enabled ? 'unavailable' : store.on ? 'on' : 'off'}** (KIRA_AI=${AI.mode ?? 'unset'}${KEY ? '' : ', no ANTHROPIC_API_KEY'})`,
     `Today: $${spentToday().toFixed(2)} of $${AI.dailyUsd}, ${d.answers} answered, ${d.passed_to_team} passed to the team`,
     `Bug reports read before filing: ${bugsEnabled ? `on, ${d.bug_reviews ?? 0} today` : 'off (KIRA_AI_BUGS)'}`,
+    `Moderation in every language: ${!modEnabled ? 'off (KIRA_AI_MOD)' : store.modOn ? `on, ${d.moderated ?? 0} messages read today` : 'off (/kira-ai mod on)'}`,
     `Waiting for the team: ${openHandoffs().length} · sources ${sources.ready() ? 'loaded' : 'not loaded yet'}`,
   ].join('\n');
 };
@@ -203,8 +211,8 @@ const statusText = () => {
 export const commands = [
   new SlashCommandBuilder().setName('kira-ai').setDescription("Kira's AI answers: turn them off or on, or see today's use (Ludovic and the mods)")
     .setDefaultMemberPermissions(P.ManageMessages)
-    .addStringOption((o) => o.setName('action').setDescription('status, off or on').setRequired(true)
-      .addChoices({ name: 'status', value: 'status' }, { name: 'off', value: 'off' }, { name: 'on', value: 'on' })),
+    .addStringOption((o) => o.setName('action').setDescription('status, off or on (all of it), mod off or mod on (moderation only)').setRequired(true)
+      .addChoices({ name: 'status', value: 'status' }, { name: 'off', value: 'off' }, { name: 'on', value: 'on' }, { name: 'mod off', value: 'mod-off' }, { name: 'mod on', value: 'mod-on' })),
 ];
 
 export const handlers = {
@@ -212,7 +220,11 @@ export const handlers = {
     const reply = (content) => i.reply({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     if (i.user.id !== OWNER_ID && !isStaff(i.member)) return reply('Only Ludovic and the mods can do this.');
     const action = i.options.getString('action');
-    if (action !== 'status') {
+    if (action === 'mod-on' || action === 'mod-off') {
+      store.modOn = action === 'mod-on';
+      save();
+      await modlog(`🤖 Kira's AI moderation turned ${store.modOn ? 'on' : 'off'}`, `by <@${i.user.id}>`);
+    } else if (action !== 'status') {
       store.on = action === 'on';
       save();
       await modlog(`🤖 Kira's AI answers turned ${action}`, `by <@${i.user.id}>`);
@@ -223,6 +235,7 @@ export const handlers = {
 
 export function setup() {
   console.log(`kira ai bug reports: ${bugsEnabled ? 'read before filing' : 'off'}`);
+  console.log(`kira ai moderation: ${modEnabled ? (store.modOn ? 'on' : 'off (/kira-ai mod on)') : 'off'}`);
   console.log(`kira ai: ${enabled ? `${store.on ? 'on' : 'off (/kira-ai)'}, ${AI.mode}, $${AI.dailyUsd} a day` : `off (${AI.mode ? 'no ANTHROPIC_API_KEY' : 'KIRA_AI is not set'})`}`);
   if (enabled) client.once('clientReady', () => sources.refresh().catch((e) => console.error('kira ai sources', e.message)));
 }
@@ -254,4 +267,32 @@ export async function reviewBug(report) {
   return d;
 }
 
-export const _test = { store, limits, seen, set: (o) => { if (o.sources) sources = o.sources; if (o.answer) answer = o.answer; if (o.reviewer !== undefined) reviewer = o.reviewer; } };
+// Moderation in every language: true when a batch would be read now (on, budget left, no recent API error).
+export const modActive = (now = Date.now()) => !!moderator && store.on && store.modOn && now >= modPausedUntil && spentToday(now) < AI.dailyUsd;
+
+// A batch of messages read for moderation (src/features/moderation.js): [{ author, channel, text }] → the model's
+// checked results in batch order, with what the call cost; null when the check doesn't run or can't be trusted (off,
+// budget spent, an API error, output that fails checkModeration): then nothing happens and the filters alone apply.
+export async function moderateBatch(batch) {
+  if (!batch.length || !modActive()) return null;
+  let r;
+  try {
+    r = await moderator(batch);
+  } catch (e) {
+    modPausedUntil = Date.now() + AI.modPauseMs;
+    console.error('kira ai moderation', e.status ?? '', e.message);
+    return null;
+  }
+  record({ kind: 'mod', count: batch.length, cost: r.cost, models: [r.model] });
+  save();
+  if (!r.results) { console.error('kira ai moderation: output not used,', r.reason); return null; }
+  return r;
+}
+
+export const _test = {
+  store, limits, seen,
+  set: (o) => {
+    if (o.sources) sources = o.sources; if (o.answer) answer = o.answer; if (o.reviewer !== undefined) reviewer = o.reviewer;
+    if (o.moderator !== undefined) moderator = o.moderator; if (o.modPausedUntil !== undefined) modPausedUntil = o.modPausedUntil;
+  },
+};

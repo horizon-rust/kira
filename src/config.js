@@ -596,4 +596,13 @@ export const AI = {
   // version and OS from the report, a duplicate check against open issues, one ask for what's missing.
   bugs: ['1', 'on'].includes((process.env.KIRA_AI_BUGS ?? '').trim().toLowerCase()),
   pendingMs: 30 * 60_000, // a "maybe the same as #N" waits this long for the reporter's yes or no, then is filed as new
+  // Moderation in every language (src/features/moderation.js): messages in the 🌍 languages channels, in `modChannels`,
+  // and non-English messages anywhere are read by Haiku, in batches per channel. On whenever KIRA_AI is (Ludovic,
+  // 2026-10-28: "use Kira for it" rather than AutoMod regexes per language); KIRA_AI_MOD=0 turns it off for good,
+  // `/kira-ai mod off` for now. Same daily budget as the answers.
+  mod: !['0', 'off', 'false', 'no'].includes((process.env.KIRA_AI_MOD ?? '').trim().toLowerCase()),
+  modChannels: ['offtopic'], // any language there
+  modBatchMs: 4_000, // messages of one channel arriving within this are read in one call
+  modBatchMax: 10,
+  modPauseMs: 5 * 60_000, // after an API error, the check pauses this long (the filters still run)
 };

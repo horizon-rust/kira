@@ -7,7 +7,7 @@
 //
 // The call: Claude Haiku 5.5 first; Claude Sonnet 5.5 when Haiku says it's unsure, or straight away for a long
 // thread. The model's only tool is read_doc (read one doc in full): it can look things up, never act.
-import { FAQ, GITHUB, WORK } from './config.js';
+import { FAQ, GITHUB, WORK, RULES } from './config.js';
 import * as kit from './ai-kit.js';
 
 const REPO = `${GITHUB.owner}/${WORK.repo}`;
@@ -200,6 +200,35 @@ export function makeBugReviewer({ client, model = kit.MODELS.fast }) {
       return { ...spent, draft: kit.checkBugDraft(out, report) };
     } catch (e) {
       return { ...spent, draft: null, reason: `unreadable answer: ${e.message}` };
+    }
+  };
+}
+
+// Moderation in every language (src/features/moderation.js): one call to the fast model for a batch of messages, no
+// tools. The rules (the same for every call) are the user turn's first block, cached; the batch comes after the
+// breakpoint. A breakpoint on the system prompt is never read back on this account (measured again 2026-10-28: 0 of
+// the rules' ~1,500 tokens read; as the first user block, all of them). Returns { results, cost, model, input, output,
+// cacheRead, cacheWrite, reason? }: results is checkModeration's (null when the output can't be trusted, and then
+// nothing happens). Throws only for an API error.
+export function makeModerator({ client, model = kit.MODELS.fast, rules = RULES }) {
+  const block = { type: 'text', text: kit.modRules(rules), cache_control: { type: 'ephemeral' } };
+  return async function moderate(batch) {
+    const r = await client.messages.create({
+      model, max_tokens: 600 + 500 * batch.length, system: kit.MOD_SYSTEM,
+      messages: [{ role: 'user', content: [block, { type: 'text', text: kit.modTurn(batch) }] }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: kit.MOD_SCHEMA } },
+    });
+    const u = r.usage ?? {};
+    const spent = {
+      cost: kit.costOf(model, u), model, input: u.input_tokens ?? 0, output: u.output_tokens ?? 0,
+      cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0,
+    };
+    if (r.stop_reason !== 'end_turn') return { ...spent, results: null, reason: `stop: ${r.stop_reason}` };
+    try {
+      const checked = kit.checkModeration(JSON.parse(r.content.filter((b) => b.type === 'text').map((b) => b.text).join('')), batch.length, rules.length);
+      return checked.ok ? { ...spent, results: checked.results } : { ...spent, results: null, reason: checked.reason };
+    } catch (e) {
+      return { ...spent, results: null, reason: `unreadable answer: ${e.message}` };
     }
   };
 }

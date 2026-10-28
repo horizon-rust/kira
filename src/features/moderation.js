@@ -1,11 +1,13 @@
-// Moderation: automatic filters (on top of Discord's AutoMod), logs, raid mode, invite tracking,
-// member reports, and the mods' commands.
+// Moderation: automatic filters (on top of Discord's AutoMod), the AI check in every language, logs, raid mode, invite
+// tracking, member reports, and the mods' commands.
 import {
   SlashCommandBuilder, ContextMenuCommandBuilder, ApplicationCommandType, PermissionFlagsBits as P,
   MessageFlags, GuildVerificationLevel, EmbedBuilder,
 } from 'discord.js';
-import { GUILD_ID, MOD, LAYOUT } from '../config.js';
+import { GUILD_ID, MOD, LAYOUT, AI, RULES } from '../config.js';
 import { client, state, save, channel, isStaff, clip, ago, modlog, parseDuration, human, quietDeletes } from '../core.js';
+import { linkify } from '../texts.js';
+import * as kiraAi from './ai.js';
 
 const URL_RE = /(https?:\/\/|www\.|discord\.gg\/)\S+/i;
 const URLS = new RegExp(URL_RE.source, 'gi');
@@ -14,6 +16,7 @@ const youngJoins = [];    // timestamps of recent joins by young accounts, for r
 const traffic = new Map(); // channelId → messages in the current minute
 const joinQueue = [];      // join / leave lines waiting to be logged together
 state.spamStrikes ??= {};  // userId → timestamps of automatic spam timeouts
+state.aiRemovals ??= {};   // userId → timestamps of messages the AI check removed
 const invites = new Map(); // code → uses
 
 // ── Commands ────────────────────────────────────────────────────────────────
@@ -193,7 +196,7 @@ async function remove(msg, note, log) {
   await msg.delete().catch(() => {});
   if (note) {
     const n = await msg.channel.send({ content: `<@${msg.author.id}> ${note}`, allowedMentions: { users: [msg.author.id] } }).catch(() => null);
-    if (n) setTimeout(() => n.delete().catch(() => {}), 12_000);
+    if (n) setTimeout(() => n.delete().catch(() => {}), 12_000).unref?.();
   }
   if (log) await modlog(log, `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>:\n${clip(msg.content)}${msg.attachments.size ? `\n📎 ${msg.attachments.map((a) => a.name).join(', ')}` : ''}`, 0xffb020);
   return true;
@@ -238,13 +241,132 @@ async function moderate(msg) {
   const [why, offending] = burst.length >= MOD.floodMessages ? [`${burst.length} messages in ${MOD.floodWindowMs / 1000} s`, burst]
     : same.length >= MOD.repeatCount ? [`the same message ${same.length} times`, same]
     : linked.length >= MOD.linkFloodMessages ? [`${linked.length} messages with links in ${MOD.linkWindowMs / 1000} s`, linked] : [];
-  if (!why) return false;
+  if (!why) { queueAi(msg); return false; }
   recent.delete(msg.author.id);
+  for (const x of offending) dropAi(x.id); // deleted below: not worth reading
   for (const x of offending) await client.channels.cache.get(x.channelId)?.messages.delete(x.id).catch(() => {});
   const { ms, strike } = await spamTimeout(m, `spam (${why})`);
   await msg.channel.send({ content: `<@${msg.author.id}> timed out for ${human(ms)}: spam (${why}).`, allowedMentions: { parse: [] } });
   await modlog('🔇 Spam timeout', `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>: ${why}, ${offending.length} messages deleted, ${human(ms)} (strike ${strike} today).\n> ${clip(msg.content, 300)}`, 0xff4d4d);
   return true;
+}
+
+// ── The AI check, in every language ─────────────────────────────────────────
+// What the filters let through in the 🌍 languages channels, in AI.modChannels (#off-topic), and non-English messages
+// anywhere is read by Haiku (src/features/ai.js moderateBatch: same client and daily budget as Kira's answers), in
+// batches per channel. "remove" (only clear cases: slurs, hate, threats, sexual content, doxxing, scams, targeted
+// harassment) deletes the message, posts the usual short note in the member's language and logs it; from the second
+// removal in a day the spam timeout ladder applies. "flag" only logs it for a mod. Nothing else is ever done on the
+// model's say. Off, budget spent or API down: nothing is read, the filters above still run.
+
+const LANG_OF = { russian: 'ru', portuguese: 'pt', spanish: 'es', french: 'fr', german: 'de', polish: 'pl', turkish: 'tr', chinese: 'zh', japanese: 'ja' };
+const LANG_KEYS = LAYOUT.find((g) => g.key === 'languages')?.channels.map((c) => c.key) ?? [];
+// The note under a removed message, in the member's language.
+export const AI_NOTES = {
+  en: (n) => `your message was removed (rule ${n}, see #rules).`,
+  ru: (n) => `ваше сообщение удалено (правило ${n}, см. #rules).`,
+  es: (n) => `tu mensaje fue eliminado (regla ${n}, ver #rules).`,
+  pt: (n) => `sua mensagem foi removida (regra ${n}, veja #rules).`,
+  fr: (n) => `ton message a été supprimé (règle ${n}, voir #rules).`,
+  de: (n) => `deine Nachricht wurde entfernt (Regel ${n}, siehe #rules).`,
+  pl: (n) => `twoja wiadomość została usunięta (zasada ${n}, zobacz #rules).`,
+  tr: (n) => `mesajın kaldırıldı (kural ${n}, bkz. #rules).`,
+  zh: (n) => `你的消息已被删除（规则 ${n}，见 #rules）。`,
+  ja: (n) => `メッセージを削除しました（ルール ${n}、#rules を参照）。`,
+};
+
+// Non-English, cheaply: mostly another script (Cyrillic, CJK, Arabic…), or Latin text with more common words of the
+// server's other languages than English ones. Short messages ("ok", "lol") never count.
+const OTHER_SCRIPT = /[\p{Script=Cyrillic}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Greek}\p{Script=Thai}\p{Script=Devanagari}\p{Script=Georgian}\p{Script=Armenian}]/gu;
+const OTHER_WORDS = new Set(('je tu il nous vous est sont pas mais avec pour dans les des une que qui quoi oui merci bonjour salut ça '
+  + 'und ich nicht ist das der ein eine mit auch aber wie danke hallo bitte '
+  + 'el los las una por para pero como está estoy qué gracias hola sí también '
+  + 'não você obrigado olá com uma isso muito '
+  + 'jest nie się tak dzięki cześć jak czy '
+  + 'bu bir ve için değil merhaba teşekkürler evet ama '
+  + 'het een niet ik maar ciao grazie sono che della perché').split(' '));
+const ENGLISH_WORDS = new Set('the and you is are it this that what how why to of in for not but with have do does can my your we they be was on just so'.split(' '));
+export function looksNonEnglish(text) {
+  const s = String(text ?? '').replace(/<a?:\w+:\d+>|<[@#][!&]?\d+>|https?:\/\/\S+|`[^`]*`/g, ' ');
+  const letters = (s.match(/\p{L}/gu) ?? []).length;
+  if (letters < 6) return false;
+  if ((s.match(OTHER_SCRIPT) ?? []).length / letters >= 0.3) return true;
+  const words = s.toLowerCase().match(/\p{L}+/gu) ?? [];
+  const other = words.filter((w) => OTHER_WORDS.has(w)).length;
+  return other >= 2 && other > words.filter((w) => ENGLISH_WORDS.has(w)).length;
+}
+
+// Why the AI check reads this message: a LAYOUT key (a language channel, #off-topic), 'non-english', or null. Staff,
+// bots and messages without letters are never read.
+export function aiScope(msg, st = state) {
+  if (!msg.member || isStaff(msg.member) || msg.author?.bot || msg.guildId !== GUILD_ID) return null;
+  if (!/\p{L}/u.test(msg.content ?? '')) return null;
+  const ids = [msg.channelId, msg.channel?.parentId].filter(Boolean);
+  const key = [...LANG_KEYS, ...AI.modChannels].find((k) => st.channels[k] && ids.includes(st.channels[k]));
+  if (key) return key;
+  return looksNonEnglish(msg.content) ? 'non-english' : null;
+}
+
+const pending = new Map(); // channelId → { items: [{ msg, scope }], timer }
+
+function queueAi(msg) {
+  if (!kiraAi.modActive()) return;
+  const scope = aiScope(msg);
+  if (!scope) return;
+  let q = pending.get(msg.channelId);
+  if (!q) {
+    q = { items: [], timer: setTimeout(() => flushAi(msg.channelId).catch(console.error), AI.modBatchMs) };
+    q.timer.unref?.();
+    pending.set(msg.channelId, q);
+  }
+  q.items.push({ msg, scope });
+  if (q.items.length >= AI.modBatchMax) flushAi(msg.channelId).catch(console.error);
+}
+function dropAi(id) {
+  for (const q of pending.values()) q.items = q.items.filter((x) => x.msg.id !== id);
+}
+
+async function flushAi(channelId) {
+  const q = pending.get(channelId);
+  if (!q) return;
+  pending.delete(channelId);
+  clearTimeout(q.timer);
+  if (!q.items.length) return;
+  const r = await kiraAi.moderateBatch(q.items.map(({ msg }) => ({
+    author: msg.member?.displayName ?? msg.author?.username ?? 'someone', channel: msg.channel?.name ?? 'unknown', text: msg.content,
+  })));
+  if (!r) return;
+  for (const [i, v] of r.results.entries()) await aiAct(q.items[i], v, r).catch(console.error);
+}
+
+const ruleName = (n) => (n ? `${n}. ${RULES[n - 1]?.[0] ?? '?'}` : 'none named');
+
+async function aiAct({ msg, scope }, v, call) {
+  if (v.verdict === 'ok') return;
+  const who = `<@${msg.author.id}> (${msg.author.tag ?? msg.author.username}) in <#${msg.channelId}>`;
+  const fields = [
+    { name: 'Original', value: clip(msg.content, 1000) },
+    ...(v.language !== 'en' ? [{ name: 'English', value: clip(v.english, 1000) }] : []),
+    { name: 'Rule', value: ruleName(v.rule), inline: true },
+    { name: 'Category', value: v.category, inline: true },
+    { name: 'Why (the model)', value: clip(v.reason, 300) },
+    { name: 'Model', value: `${call.model}, $${call.cost.toFixed(5)} for ${call.results.length} message${call.results.length > 1 ? 's' : ''}`, inline: true },
+  ];
+  if (v.verdict === 'flag') {
+    return modlog('🤖 Flagged for a mod (Kira\'s AI)', `${who} · [jump](${msg.url})\nNot deleted: a mod decides.`, 0xf0932b, fields);
+  }
+  const lang = AI_NOTES[v.language] ? v.language : LANG_OF[scope] ?? 'en';
+  await remove(msg, linkify(AI_NOTES[lang](v.rule), state));
+  // Repeat offenders: from the second removal in a day, the spam timeout ladder.
+  const day = Date.now() - 864e5;
+  const removals = [...(state.aiRemovals[msg.author.id] ?? []).filter((t) => t > day), Date.now()];
+  state.aiRemovals[msg.author.id] = removals; save();
+  let extra = '';
+  if (removals.length >= 2 && msg.member) {
+    const { ms, strike } = await spamTimeout(msg.member, `rule ${v.rule} (${v.category}), ${removals.length} removals today`);
+    extra = `\n${removals.length} removals today → timeout ${human(ms)} (strike ${strike}).`;
+  }
+  return modlog('🤖 Removed by Kira\'s AI', `${who}${extra}`, 0xff4d4d, fields);
 }
 
 // ── Events ──────────────────────────────────────────────────────────────────
@@ -340,3 +462,4 @@ export function setup() {
 }
 
 export { moderate };
+export const _test = { pending, flushAll: () => Promise.all([...pending.keys()].map((id) => flushAi(id))) };
