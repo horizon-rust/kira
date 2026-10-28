@@ -36,7 +36,8 @@ test('chat clear: older_than in hours, pages and batches', () => {
 test('chat clear: /clear-chat works in chat channels only', () => {
   const spec = (key) => LAYOUT.flatMap((g) => g.channels.map((c) => ({ ...c, staff: c.staff || g.staff }))).find((c) => c.key === key);
   assert.equal(clearAllowed({ isText: true, spec: spec('horizonchat') }), true);
-  assert.equal(clearAllowed({ isText: true, spec: spec('offtopic') }), true);
+  assert.equal(clearAllowed({ isText: true, spec: spec('introductions') }), true);
+  assert.equal(clearAllowed({ isText: true, spec: spec('offtopic') }), false); // archived: read-only
   assert.equal(clearAllowed({ isText: true, spec: undefined }), true); // a channel made by hand
   assert.equal(clearAllowed({ isText: true, spec: spec('rules') }), false); // read-only: Kira's own posts
   assert.equal(clearAllowed({ isText: true, spec: spec('modlog') }), false);
