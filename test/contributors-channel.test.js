@@ -56,7 +56,7 @@ test('the other kinds of channel keep their overwrites', () => {
   const rules = specs.find((c) => c.key === 'rules');
   assert.deepEqual(overwrites(ids, rules, false).slice(1).map((o) => o.id), ['EVERYONE', 'MOD']);
   const staff = specs.find((c) => c.key === 'modlog');
-  assert.deepEqual(overwrites(ids, staff, true).slice(1).map((o) => o.id), ['EVERYONE', 'MOD']);
+  assert.deepEqual(overwrites(ids, staff, true).slice(1).map((o) => o.id), ['EVERYONE', 'MOD', 'TEAM']);
   assert.deepEqual(overwrites(ids, specs.find((c) => c.key === 'ludovic'), false).slice(1).map((o) => o.id), ['EVERYONE', 'OWNER']);
 });
 
@@ -77,5 +77,17 @@ test('#horizon-team: only the 🌌 Horizon Team (and Kira) see it; the team also
   for (const perm of [P.ViewChannel, P.SendMessages, P.CreatePublicThreads]) assert.equal(can(['TEAM'], perm, ow), true, String(perm));
   assert.equal(can(['TEAM'], P.SendMessages, overwrites(ids, spec, false)), true);
   const order = ROLES.map((r) => r.key);
-  assert.ok(order.indexOf('team') > order.indexOf('contributor') && order.indexOf('team') > order.indexOf('sponsor') && order.indexOf('team') < order.indexOf('mod'));
+  assert.ok(order.indexOf('team') > order.indexOf('contributor') && order.indexOf('team') > order.indexOf('sponsor') && order.indexOf('team') > order.indexOf('mod'));
+});
+
+test('the Horizon Team moderates: the mods\' permissions, the staff channels, and it shows above the mods', () => {
+  const team = ROLES.find((r) => r.key === 'team');
+  const mod = ROLES.find((r) => r.key === 'mod');
+  assert.deepEqual(team.permissions, mod.permissions);
+  assert.ok(ROLES.indexOf(team) > ROLES.indexOf(mod), 'later in ROLES = higher in the list');
+  const staff = LAYOUT.find((g) => g.channels.some((c) => c.key === 'modchat') || g.key === 'staff');
+  const ow = overwrites(ids, staff.channels[0], true);
+  assert.equal(can(['TEAM'], P.ViewChannel, ow), true);
+  assert.equal(can(['MOD'], P.ViewChannel, ow), true);
+  assert.equal(can([], P.ViewChannel, ow), false);
 });
