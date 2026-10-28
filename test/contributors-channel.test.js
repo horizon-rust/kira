@@ -25,9 +25,9 @@ function can(roles, perm, ow) {
   return allowed;
 }
 
-test('#contributors sits in Horizon\'s category right after #horizon-chat, with its topic, and is a default channel', () => {
-  const horizon = LAYOUT.find((g) => g.key === 'horizon').channels.map((c) => c.key);
-  assert.equal(horizon.indexOf('contributors'), horizon.indexOf('horizonchat') + 1);
+test('#contributors leads 🛠️ contributing (with #horizon-team), with its topic, and is a default channel', () => {
+  const contributing = LAYOUT.find((g) => g.key === 'contributing').channels.map((c) => c.key);
+  assert.deepEqual(contributing, ['contributors', 'horizonteam']);
   assert.equal(spec.type, 'text');
   assert.deepEqual(spec.writers, ['contributor', 'team']);
   assert.equal(spec.topic, "Where Horizon's contributors talk. Everyone can read. To write: have a merged PR, then `/link-github` + `/verify-github`.");

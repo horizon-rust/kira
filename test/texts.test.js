@@ -31,8 +31,20 @@ const READ = {
 test('no text names a channel that is gone (#work-board, #dev-log) or one that does not exist', () => {
   for (const [where, text] of Object.entries(READ)) {
     assert.doesNotMatch(text, /work-board|dev-log|<#undefined>/, where);
-    for (const [, name] of text.matchAll(/(?<![\w/&])#(\p{Ll}[\p{Ll}\p{N}-]+)/gu)) assert.ok(names.has(name), `${where}: #${name}`);
+    for (const [, name] of text.matchAll(/(?<![\w/&])#([\p{Ll}\p{Lo}][\p{Ll}\p{Lo}\p{N}-]+)/gu)) assert.ok(names.has(name), `${where}: #${name}`);
   }
+});
+
+test('no text sends people to an archived channel, and archived ones are read-only and out of the defaults', () => {
+  const archived = specs.filter((c) => c.archived);
+  assert.deepEqual(archived.map((c) => c.key), ['offtopic', 'memes']);
+  for (const c of archived) {
+    assert.equal(c.readonly, true);
+    assert.ok(!cfg.DEFAULT_CHANNELS.includes(c.key), c.key);
+    assert.ok(!cfg.CLEAR.channels.includes(c.key), c.key);
+    for (const [where, text] of Object.entries(READ)) assert.ok(!text.includes(`#${c.name}`) || where === 'topics', `${where}: #${c.name}`);
+  }
+  assert.equal(cfg.LAYOUT.at(-1).key, 'archive'); // at the bottom
 });
 
 test('no dates, and what is not out yet says "coming soon"', () => {

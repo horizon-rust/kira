@@ -4,9 +4,9 @@ import { COLOR, LAYOUT, ROLES, HOWTO } from './config.js';
 
 const byName = new Map(LAYOUT.flatMap((g) => g.channels).filter((c) => c.type !== 'voice').map((c) => [c.name, c.key]));
 
-// "#horizon-bugs" (or "#русский") in a text becomes a clickable channel mention.
+// "#horizon-bugs" (or "#русский", "#中文": scripts without case are \p{Lo}) in a text becomes a clickable channel mention.
 export function linkify(text, state) {
-  return text.replace(/#([\p{Ll}\p{N}-]+)/gu, (m, name) => {
+  return text.replace(/#([\p{Ll}\p{Lo}\p{N}-]+)/gu, (m, name) => {
     const id = state.channels[byName.get(name)];
     return id ? `<#${id}>` : m;
   });
