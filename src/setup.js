@@ -6,7 +6,7 @@ import {
   GuildVerificationLevel, GuildExplicitContentFilter, GuildDefaultMessageNotifications,
   ForumLayoutType, SortOrderType, ChannelFlags,
 } from 'discord.js';
-import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, FAQ_MORE, HORIZON, HOWTO, DEFAULT_CHANNELS, LANGUAGES } from './config.js';
+import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, FAQ_MORE, HORIZON, HOWTO, DEFAULT_CHANNELS } from './config.js';
 import { screeningBody, screeningUpToDate } from './screening.js';
 import { applyAutomod } from './automod.js';
 import { overwrites as permissionOverwrites } from './permissions.js';
@@ -336,15 +336,10 @@ async function onboarding(guild) {
             option('🎬', 'New videos', "Ludovic's new YouTube videos", [r.newvideos], []),
           ],
         },
-        // The 🌍 languages channels are opt-in: no role, the answer shows the channel (horizon-parity discord-arch-1.md).
-        {
-          id: id(), type: 0, title: 'Do you speak another language?', single_select: false, required: false, in_onboarding: true,
-          options: LANGUAGES.map(([key, emoji, title]) => option(emoji, title, `#${LAYOUT.find((g) => g.key === 'languages').channels.find((ch) => ch.key === key).name}`, [], [c[key]])),
-        },
       ],
     },
   });
-  log('onboarding: 3 questions');
+  log('onboarding: 2 questions');
 }
 
 // The Server Guide (Discord's "home" for newcomers): a welcome from Ludovic, first steps, useful channels.

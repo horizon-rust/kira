@@ -188,8 +188,8 @@ export const LAYOUT = [
   },
   {
     // Ludovic, 2026-10-28: players asked for their language (Russian speakers say they are ~40 %); then "add more
-    // different language channels". Opt-in: not default channels, picked in Onboarding's language question (setup), so
-    // a quiet one costs nothing. Re-measured on 2026-11-11: a channel with fewer than ~5 people writing is proposed for removal.
+    // different language channels". Everyone sees all of them (default channels; Ludovic, 2026-10-28). Re-measured on
+    // 2026-11-11: a channel with fewer than ~5 people writing is proposed for removal.
     key: 'languages', category: '🌍 languages',
     channels: [
       { key: 'russian', name: 'русский', type: 'text', topic: 'Общение на русском: Horizon и всё остальное. Баги — в #horizon-bugs, идеи — в #horizon-ideas.' },
@@ -231,14 +231,8 @@ export const LAYOUT = [
 // `tag` is the staff-only tag it carries (forums require a tag); `mention` is how texts name it.
 export const HOWTO = { name: '📌 How to post here: read me first', tag: ['📌', 'read me', true], mention: 'the 📌 **How to post here** post' };
 
-// Onboarding's language question (setup): [LAYOUT key, flag, the language in its own words]. Each answer shows its channel.
-export const LANGUAGES = [
-  ['russian', '🇷🇺', 'Русский'], ['spanish', '🇪🇸', 'Español'], ['portuguese', '🇧🇷', 'Português'], ['french', '🇫🇷', 'Français'],
-  ['german', '🇩🇪', 'Deutsch'], ['polish', '🇵🇱', 'Polski'], ['turkish', '🇹🇷', 'Türkçe'], ['chinese', '🇨🇳', '中文'], ['japanese', '🇯🇵', '日本語'],
-];
-
 // What everyone sees in the channel list from the start; the Onboarding answers add the rest.
-export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'horizonchat', 'contributors', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'offtopic', 'memes', 'botcommands'];
+export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'horizonchat', 'contributors', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'offtopic', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'polish', 'turkish', 'chinese', 'japanese'];
 
 // Replaced by another channel (2026-10-25: #updates replaces #work-board and #dev-log). Setup exports every message of
 // each one to scratch/ (not committed), then deletes it; if the export fails, the channel stays.
@@ -491,7 +485,7 @@ export const WELCOME = {
     '🌅 **horizon**: #horizon-bugs, #horizon-ideas, #horizon-chat, #showcase (your videos, screenshots, builds), #releases, #updates (what changed)',
     '🛠️ **contributing**: #contributors (read by all, written by people with a merged PR)',
     '💬 **general**: chat, introductions, memes, the #hall-of-fame. Anything that isn\'t Horizon (other games, music, AI coding, Ludovic\'s other projects) goes in #off-topic.',
-    '🌍 **languages**: a channel for your language, picked in **Channels & Roles**',
+    '🌍 **languages**: #русский, #español, #português, #français, #deutsch, #polski, #türkçe, #中文, #日本語',
     '🔊 **voice**: join **➕ create your room** for your own voice channel',
     '',
     '**How it works**',
@@ -516,7 +510,7 @@ export const RULES = [
   ['Keep it SFW', 'No NSFW, gore or shock content, anywhere: names, avatars and statuses included.'],
   ['Right channel, right format', 'Every channel says what it\'s for in its description. Bugs and ideas have a template in their 📌 How to post here post, pinned at the top: posts without it are closed after an hour.'],
   ['Contributing', 'Working on an issue? `/claim` it first, so two people don\'t do the same work. Pull requests go to github.com/horizon-rust/horizon.'],
-  ['English in the main channels', 'So everyone can follow. Any language is fine in #off-topic, and these have their own channels in 🌍 languages, picked in Channels & Roles: #русский, #español, #português, #français, #deutsch, #polski, #türkçe, #中文, #日本語.'],
+  ['English in the main channels', 'So everyone can follow. Any language is fine in #off-topic, and these have their own channels in 🌍 languages: #русский, #español, #português, #français, #deutsch, #polski, #türkçe, #中文, #日本語.'],
   ['No drama with the mods in public', 'Disagree with a decision? DM Kira: it reaches the mods privately.'],
   ["Discord's rules apply", 'Follow the Discord Terms of Service and Community Guidelines (13+).'],
 ];
