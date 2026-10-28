@@ -36,7 +36,7 @@ function message(content, o = {}) {
   const replies = [];
   const msg = {
     id: `m${++n}`, content, guildId: GUILD_ID, channelId: 'chat', url: `https://discord.com/channels/${GUILD_ID}/chat/m${n}`,
-    author: { id: o.user ?? 'u1', username: 'player', bot: !!o.bot }, member: { displayName: 'Player' },
+    author: { id: o.user ?? 'u1', username: 'player', bot: !!o.bot }, member: o.member ?? { displayName: 'Player' },
     channel: { name: 'horizon-chat', parentId: o.parent ?? null, sendTyping: async () => {} },
     mentions: { repliedUser: o.repliedTo ? { id: o.repliedTo } : null },
     reference: o.ref ? { messageId: o.ref.id } : null,
@@ -266,4 +266,17 @@ test('sources not ready on the first try: one forced retry, then the question is
   assert.equal(asked.length, 1, 'no model call without sources');
   assert.equal(f.openHandoffs()[0].reason, 'sources not loaded');
   f._test.set({ sources: { refresh: async () => true, ready: () => true } });
+});
+
+test('a Team member asking for an action is told it went to Ludovic\'s agent, not "passed to the team"', async () => {
+  core.state.roles.team = 'teamrole';
+  next = { status: 'pass', reply: kit.PASSED, reason: 'asks for an action', models: ['claude-haiku-5-5'], cost: 0.001 };
+  const member = { displayName: 'levzzz', roles: { cache: new Map([['teamrole', {}]]) } };
+  const m = message(`<@${ME}> publish the nightly with its source`, { member });
+  await f.onMessage(m);
+  assert.equal(m.replies[0].content, kit.PASSED_TEAM);
+  assert.ok(!m.replies[0].content.includes('passed this to the team'));
+  assert.equal(f.openHandoffs().length, 1, 'still handed off');
+  f.closeHandoffs([m.id]);
+  delete core.state.roles.team;
 });
