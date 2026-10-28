@@ -84,8 +84,8 @@ test('the Horizon Team moderates: the mods\' permissions, the staff channels, an
   const team = ROLES.find((r) => r.key === 'team');
   const mod = ROLES.find((r) => r.key === 'mod');
   assert.deepEqual(team.permissions, mod.permissions);
-  // /slowmode is the mods' tool: both bypass it (Ludovic, 2026-10-28). Every name is a real flag (setup maps P[name]).
-  for (const r of [mod, team]) assert.ok(r.permissions.includes('BypassSlowmode'), r.key);
+  // /slowmode is the mods' tool: both bypass it, and both start voice Activities (Ludovic, 2026-10-28). Every name is a real flag (setup maps P[name]).
+  for (const r of [mod, team]) for (const p of ['BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps']) assert.ok(r.permissions.includes(p), `${r.key} ${p}`);
   for (const r of ROLES) for (const p of r.permissions ?? []) assert.equal(typeof P[p], 'bigint', `${r.key}: ${p}`);
   assert.ok(ROLES.indexOf(team) > ROLES.indexOf(mod), 'later in ROLES = higher in the list');
   const staff = LAYOUT.find((g) => g.channels.some((c) => c.key === 'modchat') || g.key === 'staff');
