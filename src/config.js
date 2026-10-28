@@ -113,6 +113,9 @@ export const LAYOUT = [
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'Big Horizon news. Pick the 📣 Big news role to get pinged.' },
       { key: 'ludovicvideos', name: 'ludovic-videos', type: 'text', readonly: true, topic: 'Ludovic\'s new YouTube videos, posted by Kira as they come out.' },
+      // In 👋 start here (Team, 2026-10-28). Ludovic, 2026-10-28: one channel for every way to support him: the Sculk affiliate link, his GitHub Sponsors (also the
+      // org-wide Sponsor button) and, later, a crypto address.
+      { key: 'sponsors', name: 'support-horizon', type: 'text', readonly: true, topic: 'Every way to support Horizon: Sculk server hosting (affiliate link), GitHub Sponsors, and crypto donations (coming soon).' },
     ],
   },
   {
@@ -148,9 +151,6 @@ export const LAYOUT = [
       },
       { key: 'releases', name: 'releases', type: 'text', readonly: true, topic: 'Every new Horizon version and launcher, posted by Kira. Pick the 📦 Releases role to get pinged.' },
       { key: 'updates', name: 'updates', type: 'text', readonly: true, topic: 'What changed in Horizon: merged work grouped by roadmap item, releases, the weekly summary, and the board at a glance. The full kanban and roadmap: playhorizon.dev/hub. Talk about it in #horizon-chat.' },
-      // Ludovic, 2026-10-28: one channel for every way to support him: the Sculk affiliate link, his GitHub Sponsors (also the
-      // org-wide Sponsor button) and, later, a crypto address.
-      { key: 'sponsors', name: 'support-horizon', type: 'text', readonly: true, topic: 'Every way to support Horizon: Sculk server hosting (affiliate link), GitHub Sponsors, and crypto donations (coming soon).' },
       // members: only these roles (and Kira, Ludovic) see it, write and open threads (src/permissions.js).
       { key: 'horizonteam', name: 'horizon-team', type: 'text', members: ['team'], topic: 'Horizon Team only: the maintainers and the core contributors.' },
     ],
