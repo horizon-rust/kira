@@ -66,3 +66,8 @@ test('every text fits where Discord puts it', () => {
   for (const c of specs.filter((s) => s.topic && s.type !== 'forum')) assert.ok(c.topic.length <= 1024, c.key);
   assert.ok(cfg.WELCOME.links.length <= 5);
 });
+
+test('#official-server says what the server runs: Pumpkin and its nightly builds', () => {
+  assert.match(cfg.OFFICIAL_SERVER.description, /Pumpkin's nightly builds/);
+  assert.doesNotMatch(cfg.OFFICIAL_SERVER.description, /Horizon's Nightly/);
+});

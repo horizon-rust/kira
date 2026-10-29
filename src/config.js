@@ -576,7 +576,7 @@ export const HORIZON = {
 export const OFFICIAL_SERVER = {
   name: 'Horizon Official',
   address: 'horizon.bunchy7s.dev',
-  description: 'Horizon\'s official **survival** server, run by **bunchy7s** and updated with Horizon\'s Nightly.',
+  description: 'Horizon\'s official **survival** server, run by **bunchy7s** on Pumpkin and updated from Pumpkin\'s nightly builds.',
   join: 'In Horizon: Multiplayer → Add Server, then the address.',
   problems: 'Something wrong, on the server or in Horizon? Post it in #horizon-bugs.',
 };
