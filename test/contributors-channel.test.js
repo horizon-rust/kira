@@ -110,3 +110,12 @@ test('read-only channels: everyone reads, the mods and the 🌌 Horizon Team pos
   // Without a Team role yet (a first setup), the overwrite is the mods' alone.
   assert.equal(overwrites({ ...ids, roles: {} }, readonly[0], false).filter((o) => o.allow?.length === 1).length, 1);
 });
+
+test('#official-server: everyone reads, only the mods, the Horizon Team and Kira write', () => {
+  const ow = overwrites(ids, specs.find((c) => c.key === 'officialserver'), false);
+  assert.equal(can([], P.ViewChannel, ow), true);
+  for (const perm of [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads]) assert.equal(can([], perm, ow), false, String(perm));
+  for (const roles of [['MOD'], ['TEAM']]) assert.equal(can(roles, P.SendMessages, ow), true, String(roles));
+  assert.equal(can(['CONTRIB'], P.SendMessages, ow), false, 'a contributor reads only');
+  assert.ok(ow.find((o) => o.id === 'KIRA').allow.includes(P.SendMessages));
+});
