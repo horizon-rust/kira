@@ -48,6 +48,13 @@ export function claimDue(claim, now, { expireDays, remindDays }) {
   return null;
 }
 
+// GitHub's assignees of an issue other than `login` (the member's linked GitHub account, or null): an issue assigned
+// on GitHub (its `/claim` comment, horizon-rust/horizon#3862) is taken, as one with Kira's label is there.
+export function heldOnGitHub(issue, login) {
+  const own = String(login ?? '').toLowerCase();
+  return (issue?.assignees ?? []).map((a) => a.login).filter((l) => l && l.toLowerCase() !== own);
+}
+
 // When a claim lapses (ms), from its last activity.
 export const lapsesAt = (claim, expireDays) => Math.max(claim.since, claim.activity ?? 0) + expireDays * DAY;
 
