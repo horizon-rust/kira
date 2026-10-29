@@ -22,7 +22,7 @@ const guide = readFileSync(new URL('../src/setup.js', import.meta.url), 'utf8').
 const forumTexts = specs.filter((c) => c.type === 'forum').flatMap((c) => [c.topic, c.guide ?? '']);
 const READ = {
   about: cfg.SERVER.about, welcome: cfg.WELCOME.description, rules: cfg.RULES.flat().join('\n'), footer: cfg.RULES_FOOTER,
-  faq: cfg.FAQ.flat().join('\n'), horizon: `${cfg.HORIZON.description}\n${cfg.HORIZON.get}`, pins: Object.values(cfg.PINS).join('\n'),
+  faq: cfg.FAQ.flat().join('\n'), official: Object.values(cfg.OFFICIAL_SERVER).join('\n'), horizon: `${cfg.HORIZON.description}\n${cfg.HORIZON.get}`, pins: Object.values(cfg.PINS).join('\n'),
   topics: specs.map((c) => c.topic ?? '').join('\n'), forums: forumTexts.join('\n'), help: help.description, guide,
   roles: texts.rolesMessage(core.state).embeds[0].data.description,
   newmember: texts.welcomeMessage(['1'], 10, core.state).embeds[0].data.description,
