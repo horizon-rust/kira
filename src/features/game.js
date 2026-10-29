@@ -2,9 +2,9 @@
 // sends { player, question } with the server's own token (data/game-servers.json, issued on Kira's host with
 // scripts/game-token.mjs; the token names the server, so a body can't claim another) and prints { answer } in chat.
 // Limits: per player, per server per hour and per day; failed logins per address, like the other routes.
-import { openStore, verify, touch, clientIp, rateLimiter } from '../agents.js';
+import { openStore, verify, touch, clientIp, rateLimiter, issue, revoke, refusal } from '../agents.js';
 import { dataFile } from '../store.js';
-import { GAME, parseAsk, validPlayer, BUSY_REPLY } from '../game-kit.js';
+import { GAME, parseAsk, validPlayer, BUSY_REPLY, tokenDm } from '../game-kit.js';
 
 export const openServers = () => openStore(process.env.KIRA_GAME_SERVERS || dataFile('game-servers.json'));
 
@@ -56,5 +56,37 @@ export function gameRoutes({ store, ask, limiter, now = Date.now }) {
         return send(res, 500, { answer: '' });
       }
     },
+  };
+}
+
+// POST /admin/game-token (src/admin.js), behind the admin token. `dm(owner, text)` sends a Discord DM. A token is sent
+// only by DM to the server's owner: if the DM fails, it is revoked at once. `deliver: 'response'` is for tests: a day
+// at most, and the caller pipes it straight where it goes.
+export function gameTokens({ store, dm, endpoint, now = Date.now }) {
+  return async (body) => {
+    if (body.action === 'list') {
+      return { servers: Object.entries(store.tokens).map(([id, t]) => ({ id, server: t.name, owner: t.user, label: t.label, expiresAt: t.expiresAt, revokedAt: t.revokedAt, lastUsedAt: t.lastUsedAt })) };
+    }
+    if (body.action === 'revoke') {
+      if (!store.tokens[body.id]) throw refusal(`no token ${body.id}`);
+      revoke(store, body.id, { any: true }, now());
+      return { revoked: body.id };
+    }
+    if (body.action !== 'issue') throw refusal('action: issue, list or revoke');
+    const { server, owner } = body;
+    if (typeof server !== 'string' || !/^[a-z0-9.-]{3,80}$/i.test(server)) throw refusal('server: its address, like horizon.example.net');
+    if (typeof owner !== 'string' || !/^\d{17,20}$/.test(owner)) throw refusal("owner: the owner's Discord id");
+    const test = body.deliver === 'response';
+    if (!test && body.deliver !== 'dm') throw refusal('deliver: dm (or response, for a test token)');
+    const days = test ? 1 : Number(body.days ?? GAME.tokenDays);
+    const t = issue(store, { user: owner, name: server, days, label: test ? 'test' : 'game', maxPerUser: 3, maxPerDay: 3 }, now());
+    if (test) return { id: t.id, server, expiresAt: t.record.expiresAt, token: t.token };
+    try {
+      await dm(owner, tokenDm({ server, endpoint, token: t.token, id: t.id }));
+    } catch (e) {
+      revoke(store, t.id, { any: true }, now());
+      throw refusal(`the DM to ${owner} failed (${String(e.message).slice(0, 100)}): token ${t.id} revoked`);
+    }
+    return { id: t.id, server, expiresAt: t.record.expiresAt, dm: 'sent' };
   };
 }
