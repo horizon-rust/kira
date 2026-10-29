@@ -6,7 +6,7 @@ import {
   GuildVerificationLevel, GuildExplicitContentFilter, GuildDefaultMessageNotifications,
   ForumLayoutType, SortOrderType, ChannelFlags,
 } from 'discord.js';
-import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, FAQ_MORE, HORIZON, HOWTO, DEFAULT_CHANNELS } from './config.js';
+import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, FAQ_MORE, HORIZON, OFFICIAL_SERVER, HOWTO, DEFAULT_CHANNELS } from './config.js';
 import { screeningBody, screeningUpToDate } from './screening.js';
 import { applyAutomod } from './automod.js';
 import { overwrites as permissionOverwrites } from './permissions.js';
@@ -296,6 +296,16 @@ async function posts(guild) {
       new EmbedBuilder().setColor(0x555555).setTitle('⚠️ Disclaimer').setDescription(HORIZON.disclaimer),
     ],
     components: linkRows([['playhorizon.dev', LINKS.horizonSite], ['The hub', LINKS.hub], ['Download the launcher', LINKS.horizonLauncher], ['GitHub', LINKS.horizon]]),
+  });
+  await upsert(guild, 'officialserver', 'officialserver', {
+    embeds: [
+      new EmbedBuilder().setColor(COLOR).setTitle(`🏕️ ${OFFICIAL_SERVER.name}`).setDescription(OFFICIAL_SERVER.description)
+        .addFields(
+          { name: 'Address', value: `\`${OFFICIAL_SERVER.address}\`` },
+          { name: 'Join', value: OFFICIAL_SERVER.join },
+          { name: 'A problem?', value: L(OFFICIAL_SERVER.problems) },
+        ),
+    ],
   });
   // The old catalogue of Ludovic's projects (#projects) was deleted with the server's old scope.
   for (const key of Object.keys(state.messages)) if (key.startsWith('project:')) delete state.messages[key];

@@ -86,6 +86,8 @@ test('the Horizon-only layout: #updates replaces the board channels, the old sco
   const keys = horizon.channels.map((c) => c.key);
   for (const k of ['horizonbugs', 'horizonideas', 'horizonchat', 'showcase', 'releases', 'updates']) assert.ok(keys.includes(k), k);
   assert.ok(LAYOUT.find((g) => g.key === 'start').channels.some((c) => c.key === 'horizoninfo'), 'the download is in start here');
+  const official = LAYOUT.find((g) => g.key === 'start').channels.find((c) => c.key === 'officialserver');
+  assert.ok(official?.readonly, 'the official server has a read-only channel in start here');
   assert.equal(horizon.channels.find((c) => c.key === 'updates').readonly, true);
   for (const r of REPLACED) {
     assert.ok(!LAYOUT.some((g) => g.channels.some((c) => c.key === r.key)), `${r.key} is replaced but in the layout`);

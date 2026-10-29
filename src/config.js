@@ -124,6 +124,8 @@ export const LAYOUT = [
       { key: 'welcome', name: 'welcome', type: 'text', readonly: true, topic: 'Start here: what Horizon is, where everything is, and your roles (buttons below).' },
       { key: 'newmembers', name: 'new-members', type: 'text', readonly: true, topic: 'Everyone who joins, welcomed here.' },
       { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the disclaimer.' },
+      // Ludovic, 2026-10-29: Horizon's official survival server, run by bunchy7s; the game and the launcher list it.
+      { key: 'officialserver', name: 'official-server', type: 'text', readonly: true, topic: 'Horizon Official, the survival server run by bunchy7s: horizon.bunchy7s.dev' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
       { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'Big Horizon news. Pick the 📣 Big news role to get pinged.' },
@@ -234,7 +236,7 @@ export const LAYOUT = [
 export const HOWTO = { name: '📌 How to post here: read me first', tag: ['📌', 'read me', true], mention: 'the 📌 **How to post here** post' };
 
 // What everyone sees in the channel list from the start; the Onboarding answers add the rest.
-export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'horizonchat', 'contributors', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'offtopic', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'polish', 'turkish', 'chinese', 'japanese'];
+export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'officialserver', 'horizonchat', 'contributors', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'offtopic', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'polish', 'turkish', 'chinese', 'japanese'];
 
 // Replaced by another channel (2026-10-25: #updates replaces #work-board and #dev-log). Setup exports every message of
 // each one to scratch/ (not committed), then deletes it; if the export fails, the channel stays.
@@ -568,6 +570,15 @@ export const HORIZON = {
   ].join('\n'),
   get: `Website: ${LINKS.horizonSite}\nLauncher: [download](${LINKS.horizonLauncher})\nCode: ${LINKS.horizon}`,
   disclaimer: 'Horizon is an unofficial fan project. It is not affiliated with, endorsed by, or connected to Mojang Studios or Microsoft. Minecraft is a trademark of Mojang and Microsoft; the game, its name, textures and sounds belong to them. Horizon contains none of Minecraft\'s code or files, and none are distributed. To play Horizon you must own a legal copy of Minecraft Java Edition. Horizon is a free, personal, educational project, not for sale, and used at your own risk.',
+};
+
+// Horizon's official survival server: #official-server, and the game's and the launcher's Multiplayer lists.
+export const OFFICIAL_SERVER = {
+  name: 'Horizon Official',
+  address: 'horizon.bunchy7s.dev',
+  description: 'Horizon\'s official **survival** server, run by **bunchy7s** and updated with Horizon\'s Nightly. Online mode: you play with your own Java Edition account, as on any official-rules server.',
+  join: 'In Horizon: Multiplayer → Add Server, then the address. Signed in? The launcher\'s account button, top right.',
+  problems: 'Something wrong, on the server or in Horizon? Post it in #horizon-bugs.',
 };
 
 // Contributors' AI agents (src/agents.js, src/mcp.js, src/features/agents.js): the MCP endpoint and its tokens.

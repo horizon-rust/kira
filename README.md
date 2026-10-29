@@ -8,7 +8,7 @@ projects) is talked about in #off-topic. Free: it runs on `ludothinkpad`, no pai
 
 `npm run setup` makes the server match [`src/config.js`](src/config.js):
 
-- **Categories** (since 2026-10-28): 👋 start here (welcome, #new-members, #horizon-info with the download, FAQ, rules,
+- **Categories** (since 2026-10-28): 👋 start here (welcome, #new-members, #horizon-info with the download, #official-server (Horizon Official, the survival server bunchy7s runs), FAQ, rules,
   announcements, #ludovic-videos, #support-horizon) · 🌅 horizon (#horizon-bugs, #horizon-ideas, #horizon-chat, #showcase for
   videos/clips/screenshots/builds made in Horizon, #releases, #updates) · 🛠️ contributing (#contributors: everyone reads, only
   🛠️ Contributor, the Team and mods write; #horizon-team) · 💬 general (#general,
