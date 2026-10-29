@@ -323,7 +323,7 @@ body `{ "player": "<Minecraft name>", "question": "kira why …" }` (the `kira`/
   `node scripts/admin.mjs game-token https://mcp.playhorizon.dev '{"action":"issue","server":"<address>","owner":"<discord id>","deliver":"dm"}'`
   answers its id only; a failed DM revokes it at once. `{"action":"list"}`, `{"action":"revoke","id":"…"}`;
   `"deliver":"response"` gives a test token for a day. From a shell on the host, `scripts/game-token.mjs` does the same.
-- **Limits** (`GAME` in `src/game-kit.js`): 3 questions per player in 10 minutes (then "ask me again a bit later"), 30 per
+- **Limits** (`GAME` in `src/game-kit.js`): 20 questions per player an hour (then "ask me again a bit later"), 60 per
   server an hour and 200 a day (then nothing in chat); failed logins per address like the other routes; and the AI's
   daily budget.
 - **Rules**: her Discord rules (only what works in a release, no dates or promises, no piracy), then game chat's: 240

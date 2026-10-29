@@ -7,7 +7,7 @@ export const GAME = {
   maxReply: 256, // one Minecraft chat message
   maxQuestion: 256, // what the chat box lets a player type
   maxBody: 4 * 1024,
-  limits: { player: [3, 10 * 60_000], server: [30, 60 * 60_000], serverDay: [200, 24 * 60 * 60_000] },
+  limits: { player: [20, 60 * 60_000], server: [60, 60 * 60_000], serverDay: [200, 24 * 60 * 60_000] },
   tokenDays: 365,
 };
 
