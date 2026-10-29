@@ -75,6 +75,8 @@ export async function claim(user, member, n) {
     refreshSoon();
     return `#${n} is still yours: the ${WORK.expireDays} days start again.`;
   }
+  const holders = wk.heldOnGitHub(issue, loginOf(user.id));
+  if (holders.length && !isStaff(member)) return `#${n} is assigned to **${holders.join(', ')}** on GitHub: someone is on it. Pick another, or ask in the issue.`;
   if (issue.labels.some((l) => l.name === WORK.label) && !isStaff(member)) return `#${n} already has the **${WORK.label}** label on GitHub: someone is on it. Ask in #horizon-chat.`;
   const wait = wk.cooldownLeft(work.githubAt?.[n], Date.now(), WORK.claimCooldownMs);
   if (wait) return `#${n} was claimed or unclaimed a moment ago: try again in ${Math.ceil(wait / 60_000)} min.`;

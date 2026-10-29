@@ -124,3 +124,11 @@ test('CI failures: reported once per failing commit, not at the first look (step
   assert.deepEqual(r.seen, {});
 });
 
+
+test('an issue assigned on GitHub is taken, except by its own assignee', () => {
+  const issue = { assignees: [{ login: 'Dev' }, { login: 'other' }] };
+  assert.deepEqual(wk.heldOnGitHub(issue, null), ['Dev', 'other']);
+  assert.deepEqual(wk.heldOnGitHub(issue, 'dev'), ['other']);
+  assert.deepEqual(wk.heldOnGitHub({ assignees: [] }, 'dev'), []);
+  assert.deepEqual(wk.heldOnGitHub({}, 'dev'), []);
+});
