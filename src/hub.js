@@ -192,6 +192,16 @@ export function reportBody(fields) {
   ].join('\n').slice(0, 1900);
 }
 
+// The roadmap is several long messages: outside #bot-commands it would flood the chat (Cosmic, 2026-10-29), so
+// there only the person who asked sees it. With no #bot-commands channel known, it posts as before.
+export function roadmapIsPrivate(channelId, botCommandsId) {
+  return Boolean(botCommandsId) && channelId !== botCommandsId;
+}
+
+export function roadmapElsewhere(botCommandsId, hubUrl) {
+  return `The roadmap is long, so I post it in <#${botCommandsId}> only. Run \`/roadmap\` here to see it just for you, or read it on ${hubUrl}.`;
+}
+
 export function helpText(hubUrl) {
   return [
     "I'm Kira, Horizon's front desk. The same things you can do on the hub:",

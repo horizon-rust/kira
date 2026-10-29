@@ -188,7 +188,11 @@ export async function onMessage(msg) {
   const parsed = client.user && hub.parseVerb(msg.content, client.user.id);
   if (!parsed) return false;
   const { verb, rest } = parsed;
-  if (verb === 'roadmap') await replyAll(msg, hub.roadmapMessages(await roadmap(), HUB.url, rest));
+  if (verb === 'roadmap') {
+    const here = channel('botcommands')?.id;
+    if (hub.roadmapIsPrivate(msg.channelId, here)) await reply(msg, hub.roadmapElsewhere(here, HUB.url));
+    else await replyAll(msg, hub.roadmapMessages(await roadmap(), HUB.url, rest));
+  }
   else if (verb === 'suggest') await reply(msg, await suggest(msg.author, msg.member, rest, 'Discord, @Kira suggest', msg.url));
   else if (verb === 'report') await reply(msg, { content: 'Click to fill in the bug form (it becomes a post in #horizon-bugs and a GitHub issue):', components: [reportButton()] });
   else if (verb === 'claim') {
@@ -217,10 +221,12 @@ export const commands = [
 
 export const handlers = {
   async roadmap(i) {
-    await i.deferReply();
+    const quiet = hub.roadmapIsPrivate(i.channelId, channel('botcommands')?.id);
+    const flags = quiet ? { flags: MessageFlags.Ephemeral } : {};
+    await i.deferReply(flags);
     const [first, ...rest] = hub.roadmapMessages(await roadmap(), HUB.url, i.options.getString('area') ?? '');
     await i.editReply(first);
-    for (const p of rest) await i.followUp({ ...p, allowedMentions: { parse: [] } }).catch((e) => console.error('roadmap', e.message));
+    for (const p of rest) await i.followUp({ ...p, ...flags, allowedMentions: { parse: [] } }).catch((e) => console.error('roadmap', e.message));
   },
   async suggest(i) {
     await i.deferReply({ flags: MessageFlags.Ephemeral });

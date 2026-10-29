@@ -340,3 +340,13 @@ test('/roadmap and @Kira roadmap: the first message answers, the others follow i
   assert.deepEqual(said.map(([k]) => k), ['reply', 'send']);
   assert.deepEqual(said[1][1].allowedMentions, { parse: [] });
 });
+
+test('the roadmap posts in #bot-commands only; elsewhere only the asker sees it', async () => {
+  const hub = await import('../src/hub.js');
+  assert.equal(hub.roadmapIsPrivate('1', '1'), false);
+  assert.equal(hub.roadmapIsPrivate('2', '1'), true);
+  assert.equal(hub.roadmapIsPrivate('2', undefined), false);
+  const text = hub.roadmapElsewhere('1', 'https://playhorizon.dev/hub');
+  assert.match(text, /<#1>/);
+  assert.match(text, /\/roadmap/);
+});
