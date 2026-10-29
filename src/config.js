@@ -601,7 +601,8 @@ export const AI = {
   // 2026-10-28: "use Kira for it" rather than AutoMod regexes per language); KIRA_AI_MOD=0 turns it off for good,
   // `/kira-ai mod off` for now. Same daily budget as the answers.
   mod: !['0', 'off', 'false', 'no'].includes((process.env.KIRA_AI_MOD ?? '').trim().toLowerCase()),
-  modChannels: ['offtopic'], // any language there
+  modChannels: ['offtopic', 'horizonchat', 'general'], // every message there, any language (the busy English chats too:
+  // #horizon-team, 2026-10-29: "horizon-chat is absolutely off the walls … political and racist")
   modBatchMs: 4_000, // messages of one channel arriving within this are read in one call
   modBatchMax: 10,
   modPauseMs: 5 * 60_000, // after an API error, the check pauses this long (the filters still run)
