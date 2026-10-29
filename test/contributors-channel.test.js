@@ -80,10 +80,12 @@ test('#horizon-team: only the 🌌 Horizon Team (and Kira) see it; the team also
   assert.ok(order.indexOf('team') > order.indexOf('contributor') && order.indexOf('team') > order.indexOf('sponsor') && order.indexOf('team') > order.indexOf('mod'));
 });
 
-test('the Horizon Team moderates: the mods\' permissions, the staff channels, and it shows above the mods', () => {
+test('the Horizon Team moderates: the mods\' permissions plus kick and ban, the staff channels, and it shows above the mods', () => {
   const team = ROLES.find((r) => r.key === 'team');
   const mod = ROLES.find((r) => r.key === 'mod');
-  assert.deepEqual(team.permissions, mod.permissions);
+  // Only the Team kicks and bans (dezer-x, 2026-10-29): mods time out and delete.
+  assert.deepEqual(team.permissions.filter((p) => p !== 'KickMembers' && p !== 'BanMembers'), mod.permissions);
+  for (const p of ['KickMembers', 'BanMembers']) { assert.ok(team.permissions.includes(p)); assert.ok(!mod.permissions.includes(p)); }
   // /slowmode is the mods' tool: both bypass it, and both start voice Activities (Ludovic, 2026-10-28). Every name is a real flag (setup maps P[name]).
   for (const r of [mod, team]) for (const p of ['BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps']) assert.ok(r.permissions.includes(p), `${r.key} ${p}`);
   for (const r of ROLES) for (const p of r.permissions ?? []) assert.equal(typeof P[p], 'bigint', `${r.key}: ${p}`);

@@ -73,8 +73,10 @@ export const ROLES = [
   // Given by Ludovic by hand. 💚 Sponsor: who sponsors Horizon (Sculk Hosting's owner, 2026-10-27).
   { key: 'sponsor', name: '💚 Sponsor', color: 0x2ecc40, hoist: true },
   {
+    // No kick or ban (dezer-x in #horizon-team, 2026-10-29: a rogue mod could ban people for no reason): mods time
+    // out and delete; a ban goes through the Team.
     key: 'mod', name: '🛡️ Mod', color: 0x2ecc71, hoist: true,
-    permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps'],
+    permissions: ['ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps'],
   },
   // The core contributors who review and merge (GitHub team horizon-team). Ludovic, 2026-10-28: they moderate too, with
   // the mods' permissions and the staff channels, and show above the mods. Writes in #contributors; the only role in
