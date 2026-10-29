@@ -94,14 +94,14 @@ test('POST /game/ask: the token names the server, the answer comes back, bad bod
   }
 });
 
-test('POST /game/ask: 3 questions per player in 10 minutes, 30 per server an hour', async () => {
+test('POST /game/ask: 20 questions per player an hour, 60 per server an hour', async () => {
   const { store, server, post } = await serve(async () => ({ status: 'answer', reply: 'ok.' }));
   try {
     const { token } = issue(store, { user: 'owner2', name: 'limits.example', days: 30 });
-    for (let i = 0; i < 3; i++) assert.equal((await post({ player: 'Alex', question: 'hi' }, token)).status, 200);
+    for (let i = 0; i < 20; i++) assert.equal((await post({ player: 'Alex', question: 'hi' }, token)).status, 200);
     assert.deepEqual(await post({ player: 'alex', question: 'hi' }, token), { status: 429, body: { answer: g.BUSY_REPLY } }, 'names in any case');
     let last;
-    for (let i = 0; i < 40 && (last = await post({ player: `P${String(i).padStart(3, '0')}`, question: 'hi' }, token)).status === 200; i++);
+    for (let i = 0; i < 80 && (last = await post({ player: `P${String(i).padStart(3, '0')}`, question: 'hi' }, token)).status === 200; i++);
     assert.deepEqual(last, { status: 429, body: { answer: '' } }, 'the server limit says nothing in chat');
   } finally {
     server.close();

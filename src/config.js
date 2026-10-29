@@ -577,8 +577,8 @@ export const OFFICIAL_SERVER = {
   name: 'Horizon Official',
   address: 'horizon.bunchy7s.dev',
   description: 'Horizon\'s official **survival** server, run by **bunchy7s** on Pumpkin and updated from Pumpkin\'s nightly builds.',
-  join: 'In Horizon: Multiplayer → Add Server, then the address.',
-  problems: 'Something wrong, on the server or in Horizon? Post it in #horizon-bugs.',
+  join: 'You need Horizon to join (other clients are turned away). In Horizon: Multiplayer → Add Server, then the address.',
+  problems: 'A bug there can come from Pumpkin (the server) or from Horizon. Try the same thing in single player first: if it happens there too, post it in #horizon-bugs; if it only happens on the server, tell bunchy7s.',
 };
 
 // Contributors' AI agents (src/agents.js, src/mcp.js, src/features/agents.js): the MCP endpoint and its tokens.
