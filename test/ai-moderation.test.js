@@ -18,7 +18,7 @@ const mod = await import('../src/features/moderation.js');
 const ai = await import('../src/ai.js');
 const kit = await import('../src/ai-kit.js');
 
-Object.assign(core.state.channels, { french: 'fr', offtopic: 'ot', horizonchat: 'hc', modlog: 'ml', rules: 'rl' });
+Object.assign(core.state.channels, { french: 'fr', offtopic: 'ot', horizonchat: 'hc', showcase: 'sc', modlog: 'ml', rules: 'rl' });
 const logs = [];
 core.client.channels.cache.set('ml', { send: async (m) => { logs.push(m.embeds[0].toJSON()); return m; } });
 core.client.channels.cache.set('fr', { messages: { delete: async (id) => { deleted.push(id); } } }); // the flood filter deletes by id
@@ -136,10 +136,11 @@ test('the scope: the language channels, #off-topic and its threads, non-English 
   assert.equal(mod.aiScope(message('bonjour à tous')), 'french');
   assert.equal(mod.aiScope(message('hello everyone', { channel: 'ot' })), 'offtopic');
   assert.equal(mod.aiScope(message('hello everyone', { channel: 'thread1', parent: 'ot' })), 'offtopic');
-  assert.equal(mod.aiScope(message('привет, как дела у всех?', { channel: 'hc' })), 'non-english');
-  assert.equal(mod.aiScope(message('je ne comprends pas pourquoi ça crash', { channel: 'hc' })), 'non-english');
-  assert.equal(mod.aiScope(message('how do I change the render distance?', { channel: 'hc' })), null);
-  assert.equal(mod.aiScope(message('ok lol', { channel: 'hc' })), null);
+  assert.equal(mod.aiScope(message('привет, как дела у всех?', { channel: 'sc' })), 'non-english');
+  assert.equal(mod.aiScope(message('je ne comprends pas pourquoi ça crash', { channel: 'sc' })), 'non-english');
+  assert.equal(mod.aiScope(message('how do I change the render distance?', { channel: 'sc' })), null);
+  assert.equal(mod.aiScope(message('ok lol', { channel: 'sc' })), null);
+  assert.equal(mod.aiScope(message('how do I change the render distance?', { channel: 'hc' })), 'horizonchat', 'the busy English chats: every message');
   assert.equal(mod.aiScope(message('bonjour à tous', { staff: true })), null);
   assert.equal(mod.aiScope(message('bonjour à tous', { bot: true })), null);
   assert.equal(mod.aiScope(message('🔥🔥 123 :)')), null);
@@ -188,7 +189,7 @@ test('a batch: messages of one channel within a few seconds are read in one call
   await mod.moderate(message('ça va ?', { user: 'b' }));
   await mod.moderate(message('je suis modo', { user: 'c', staff: true }));
   await mod.moderate(message('hello', { user: 'd', channel: 'ot' }));
-  await mod.moderate(message('just English', { user: 'e', channel: 'hc' }));
+  await mod.moderate(message('just English', { user: 'e', channel: 'sc' }));
   await mod._test.flushAll();
   assert.equal(calls.length, 2, 'one call per channel');
   assert.deepEqual(calls.map((b) => b.map((m) => m.text)).sort(), [['hello'], ['salut tout le monde', 'ça va ?']]);
