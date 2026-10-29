@@ -318,9 +318,11 @@ Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`
 body `{ "player": "<Minecraft name>", "question": "kira why …" }` (the `kira`/`@kira` prefix is optional), answer
 `{ "answer": "…" }` (empty: say nothing). The token names the server; a body can't claim another.
 
-- **Tokens**, one per server, in `data/game-servers.json` (never usable for MCP), from a shell on Kira's host:
-  `node scripts/game-token.mjs issue <server name> <owner's discord id> [days]` prints it once on stdout: pipe it
-  straight into Kira's DM to the owner. `list`, `revoke <id>`.
+- **Tokens**, one per server, in `data/game-servers.json` (never usable for MCP). Kira issues one and **DMs it to the
+  server's owner herself**, so it is never printed anywhere: with the admin routes on (see Hosting),
+  `node scripts/admin.mjs game-token https://mcp.playhorizon.dev '{"action":"issue","server":"<address>","owner":"<discord id>","deliver":"dm"}'`
+  answers its id only; a failed DM revokes it at once. `{"action":"list"}`, `{"action":"revoke","id":"…"}`;
+  `"deliver":"response"` gives a test token for a day. From a shell on the host, `scripts/game-token.mjs` does the same.
 - **Limits** (`GAME` in `src/game-kit.js`): 3 questions per player in 10 minutes (then "ask me again a bit later"), 30 per
   server an hour and 200 a day (then nothing in chat); failed logins per address like the other routes; and the AI's
   daily budget.

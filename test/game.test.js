@@ -152,3 +152,49 @@ test('askInGame: AutoMod and the moderation model stop a question; the off switc
   assert.deepEqual(await f.askInGame({ server: 's', player: 'Steve', question: 'hi' }), { status: 'off', reply: g.OFF_REPLY });
   f._test.store.on = true;
 });
+
+test('POST /admin/game-token: issue sends the token by DM only, a failed DM revokes it, list and revoke', async () => {
+  const { adminRoutes } = await import('../src/admin.js');
+  const { createHash } = await import('node:crypto');
+  const { verify } = await import('../src/agents.js');
+  const { gameTokens } = await import('../src/features/game.js');
+  const store = openServers();
+  const dms = [];
+  let dmFails = false;
+  const tokens = gameTokens({ store, endpoint: 'https://kira.example/game/ask', dm: async (id, text) => { if (dmFails) throw new Error('Cannot send messages to this user'); dms.push({ id, text }); } });
+  const admin = 'a'.repeat(40);
+  const routes = adminRoutes({ hash: createHash('sha256').update(admin).digest('hex'), files: {}, limiter: rateLimiter(), save: () => {}, freeze: () => {}, gameTokens: tokens });
+  const server = await startServer(0, { store: { tokens: {} }, api: { snapshot: () => null }, routes });
+  const call = async (body, auth = admin) => {
+    const r = await fetch(`http://127.0.0.1:${server.address().port}/admin/game-token`, { method: 'POST', headers: { Authorization: `Bearer ${auth}` }, body: JSON.stringify(body) });
+    return { status: r.status, body: await r.json() };
+  };
+  try {
+    const owner = '1372615310946992188';
+    assert.equal((await call({ action: 'list' }, 'wrong')).status, 401);
+    const ok = await call({ action: 'issue', server: 'horizon.bunchy7s.dev', owner, deliver: 'dm' });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.dm, 'sent');
+    assert.equal(ok.body.token, undefined, 'the answer never holds the token');
+    assert.equal(dms.length, 1);
+    assert.equal(dms[0].id, owner);
+    const sent = /token = "(kira_[^"]+)"/.exec(dms[0].text)[1];
+    assert.match(dms[0].text, /endpoint = "https:\/\/kira\.example\/game\/ask"/);
+    assert.deepEqual(verify(store, sent).name, 'horizon.bunchy7s.dev');
+    dmFails = true;
+    const failed = await call({ action: 'issue', server: 'other.example', owner, deliver: 'dm' });
+    assert.equal(failed.status, 400);
+    assert.match(failed.body.error, /DM .* failed.*revoked/);
+    const list = (await call({ action: 'list' })).body.servers;
+    assert.equal(list.find((t) => t.server === 'other.example').revokedAt > 0, true);
+    assert.equal((await call({ action: 'issue', server: 'x y', owner, deliver: 'dm' })).status, 400);
+    assert.equal((await call({ action: 'issue', server: 'a.example', owner: 'me', deliver: 'dm' })).status, 400);
+    assert.equal((await call({ action: 'issue', server: 'a.example', owner })).status, 400, 'deliver is explicit');
+    const test = await call({ action: 'issue', server: 'test.example', owner: '622720516779802630', deliver: 'response' });
+    assert.ok(test.body.token.startsWith('kira_') && test.body.expiresAt - Date.now() <= 86_400_000, 'a test token lasts a day');
+    assert.deepEqual((await call({ action: 'revoke', id: ok.body.id })).body, { revoked: ok.body.id });
+    assert.equal(verify(store, sent).ok, false);
+  } finally {
+    server.close();
+  }
+});

@@ -64,3 +64,15 @@ export function gameReply(text) {
   }
   return out;
 }
+
+// The DM that carries a server's token to its owner, with what to do with it.
+export const tokenDm = ({ server, endpoint, token, id }) => [
+  `🔑 Your token for Kira in **${server}**'s chat (id \`${id}\`). Keep it secret: anyone with it can ask Kira in your server's name.`,
+  '',
+  'Put it in `plugins/data/kira-pumpkin/config.toml` on the server:',
+  '```toml',
+  `endpoint = "${endpoint}"`,
+  `token = "${token}"`,
+  '```',
+  'Then install the plugin and restart: <https://github.com/horizon-rust/kira-pumpkin#install>. Lost or leaked? Ask the Horizon Team for a new one; the old one is then revoked.',
+].join('\n');

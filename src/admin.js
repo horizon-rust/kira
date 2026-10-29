@@ -2,6 +2,7 @@
 // replaces them and restarts the process (the host starts it again on the new files). Both need the admin
 // token: its secret is in 1Password (op://Agents/Kira admin token/credential), the host only has its SHA-256
 // (KIRA_ADMIN_TOKEN_SHA256). No variable, no admin routes. Failed attempts count in the "auth" rate limit.
+// POST /admin/game-token issues, lists and revokes game servers' tokens (src/features/game.js `gameTokens`).
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { clientIp } from './agents.js';
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
@@ -19,7 +20,7 @@ export function validAgents(a) {
     && (t.name === undefined || typeof t.name === 'string') && (t.label == null || typeof t.label === 'string'));
 }
 
-export function adminRoutes({ hash, files, limiter, save, freeze, cleanup = null, exit = () => process.exit(75) }) { // non-zero: every restart policy starts it again
+export function adminRoutes({ hash, files, limiter, save, freeze, cleanup = null, gameTokens = null, exit = () => process.exit(75) }) { // non-zero: every restart policy starts it again
   if (!/^[0-9a-f]{64}$/.test(hash ?? '')) return {};
   const want = Buffer.from(hash, 'hex');
   const ok = (req) => {
@@ -60,8 +61,32 @@ export function adminRoutes({ hash, files, limiter, save, freeze, cleanup = null
       res.end(JSON.stringify(job.last ?? { running: false, last: null }));
     },
   };
+  // Game servers' tokens (Kira in a Minecraft server's chat): { action: 'issue', server, owner, days?, deliver: 'dm' }
+  // DMs the token to the owner and answers its id only; deliver 'response' (a test token, a day at most) answers it.
+  // { action: 'list' }, { action: 'revoke', id }.
+  const gameRoutes = !gameTokens ? {} : {
+    'POST /admin/game-token': (req, res) => {
+      if (!ok(req)) { req.resume(); return deny(req, res); }
+      const chunks = [];
+      let size = 0;
+      req.on('data', (c) => { size += c.length; if (size <= 4096) chunks.push(c); });
+      req.on('end', async () => {
+        const send = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+        let body = null;
+        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { /* below */ }
+        if (size > 4096 || !body || typeof body !== 'object') return send(400, { error: 'expected a JSON object' });
+        try {
+          send(200, await gameTokens(body));
+        } catch (e) {
+          send(e.expose ? 400 : 500, { error: e.expose ? e.message : 'internal error' });
+          if (!e.expose) console.error('admin game-token', e.message);
+        }
+      });
+    },
+  };
   return {
     ...cleanupRoutes,
+    ...gameRoutes,
     'GET /admin/backup': (req, res) => {
       if (!ok(req)) return deny(req, res);
       save(); // what is in memory, first
