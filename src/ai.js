@@ -109,15 +109,16 @@ const readDocTool = (names) => ({
   input_schema: { type: 'object', additionalProperties: false, required: ['name'], properties: { name: { type: 'string', enum: names.length ? names : ['README.md'] } } },
 });
 
-// `client`: an Anthropic client (or a fake with messages.create). answer() never throws for a model problem: it
+// `client`: an Anthropic client (or a fake with messages.create); `rules`: the system prompt (game chat has its own,
+// src/game-kit.js). answer() never throws for a model problem: it
 // returns status 'pass' with the reason, so the member always hears back.
-export function makeAnswerer({ client, sources, models = kit.MODELS }) {
+export function makeAnswerer({ client, sources, models = kit.MODELS, rules = kit.RULES }) {
   // One model's attempt; what it costs is added to `spent` as it goes, so a failure halfway still counts.
   async function ask(model, turn, spent) {
     const careful = model === models.careful;
     // The rules are the system prompt; the sources are the user turn's first block, cached for an hour (answers come
     // minutes to hours apart); the question comes after the breakpoint.
-    const system = kit.RULES;
+    const system = rules;
     const tools = [readDocTool(sources.names())];
     const messages = [{ role: 'user', content: [{ type: 'text', text: sources.text(), cache_control: { type: 'ephemeral', ttl: '1h' } }, { type: 'text', text: turn }] }];
     const read = new Set();
