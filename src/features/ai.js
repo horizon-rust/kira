@@ -15,6 +15,7 @@ import { rateLimiter, clientIp, untrusted } from '../agents.js';
 import { parseVerb } from '../hub.js';
 import * as ai from '../ai.js';
 import * as kit from '../ai-kit.js';
+import * as game from '../game-kit.js';
 
 const KEY = !!process.env.ANTHROPIC_API_KEY?.trim();
 export const enabled = !!AI.mode && KEY;
@@ -27,6 +28,7 @@ store.handoffs ??= []; // [{ id, url, channel, author, question, reason, at, don
 let sources = ai.makeSources({ gh: makeGitHub({ token: githubToken() }) });
 const anthropic = KEY ? new Anthropic({ maxRetries: 2, timeout: 60_000 }) : null;
 let answer = enabled ? ai.makeAnswerer({ client: anthropic, sources }) : null;
+let gameAnswer = enabled ? ai.makeAnswerer({ client: anthropic, sources, rules: game.GAME_RULES }) : null;
 export const bugsEnabled = AI.bugs && KEY;
 let reviewer = bugsEnabled ? ai.makeBugReviewer({ client: anthropic }) : null;
 export const modEnabled = !!AI.mode && AI.mod && KEY;
@@ -127,6 +129,39 @@ async function respond(msg, text) {
   save();
   await send(r.reply).catch((e) => console.error('kira ai reply', e.message));
   await logAnswer(msg, text, r);
+}
+
+// A question from a Minecraft server's chat (POST /game/ask, src/features/game.js): the same sources, budget, off switch
+// and moderation as on Discord, in game chat's rules. → { status, reply }: reply is what goes to chat ('' for nothing).
+export async function askInGame({ server, player, question }) {
+  const asked = { author: player, channel: `minecraft ${server}`, text: question };
+  if (!enabled || !store.on) return { status: 'off', reply: game.OFF_REPLY };
+  const hit = game.blockedBy(question);
+  let r;
+  if (hit) r = { status: 'blocked', reply: game.BLOCKED_REPLY, reason: `AutoMod: ${hit}`, models: [], cost: 0 };
+  else if (spentToday() >= AI.dailyUsd) r = { status: 'pass', reply: game.OFF_REPLY, reason: 'daily budget spent', models: [], cost: 0 };
+  else if (!(await sources.refresh()) && !(await sources.refresh(Date.now(), { force: true }))) r = { status: 'pass', reply: game.PASS_REPLY, reason: 'sources not loaded', models: [], cost: 0 };
+  else {
+    const [mod, a] = await Promise.all([moderateBatch([asked]).catch(() => null), gameAnswer(asked)]);
+    record(a);
+    const removed = mod?.results?.[0]?.verdict === 'remove';
+    const reply = a.status === 'ignore' ? '' : a.reply === kit.PASSED ? game.PASS_REPLY : (game.gameReply(a.reply) ?? game.PASS_REPLY);
+    r = removed ? { ...a, status: 'blocked', reply: game.BLOCKED_REPLY, reason: `moderation: ${mod.results[0].reason}` } : { ...a, reply };
+  }
+  save();
+  await logGame(server, player, question, r).catch((e) => console.error('kira game log', e.message));
+  return { status: r.status, reply: r.reply };
+}
+
+function logGame(server, player, text, r) {
+  const answered = r.status === 'answer';
+  return modlog(answered ? '🎮 Kira answered in game' : `🎮 Kira in game: ${r.status}`, `**${clip(player, 16)}** on **${clip(server, 60)}**`, answered ? 0x4cc38a : 0xf0932b, [
+    { name: 'Question', value: clip(text, 500) },
+    { name: 'Reply', value: clip(r.reply || '(nothing)', 300) },
+    ...(r.reason ? [{ name: 'Why', value: clip(r.reason, 200) }] : []),
+    { name: 'Model', value: r.models?.length ? r.models.join(' → ') : 'none', inline: true },
+    { name: 'Cost', value: `$${(r.cost ?? 0).toFixed(4)} (today $${spentToday().toFixed(2)} of $${AI.dailyUsd})`, inline: true },
+  ]);
 }
 
 // Set by src/features/github.js: (msg) → true when the mention in a bug post was dealt with (it replied itself).
@@ -292,7 +327,7 @@ export async function moderateBatch(batch) {
 export const _test = {
   store, limits, seen,
   set: (o) => {
-    if (o.sources) sources = o.sources; if (o.answer) answer = o.answer; if (o.reviewer !== undefined) reviewer = o.reviewer;
+    if (o.sources) sources = o.sources; if (o.answer) answer = o.answer; if (o.gameAnswer) gameAnswer = o.gameAnswer; if (o.reviewer !== undefined) reviewer = o.reviewer;
     if (o.moderator !== undefined) moderator = o.moderator; if (o.modPausedUntil !== undefined) modPausedUntil = o.modPausedUntil;
   },
 };

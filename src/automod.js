@@ -6,6 +6,13 @@ import {
 } from 'discord.js';
 import { MOD } from './config.js';
 
+// Server invites and gift scams (the "invites and scams" rule; Kira's game chat answers check them too).
+export const SCAM_PATTERNS = [
+  'discord(?:app)?\\.(?:gg|com/invite|io|me|li)/\\S+',
+  '(?i)free\\s*nitro', '(?i)nitro\\s*(?:for\\s*)?free', '(?i)steam\\s*gift',
+  'd[il1][sz]c[o0]r[dcl][a-z]*\\.(?:gift|ru|xyz|top|click|link)',
+];
+
 // ids: { modlog, modchat (channels), mod, team (roles) }.
 export function automodRules(ids) {
   const alert = { type: A.SendAlertMessage, metadata: { channel: ids.modlog } };
@@ -18,11 +25,7 @@ export function automodRules(ids) {
     {
       name: 'Kira · invites and scams', triggerType: T.Keyword,
       triggerMetadata: {
-        regexPatterns: [
-          'discord(?:app)?\\.(?:gg|com/invite|io|me|li)/\\S+',
-          '(?i)free\\s*nitro', '(?i)nitro\\s*(?:for\\s*)?free', '(?i)steam\\s*gift',
-          'd[il1][sz]c[o0]r[dcl][a-z]*\\.(?:gift|ru|xyz|top|click|link)',
-        ],
+        regexPatterns: SCAM_PATTERNS,
       },
       actions: [block('Server invites and gift links are not allowed (rule 2 and 4).'), alert], ...exempt,
     },

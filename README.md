@@ -69,6 +69,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | Triage | `/gh` (`label`, `close`, `reopen`, `duplicate`, `pause`, `resume`) for Ludovic's trusted reviewers, through Kira's GitHub token: see [Triage through Kira](#triage-through-kira) |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
 | AI answers | A message that mentions Kira or replies to her gets one answer from Claude, grounded in the FAQ, Horizon's docs and release notes; what she can't answer goes to the team. Off unless `KIRA_AI` is set; `/kira-ai off\|on\|status`: see [AI answers](#ai-answers) |
+| Game chat | On a Minecraft server with the [kira-pumpkin](https://github.com/horizon-rust/kira-pumpkin) plugin, a chat message starting with `kira` or `@kira` gets one answer in chat (`<Kira> …`): the same sources, budget, off switch and moderation as her Discord answers, at most 256 characters, plain text, links only to playhorizon.dev. `POST /game/ask` with the server's token: see [Game chat](#game-chat) |
 | Info | `/help` (what Kira does, its commands), `/links`, `/horizon`, `/userinfo`, `/serverinfo`, `/avatar`, `/modmail` |
 
 ## Running it
@@ -310,6 +311,24 @@ Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`
 - **Off switch:** `/kira-ai off` (Ludovic and the mods) stops all of it (answers, bug reports, moderation) at once, `/kira-ai mod off` only the moderation (`mod on` restarts it), `/kira-ai on` restarts it, and `/kira-ai status` shows the day's use. Removing `KIRA_AI` (or setting it to `0`) turns it off for good.
 - **Variables:** `KIRA_AI`, `ANTHROPIC_API_KEY` (1Password `Horizon Claude API Key ludo47j`, set on Railway with the CLI, never printed), `KIRA_AI_DAILY_USD`, `KIRA_USAGE_TOKEN`, `KIRA_AI_BUGS`, `KIRA_AI_MOD`.
 - **Cost, measured** on 38 real questions from the server's history: $0.0013 per answer with Haiku and a warm cache. The 21K-token sources block is cached for an hour as the first block of the user turn: a breakpoint on the system prompt was never read back on this account.
+
+## Game chat
+
+`POST /game/ask` (`src/features/game.js`, rules and checks in `src/game-kit.js`): `Authorization: Bearer <server token>`,
+body `{ "player": "<Minecraft name>", "question": "kira why …" }` (the `kira`/`@kira` prefix is optional), answer
+`{ "answer": "…" }` (empty: say nothing). The token names the server; a body can't claim another.
+
+- **Tokens**, one per server, in `data/game-servers.json` (never usable for MCP), from a shell on Kira's host:
+  `node scripts/game-token.mjs issue <server name> <owner's discord id> [days]` prints it once on stdout: pipe it
+  straight into Kira's DM to the owner. `list`, `revoke <id>`.
+- **Limits** (`GAME` in `src/game-kit.js`): 3 questions per player in 10 minutes (then "ask me again a bit later"), 30 per
+  server an hour and 200 a day (then nothing in chat); failed logins per address like the other routes; and the AI's
+  daily budget.
+- **Rules**: her Discord rules (only what works in a release, no dates or promises, no piracy), then game chat's: 240
+  characters, plain text, playful is fine, server questions go to its staff, passes point to Horizon's Discord. A
+  question AutoMod's piracy or scam rules would block, or the moderation model would remove, gets "I'm not answering
+  that one."; a reply that fails the checks becomes the pass line.
+- **Log**: one line per question in #mod-log (`🎮 Kira answered in game`): server, player, question, reply, model, cost.
 
 ## Hosting (Railway)
 

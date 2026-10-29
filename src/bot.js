@@ -24,6 +24,7 @@ import * as hub from './features/hub.js';
 import * as updates from './features/updates.js';
 import * as x from './features/x.js';
 import * as kiraAi from './features/ai.js';
+import { gameRoutes, openServers } from './features/game.js';
 import * as chatclear from './features/chatclear.js';
 import * as sponsors from './features/sponsors.js';
 import { startServer } from './mcp.js';
@@ -127,6 +128,7 @@ if (port) {
       res.end(JSON.stringify({ contributors: workboard.creditedPairs() }));
     },
     ...kiraAi.usageRoutes({ limiter }),
+    ...gameRoutes({ store: openServers(), ask: kiraAi.askInGame, limiter }),
     ...adminRoutes({ hash: process.env.KIRA_ADMIN_TOKEN_SHA256, limiter, save, freeze, cleanup: DISCORD && contributors.enabled ? contributors.cleanup : null, files: { state: dataFile('state.json'), agents: process.env.KIRA_AGENTS || dataFile('agents.json') } }),
   };
   startServer(Number(port), { store: agents.store, api: agents.api, routes, limiter }).then(() => console.log(`mcp server on :${port}${routes['GET /admin/backup'] ? ', admin routes on' : ''}`));
