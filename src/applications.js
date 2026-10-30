@@ -97,6 +97,6 @@ export function list(store, dashboard, viewer, ctx) {
   const done = mine.filter((a) => FINAL.includes(a.status)).sort((a, b) => b.decidedAt - a.decidedAt);
   return [...open, ...done].map(({ vote, ...a }) => ({
     ...a, questions: questions(a.role).map(({ id, label }) => ({ id, label })), githubManual: a.role === 'team',
-    vote: voteView({ ...a, vote }, viewer, ctx), audit: auditView(store, a), owner: viewer === ctx.owner,
+    vote: voteView({ ...a, vote }, viewer, ctx), audit: auditView(store, { ...a, vote }, viewer, ctx), owner: viewer === ctx.owner,
   }));
 }

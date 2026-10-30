@@ -52,7 +52,7 @@ test('ballots: against needs a comment; changeable; blind while open; recusal', 
   assert.equal(seen.mine, null);
   assert.equal(seen.eligible, 4);
   assert.equal(v.voteView(s.app, 'm1', s.ctx(T0)).mine.choice, 'against');
-  assert.ok(v.auditView(s.store, s.app).every((e) => !e.choice && !e.comment));
+  assert.ok(v.auditView(s.store, s.app, 'm3', s.ctx(T0)).every((e) => !e.choice && !e.comment));
   assert.deepEqual(s.store.data.audit.map((e) => e.action), ['ballot', 'ballot-changed', 'recused']);
 });
 
@@ -129,4 +129,38 @@ test('nobody votes within 72 hours: treated as no quorum', async () => {
   const s = setup();
   assert.equal(await v.advance(s.store, s.app, s.ctx(T0 + 71 * H)), null);
   assert.equal(await v.advance(s.store, s.app, s.ctx(T0 + 72 * H)), 'extended');
+});
+
+test('blind until you vote: your ballot opens the others\' and the running tally; recused stays blind; the owner sees', () => {
+  const s = setup();
+  v.castBallot(s.store, s.app, { voter: 'm1', choice: 'against', comment: 'Too new here.' }, s.ctx(T0));
+  const before = v.voteView(s.app, 'm2', s.ctx(T0));
+  assert.deepEqual([before.seen, before.ballots, before.tally, before.needed], [false, null, null, 1]);
+  assert.ok(v.auditView(s.store, s.app, 'm2', s.ctx(T0)).every((e) => e.choice === null && e.comment === null));
+  v.castBallot(s.store, s.app, { voter: 'm2', choice: 'for' }, s.ctx(T0 + H));
+  const after = v.voteView(s.app, 'm2', s.ctx(T0 + H));
+  assert.equal(after.seen, true);
+  assert.deepEqual(after.ballots.map((b) => [b.by, b.choice, b.comment]), [['m1', 'against', 'Too new here.'], ['m2', 'for', '']]);
+  assert.deepEqual(after.tally, { for: 1, against: 1, abstain: 0, quorum: 2 });
+  assert.equal(after.needed, 0);
+  assert.equal(v.auditView(s.store, s.app, 'm2', s.ctx(T0 + H))[0].comment, 'Too new here.');
+  v.recuse(s.store, s.app, 'm3', s.ctx(T0 + H));
+  assert.equal(v.voteView(s.app, 'm3', s.ctx(T0 + H)).ballots, null);
+  v.castBallot(s.store, s.app, { voter: 'm4', choice: 'for' }, s.ctx(T0 + H));
+  v.recuse(s.store, s.app, 'm4', s.ctx(T0 + H)); // recusing after voting: blind again, the ballot no longer counts
+  assert.equal(v.voteView(s.app, 'm4', s.ctx(T0 + H)).ballots, null);
+  assert.deepEqual(v.voteView(s.app, OWNER, s.ctx(T0 + H)).ballots.map((b) => b.by), ['m1', 'm2']); // m4's went with the recusal
+});
+
+test('a veto: declined at once, the note only Ludovic sees, and the applicant\'s DM carries no votes', async () => {
+  const s = setup();
+  v.castBallot(s.store, s.app, { voter: 'm1', choice: 'for' }, s.ctx(T0));
+  await v.ownerAct(s.store, s.app, 'veto', s.ctx(T0 + H), { note: '  Asked to wait for the next round.  ' });
+  assert.equal(s.app.status, 'declined');
+  const mine = v.auditView(s.store, s.app, OWNER, s.ctx(T0 + H)).find((e) => e.action === 'veto');
+  assert.equal(mine.note, 'Asked to wait for the next round.');
+  assert.equal(v.auditView(s.store, s.app, 'm1', s.ctx(T0 + H)).find((e) => e.action === 'veto').note, undefined);
+  const event = s.calls.decide.at(-1);
+  assert.equal(event.outcome, 'decline');
+  assert.ok(!('tally' in event) && !('ballots' in event) && !JSON.stringify(event).includes('wait for the next round'));
 });

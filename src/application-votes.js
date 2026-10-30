@@ -3,8 +3,9 @@
 //
 // - Voters: 🛡️ Mod holders vote on Mod and Support applications, 🌌 Horizon Team holders on Team and Support ones. The
 //   applicant never votes, and neither does the owner (he has the veto). A voter can recuse themselves.
-// - Ballot: For, Against (a comment is required) or Abstain; blind (only the count shows) and changeable until the vote
-//   closes.
+// - Ballot: For, Against (a comment is required) or Abstain, changeable until the vote closes. Blind until you vote:
+//   the others' ballots and comments show once you cast yours, or once the vote closes (Ludovic, who never votes,
+//   sees them all along). A recused voter stays blind.
 // - Active voters: eligible, not recused, and logged in to a dashboard or acted there in the last 30 days.
 //   Quorum: max(2, ceil(40% of the active voters)), counting every ballot cast (abstentions included).
 // - The vote closes 72 hours after the first ballot, or as soon as every active voter has voted. An application
@@ -13,8 +14,9 @@
 //   once). Without quorum: extended once by 48 hours, then 'stalled', for the owner to decide. Fewer than 2 active
 //   voters at close: the owner decides ('owner').
 // - A pass opens a 12-hour veto window and Ludovic gets exactly one DM. Doing nothing accepts it when the window ends;
-//   he can veto (a decline) or approve at once. He can also veto while the vote is open, decide 'stalled' and 'owner'
-//   ones, and take the role back later. Every action goes to the append-only audit log (staff.json's `audit`).
+//   he can veto (a decline, with an optional note only he sees) or approve at once. He can also veto while the vote is
+//   open, decide 'stalled' and 'owner' ones, and take the role back later. Every action goes to the append-only audit
+//   log (staff.json's `audit`), which voters and the owner see; the applicant's DM never tells the votes.
 import { DECLINE_COOLDOWN_DAYS, DECISION_TEXTS } from './staff-hooks.js';
 
 const H = 3_600_000;
@@ -127,10 +129,11 @@ export async function advance(store, app, ctx) {
 
 // The owner's actions: veto (any time before final), approve (veto window, stalled, owner), decline (stalled, owner),
 // revoke (an accepted one: the role is taken back, logged).
-export async function ownerAct(store, app, action, ctx) {
+export async function ownerAct(store, app, action, ctx, { note = '' } = {}) {
   const open = !FINAL.includes(app.status);
   if (action === 'veto' && open) {
-    audit(store, { at: ctx.now, by: ctx.owner, app: app.id, action: 'veto' });
+    const text = String(note ?? '').trim().slice(0, 500);
+    audit(store, { at: ctx.now, by: ctx.owner, app: app.id, action: 'veto', ...(text ? { note: text } : {}) });
     return finalize(store, app, 'decline', ctx.owner, ctx);
   }
   if (action === 'approve' && ['veto-window', 'stalled', 'owner'].includes(app.status)) return finalize(store, app, 'accept', ctx.owner, ctx);
@@ -144,24 +147,38 @@ export async function ownerAct(store, app, action, ctx) {
   throw refuse(`Can't ${action} an application that is ${app.status}.`);
 }
 
-// What a dashboard shows of the vote to `viewer`: blind while open (the count, and their own ballot), everything once
-// it closed.
+// Whether `viewer` sees the others' ballots: once they voted (not recused), once the vote closed, or the owner.
+export function seesBallots(app, viewer, ctx) {
+  if (app.status !== 'open' || viewer === ctx.owner) return true;
+  return !!app.vote?.ballots[viewer] && !app.vote.recused.includes(viewer);
+}
+
+// What a dashboard shows of the vote to `viewer`: until they vote, the count and their own state; then the ballots and
+// the running tally; everything once it closed.
 export function voteView(app, viewer, ctx) {
   const c = count(app, ctx);
   const closed = app.status !== 'open';
+  const sees = seesBallots(app, viewer, ctx);
   return {
     closesAt: app.vote.closesAt, firstBallotAt: app.vote.firstBallotAt, extended: app.vote.extended,
     cast: c.cast, quorum: c.quorum, active: c.active, eligible: c.eligible,
     canVote: app.status === 'open' && eligible(app, ctx).has(viewer),
     mine: app.vote.ballots[viewer] ?? null,
     recused: app.vote.recused.includes(viewer),
-    ballots: closed ? Object.entries(app.vote.ballots).map(([by, b]) => ({ by, ...b })) : null,
-    tally: closed ? app.tally ?? null : null,
+    needed: Math.max(0, c.quorum - c.cast), // ballots still missing for the quorum
+    seen: sees,
+    ballots: sees ? Object.entries(app.vote.ballots).map(([by, b]) => ({ by, ...b })) : null,
+    tally: closed ? app.tally ?? null : sees ? { for: c.for, against: c.against, abstain: c.abstain, quorum: c.quorum } : null,
   };
 }
 
-// The audit lines of an application, ballots' choices hidden while the vote is open.
-export function auditView(store, app) {
-  const open = app.status === 'open';
-  return (store.data.audit ?? []).filter((e) => e.app === app.id).map((e) => (open && e.choice ? { ...e, choice: null, comment: null } : e));
+// The audit lines of an application for `viewer`: ballots' choices and comments hidden until they see the ballots
+// (seesBallots), the owner's veto note shown to him only.
+export function auditView(store, app, viewer, ctx) {
+  const sees = !!ctx && seesBallots(app, viewer, ctx);
+  return (store.data.audit ?? []).filter((e) => e.app === app.id).map((e) => {
+    let out = !sees && e.choice ? { ...e, choice: null, comment: null } : e;
+    if (out.note && viewer !== ctx?.owner) { out = { ...out }; delete out.note; }
+    return out;
+  });
 }

@@ -105,7 +105,7 @@ export function applicationRoutes({ store, site, log, deps = {} }) {
     { method: 'POST', path: `${dashboard}/applications/owner`, role: dashboard, handler: async (ctx) => {
       if (ctx.user !== OWNER_ID) return { status: 403, body: { error: 'Only Ludovic can do this.' } };
       const a = find(dashboard, ctx.body.id);
-      await votes.ownerAct(store, a, String(ctx.body.action ?? ''), ctxAt(ctx.now));
+      await votes.ownerAct(store, a, String(ctx.body.action ?? ''), ctxAt(ctx.now), { note: ctx.body.note });
       log(`📝 ${apps.ROLE_NAMES[a.role]} application of <@${a.user}>: ${ctx.body.action} by the owner.`);
       return { body: { application: view(dashboard, ctx.user, a.id, ctx.now) } };
     } },
