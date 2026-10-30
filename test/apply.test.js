@@ -80,10 +80,11 @@ test('/apply: refusals in words, from the staff side\'s reasons; closed when the
 
 // A fake guild for the decisions.
 const given = [];
+const taken = [];
 const dms = [];
 let dmsClosed = false;
 const user = (id) => ({ id, send: async (m) => { if (dmsClosed && id !== OWNER_ID) throw new Error('closed'); dms.push([id, m.content]); } });
-core.client.guilds.cache.set(GUILD_ID, { id: GUILD_ID, members: { fetch: async (id) => (id === 'gone' ? Promise.reject(new Error('Unknown Member')) : { id, user: user(id), roles: { add: async (r) => { given.push([id, r]); } } }) } });
+core.client.guilds.cache.set(GUILD_ID, { id: GUILD_ID, members: { fetch: async (id) => (id === 'gone' ? Promise.reject(new Error('Unknown Member')) : { id, user: user(id), roles: { add: async (r) => { given.push([id, r]); }, remove: async (r) => { if (id === 'locked') throw new Error('Missing Permissions'); taken.push([id, r]); } } }) } });
 core.client.users.fetch = async (id) => user(id);
 
 test('a decision from the dashboards: accept gives the role and DMs where to start; Ludovic gets no second DM', async () => {
@@ -130,4 +131,18 @@ test('dm(): the staff side\'s DMs (Ludovic\'s veto window), no pings, never a th
   hooks.setDiscordSide(null);
   assert.deepEqual(await hooks.dm({ userId: OWNER_ID, content: 'x' }), { sent: false, error: 'discord side not loaded' });
   feature.setup();
+});
+
+test('revokeRole(): Ludovic takes a role back from the dashboard: removed, logged, no DM, never a throw', async () => {
+  hooks.setDiscordSide(null);
+  feature.setup();
+  dms.length = 0;
+  assert.deepEqual(await hooks.revokeRole({ applicationId: 'a7', userId: 'u5', role: 'support', by: OWNER_ID }), { removed: true, error: null });
+  assert.deepEqual(taken.at(-1), ['u5', 'R-support']);
+  assert.match(logs.at(-1).title, /taken back/);
+  assert.equal(dms.length, 0);
+  assert.deepEqual(await hooks.revokeRole({ applicationId: 'a8', userId: 'gone', role: 'mod', by: OWNER_ID }), { removed: false, error: 'not on the server' });
+  assert.deepEqual(await hooks.revokeRole({ applicationId: 'a9', userId: 'locked', role: 'mod', by: OWNER_ID }), { removed: false, error: 'Missing Permissions' });
+  assert.match(logs.at(-1).description, /NOT removed/);
+  assert.equal((await hooks.revokeRole({ applicationId: 'a10', userId: 'u5', role: 'admin', by: OWNER_ID })).error, 'unknown role');
 });
