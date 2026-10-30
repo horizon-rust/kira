@@ -9,8 +9,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { SlashCommandBuilder, PermissionFlagsBits as P, MessageFlags } from 'discord.js';
 import { AI, GUILD_ID, OWNER_ID } from '../config.js';
 import { client, state, save, isStaff, modlog, clip } from '../core.js';
-import { makeGitHub } from '../github.js';
-import { githubToken } from '../github-app.js';
+import { makePublicGitHub } from '../github.js';
+import { appToken } from '../github-app.js';
+import { dataFile } from '../store.js';
 import { rateLimiter, clientIp, untrusted } from '../agents.js';
 import { parseVerb } from '../hub.js';
 import * as ai from '../ai.js';
@@ -25,7 +26,9 @@ store.modOn ??= true; // /kira-ai mod on|off: moderation only
 store.days ??= {}; // 'YYYY-MM-DD' → { cost_usd, answers, passed_to_team, bug_reviews, moderated, models: { model: calls } }
 store.handoffs ??= []; // [{ id, url, channel, author, question, reason, at, done }]
 
-let sources = ai.makeSources({ gh: makeGitHub({ token: githubToken() }) });
+// The sources read public content through the GitHub App (else without a token), never Ludovic's token, and keep their
+// last good copy in data/ai-sources.json (KIRA_AI_SOURCES).
+let sources = ai.makeSources({ gh: makePublicGitHub({ appToken: appToken() }), file: process.env.KIRA_AI_SOURCES || dataFile('ai-sources.json') });
 const anthropic = KEY ? new Anthropic({ maxRetries: 2, timeout: 60_000 }) : null;
 let answer = enabled ? ai.makeAnswerer({ client: anthropic, sources }) : null;
 let gameAnswer = enabled ? ai.makeAnswerer({ client: anthropic, sources, rules: game.GAME_RULES }) : null;

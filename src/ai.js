@@ -1,12 +1,16 @@
 // Kira's answers with the Claude API: the sources she answers from, and the call itself.
 //
 // Sources: the FAQ (config.js), and from horizon-rust/horizon's main branch the README and docs/*.md (refreshed daily),
-// plus the notes of the latest published releases (hourly). Every GitHub read goes through github.js, so it comes out
-// of the shared budget; unchanged files cost nothing (a doc is fetched again only when its blob sha changes, and
-// conditional GETs answered 304 aren't counted). A failed refresh keeps the last good copy.
+// plus the notes of the latest published releases (hourly). They are read through github.js's makePublicGitHub (the
+// GitHub App, else no token; never Ludovic's token); unchanged files cost nothing (a doc is fetched again only when its
+// blob sha changes, and conditional GETs answered 304 aren't counted). A failed refresh keeps the last good copy, and
+// every good copy is saved to `file` (data/ai-sources.json on the volume): after a restart during a GitHub outage or a
+// held-back hour, Kira answers from it. A failure is logged once, until that part loads again.
 //
 // The call: Claude Haiku 5.5 first; Claude Sonnet 5.5 when Haiku says it's unsure, or straight away for a long
 // thread. The model's only tool is read_doc (read one doc in full): it can look things up, never act.
+import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { FAQ, GITHUB, WORK, RULES } from './config.js';
 import * as kit from './ai-kit.js';
 
@@ -24,11 +28,46 @@ const decode = (blob) => (blob?.content ? Buffer.from(blob.content, blob.encodin
 const isGame = (r) => /^v\d/.test(r.tag_name) || /^nightly(?:-|$)/.test(r.tag_name);
 const isLauncher = (r) => /^launcher[@-]v?\d/.test(r.tag_name);
 
-export function makeSources({ gh, faq = FAQ, log = console.error }) {
+export function makeSources({ gh, faq = FAQ, file = null, log = console.error, info = console.log }) {
   const docs = new Map(); // 'docs/x.md' → { sha, text, summary }
   let readme = null;
   let releases = [];
   const at = { docs: 0, releases: 0 };
+  const failing = { docs: false, releases: false }; // logged once per failure streak
+
+  // The last good copy on disk: { at, docs: [{ path, sha, text }], readme, releases }. Summaries are made again.
+  if (file) {
+    try {
+      const saved = JSON.parse(readFileSync(file, 'utf8'));
+      for (const d of saved.docs ?? []) if (d?.path && d.sha && typeof d.text === 'string') docs.set(d.path, { sha: d.sha, text: d.text, summary: kit.docSummary(d.path, d.text) });
+      readme = typeof saved.readme === 'string' ? saved.readme : null;
+      releases = Array.isArray(saved.releases) ? saved.releases.filter((r) => r?.name && typeof r.body === 'string') : [];
+      at.docs = Number(saved.at?.docs) || 0;
+      at.releases = Number(saved.at?.releases) || 0;
+      info(`ai sources: from ${file}: ${docs.size} docs, ${readme ? 'the README' : 'no README'}, ${releases.length} releases (saved ${new Date(Number(saved.savedAt) || 0).toISOString()})`);
+    } catch (e) {
+      if (e.code !== 'ENOENT') log('ai sources: saved copy not read', e.message);
+    }
+  }
+  function persist(now) {
+    if (!file) return;
+    try {
+      mkdirSync(dirname(file), { recursive: true });
+      const data = { savedAt: now, at, readme, releases, docs: [...docs].map(([path, d]) => ({ path, sha: d.sha, text: d.text })) };
+      writeFileSync(file + '.tmp', JSON.stringify(data));
+      renameSync(file + '.tmp', file);
+    } catch (e) {
+      log('ai sources: not saved', e.message);
+    }
+  }
+  function failed(part, e) {
+    if (!failing[part]) log(`ai sources: ${part}`, e.message, ready() ? '(answering from the last good copy; logged once until it loads again)' : '(nothing loaded yet; logged once until it loads)');
+    failing[part] = true;
+  }
+  function loaded(part, what) {
+    info(`ai sources: ${part} loaded${failing[part] ? ' again' : ''}: ${what}`);
+    failing[part] = false;
+  }
 
   async function refreshDocs() {
     const list = await gh.get(`/repos/${REPO}/contents/docs?ref=main`);
@@ -41,6 +80,7 @@ export function makeSources({ gh, faq = FAQ, log = console.error }) {
     }
     for (const name of [...docs.keys()]) if (!files.some((f) => f.path === name)) docs.delete(name);
     readme = decode(await gh.get(`/repos/${REPO}/readme?ref=main`)) ?? readme;
+    return `${docs.size} docs${readme ? ' and the README' : ''}`;
   }
 
   async function refreshReleases() {
@@ -58,6 +98,7 @@ export function makeSources({ gh, faq = FAQ, log = console.error }) {
     }
     for (const r of published.filter(isLauncher).slice(0, LAUNCHER_RELEASES)) out.push({ name: `Launcher: ${r.name || r.tag_name} (${r.tag_name})`, body: kit.releaseNotes(r.body) });
     if (out.length) releases = out;
+    return `${releases.length} releases`;
   }
 
   // Refreshes what is stale; false when nothing could ever be loaded. A call during a refresh waits for it (right after
@@ -65,14 +106,20 @@ export function makeSources({ gh, faq = FAQ, log = console.error }) {
   // inside the retry delay of a failed refresh.
   let inflight = null;
   async function load(now, force) {
+    let changed = false;
     if (now - at.docs >= DOCS_EVERY_MS || (force && !readme)) {
       at.docs = now;
-      await refreshDocs().catch((e) => { at.docs = now - DOCS_EVERY_MS + 15 * 60_000; log('ai sources: docs', e.message); });
+      await refreshDocs().then((what) => { changed = true; loaded('docs', what); }, (e) => { at.docs = now - DOCS_EVERY_MS + 15 * 60_000; failed('docs', e); });
     }
     if (now - at.releases >= RELEASES_EVERY_MS || (force && !releases.length)) {
       at.releases = now;
-      await refreshReleases().catch((e) => { at.releases = now - RELEASES_EVERY_MS + 5 * 60_000; log('ai sources: releases', e.message); });
+      const before = JSON.stringify(releases);
+      await refreshReleases().then((what) => {
+        if (JSON.stringify(releases) !== before) changed = true;
+        if (failing.releases || before === '[]') loaded('releases', what); // the first load and a recovery, not every hour
+      },(e) => { at.releases = now - RELEASES_EVERY_MS + 5 * 60_000; failed('releases', e); });
     }
+    if (changed) persist(now);
     return ready();
   }
   async function refresh(now = Date.now(), { force = false } = {}) {
@@ -81,7 +128,8 @@ export function makeSources({ gh, faq = FAQ, log = console.error }) {
     inflight = p;
     return p;
   }
-  const ready = () => !!readme && releases.length > 0;
+  // Ready once anything was ever loaded (here or from the saved copy); the FAQ is always there.
+  const ready = () => !!readme || releases.length > 0 || docs.size > 0;
 
   return {
     refresh,

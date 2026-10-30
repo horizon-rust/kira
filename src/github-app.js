@@ -44,9 +44,13 @@ export function makeAppToken({ appId, privateKey, org = ORG, fetchImpl = fetch, 
 }
 
 let app = null; // one per process: every client shares the token and its hour
-export function githubToken(env = process.env) {
+// The App's token function, or null when the App isn't set up (never GITHUB_TOKEN: Kira's AI sources use this).
+export function appToken(env = process.env) {
   const id = env.GITHUB_APP_ID?.trim();
   const key = env.GITHUB_APP_PRIVATE_KEY?.trim();
   if (id && key) return (app ??= makeAppToken({ appId: id, privateKey: key.replace(/\\n/g, '\n') }));
-  return env.GITHUB_TOKEN?.trim();
+  return null;
+}
+export function githubToken(env = process.env) {
+  return appToken(env) ?? env.GITHUB_TOKEN?.trim();
 }

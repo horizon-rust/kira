@@ -1,7 +1,7 @@
 // Kira's AI answers (src/ai.js): the sources from GitHub, and the model loop with a fake Claude API. No network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -242,6 +242,84 @@ test('a bug report read before filing: one Haiku call, no tools, the report as d
   assert.ok(r.cost > 0);
   assert.equal((await review(report)).draft, null);
   assert.match((await review(report)).reason, /unreadable/);
+});
+
+test('sources: a failure streak keeps the last good copy and is logged once; loading again is logged', async () => {
+  const gh = fakeGitHub();
+  const logs = [];
+  const infos = [];
+  const s = ai.makeSources({ gh, log: (...a) => logs.push(a.join(' ')), info: (m) => infos.push(m) });
+  const t0 = Date.UTC(2026, 9, 27, 12);
+  assert.equal(await s.refresh(t0), true);
+  assert.deepEqual(infos, ['ai sources: docs loaded: 2 docs and the README', 'ai sources: releases loaded: 4 releases']);
+  gh.fail = true;
+  for (let h = 1; h <= 30; h++) assert.equal(await s.refresh(t0 + h * ai.RELEASES_EVERY_MS, { force: h % 2 === 0 }), true, 'still answering');
+  assert.ok(s.text().includes('Decorated pot') && s.text().includes('Minecraft in Rust.'));
+  assert.deepEqual(logs, [
+    'ai sources: releases HTTP 500 (answering from the last good copy; logged once until it loads again)',
+    'ai sources: docs HTTP 500 (answering from the last good copy; logged once until it loads again)',
+  ]);
+  gh.fail = false;
+  infos.length = 0;
+  await s.refresh(t0 + 31 * ai.RELEASES_EVERY_MS);
+  assert.deepEqual(infos, ['ai sources: docs loaded again: 2 docs and the README', 'ai sources: releases loaded again: 4 releases']);
+  await s.refresh(t0 + 32 * ai.RELEASES_EVERY_MS);
+  assert.equal(infos.length, 2, 'an hourly refresh that works is not logged');
+});
+
+test('sources: one part loaded is enough to answer; not ready only when nothing was ever loaded', async () => {
+  const gh = fakeGitHub();
+  const get = gh.get;
+  gh.get = async (p) => { if (p.includes('/releases')) throw new Error('holding back'); return get(p); };
+  const s = ai.makeSources({ gh, log: () => {}, info: () => {} });
+  assert.equal(await s.refresh(Date.UTC(2026, 9, 27, 12)), true);
+  assert.ok(s.text().includes('Minecraft in Rust.'));
+});
+
+test('sources: the last good copy is saved and loaded after a restart, while GitHub still fails', async () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'kira-ai-sources-')), 'ai-sources.json');
+  const gh = fakeGitHub();
+  const t0 = Date.UTC(2026, 9, 27, 12);
+  const first = ai.makeSources({ gh, file, log: () => {}, info: () => {} });
+  assert.equal(first.ready(), false, 'no file yet');
+  assert.equal(await first.refresh(t0), true);
+  assert.ok(existsSync(file));
+  const saved = JSON.parse(readFileSync(file, 'utf8'));
+  assert.deepEqual(saved.docs.map((d) => [d.path, d.sha]), [['docs/hosting.md', 's1'], ['docs/known-issues.md', 's2']]);
+
+  // A restart during an outage: answers from the saved copy, before and after a failed refresh.
+  gh.fail = true;
+  const infos = [];
+  const logs = [];
+  const second = ai.makeSources({ gh, file, log: (...a) => logs.push(a.join(' ')), info: (m) => infos.push(m) });
+  assert.equal(second.ready(), true);
+  assert.match(infos[0], /^ai sources: from .*ai-sources\.json: 2 docs, the README, 4 releases \(saved 2026-10-27T12:00:00\.000Z\)$/);
+  assert.equal(await second.refresh(t0 + 2 * ai.DOCS_EVERY_MS, { force: true }), true);
+  assert.equal(second.text(), first.text(), 'the same sources block (and so the same cache prefix)');
+  assert.equal(second.readDoc('docs/hosting.md'), '# Hosting\n\nRun a server.');
+  assert.ok(logs.every((l) => l.includes('answering from the last good copy')));
+
+  // Inside the refresh intervals saved with the copy, a restart reads nothing from GitHub; a changed doc is fetched alone.
+  gh.fail = false;
+  gh.gets.length = 0;
+  const third = ai.makeSources({ gh, file, log: () => {}, info: () => {} });
+  assert.equal(await third.refresh(t0 + 1000), true);
+  assert.deepEqual(gh.gets, []);
+  gh.files['docs/hosting.md'] = ['s3', '# Hosting\n\nRun a dedicated server.'];
+  await third.refresh(t0 + ai.DOCS_EVERY_MS);
+  assert.deepEqual(gh.gets.filter((p) => p.includes('/git/blobs/')), [`${R}/git/blobs/s3`]);
+  assert.ok(ai.makeSources({ gh, file, log: () => {}, info: () => {} }).text().includes('Run a dedicated server.'), 'saved again');
+});
+
+test('sources: an unreadable saved copy is ignored, with a log', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'kira-ai-sources-'));
+  const file = join(dir, 'ai-sources.json');
+  (await import('node:fs')).writeFileSync(file, '{not json');
+  const logs = [];
+  const s = ai.makeSources({ gh: fakeGitHub(), file, log: (...a) => logs.push(a.join(' ')), info: () => {} });
+  assert.equal(s.ready(), false);
+  assert.match(logs[0], /^ai sources: saved copy not read/);
+  assert.equal(await s.refresh(Date.UTC(2026, 9, 27, 12)), true);
 });
 
 test('sources: a refresh that is already running is waited for, not skipped (the first questions after a deploy)', async () => {
