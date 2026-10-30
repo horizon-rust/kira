@@ -12,7 +12,7 @@ import { applyAutomod } from './automod.js';
 import { overwrites as permissionOverwrites } from './permissions.js';
 import { load, save, claim } from './store.js';
 import { unique, isCopy, ensureThread } from './adopt.js';
-import { linkify, rolesMessage, howToPost } from './texts.js';
+import { linkify, rolesMessage, howToPost, faqMessages } from './texts.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { exportChannel } from './archive.js';
@@ -274,9 +274,10 @@ async function posts(guild) {
       .setFooter({ text: RULES_FOOTER })],
     components: linkRows([['Discord Community Guidelines', 'https://discord.com/guidelines']]),
   });
-  await upsert(guild, 'faq', 'faq', {
-    embeds: [FAQ, FAQ_MORE].map((list, i) => new EmbedBuilder().setColor(COLOR).setTitle(i ? '❓ More questions' : '❓ FAQ').setDescription(L(list.map(([q, a]) => `**${q}**\n${a}`).join('\n\n')).slice(0, 4096))),
-  });
+  // Two messages: Discord refuses a message whose embeds add up to more than 6000 characters (2026-10-30).
+  const [faq, faqMore] = faqMessages(state);
+  await upsert(guild, 'faq', 'faq', faq);
+  await upsert(guild, 'faqmore', 'faq', faqMore);
   for (const group of LAYOUT) for (const spec of group.channels) {
     if (spec.pin) {
       const msg = await upsert(guild, 'pin:' + spec.key, spec.key, { content: L(PINS[spec.pin]) });

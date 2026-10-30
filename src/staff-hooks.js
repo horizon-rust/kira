@@ -6,7 +6,7 @@ export const APPLY_ROLES = ['mod', 'support', 'team'];
 export const DECLINE_COOLDOWN_DAYS = 14;
 
 let staff = null; // { canApply, issueApplyLink }: src/applications.js
-let discord = null; // { decide }: the Discord side
+let discord = null; // { decide, dm }: the Discord side (src/features/apply.js)
 
 export const setStaffSide = (side) => { staff = side; };
 export const setDiscordSide = (side) => { discord = side; };
@@ -27,6 +27,17 @@ export async function decide(event) {
   }
 }
 
+// A DM the staff side asks Kira to send (Ludovic's veto window: DECISION_TEXTS.vetoWindow). Never throws.
+export async function dm({ userId, content }) {
+  if (!discord?.dm) return { sent: false, error: 'discord side not loaded' };
+  try {
+    const r = await discord.dm({ userId, content });
+    return { sent: !!r?.sent, error: r?.error ?? null };
+  } catch (e) {
+    return { sent: false, error: String(e?.message ?? e).slice(0, 200) };
+  }
+}
+
 const NAMES = { mod: '🛡️ Mod', support: '🤝 Support', team: '🌌 Horizon Team' };
 const day = (ms) => new Date(ms).toISOString().slice(0, 10);
 
@@ -37,5 +48,10 @@ export const DECISION_TEXTS = {
     role === 'team' ? 'Only the Discord role was given: access to the GitHub organisation or its teams is set up by Ludovic by hand, and he has been told.' : null,
   ].filter(Boolean).join('\n'),
   decline: (role, cooldownUntil) => `Thank you for applying for ${NAMES[role]} on Horizon's Discord. We are not taking your application this time. You can apply again from ${day(cooldownUntil)}.`,
-  ownerTeamAccepted: ({ userId, decidedBy, url }) => `🌌 Horizon Team application accepted: <@${userId}>, by <@${decidedBy}>. ${url}\nGitHub organisation or team access is yours to give by hand.`,
+  // To Ludovic (OWNER_ID), the one DM he gets about an application: the vote passed and his veto window opened. Sent by
+  // the staff side through dm(); the Discord side's decide() never DMs him (2026-10-30: no second DM).
+  vetoWindow: ({ userId, role, yes, no, url, until }) => [
+    `🗳️ The vote passed: <@${userId}> for ${NAMES[role]} (${yes} for, ${no} against). It goes through <t:${Math.floor(until / 1000)}:R> unless you veto it on the card: ${url}`,
+    role === 'team' ? 'Once it does, GitHub organisation or team access is yours to give by hand.' : null,
+  ].filter(Boolean).join('\n'),
 };

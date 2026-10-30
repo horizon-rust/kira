@@ -1,6 +1,6 @@
 // Texts shared by setup and the bot.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
-import { COLOR, LAYOUT, ROLES, HOWTO } from './config.js';
+import { COLOR, LAYOUT, ROLES, HOWTO, FAQ, FAQ_MORE } from './config.js';
 
 const byName = new Map(LAYOUT.flatMap((g) => g.channels).filter((c) => c.type !== 'voice').map((c) => [c.name, c.key]));
 
@@ -11,6 +11,12 @@ export function linkify(text, state) {
     return id ? `<#${id}>` : m;
   });
 }
+
+// The FAQ in #faq: one message per list (FAQ, FAQ_MORE), one embed each, under Discord's 4096 characters a description
+// and 6000 a message.
+export const faqMessages = (state) => [[FAQ, '❓ FAQ'], [FAQ_MORE, '❓ More questions']].map(([list, title]) => ({
+  embeds: [new EmbedBuilder().setColor(COLOR).setTitle(title).setDescription(linkify(list.map(([q, a]) => `**${q}**\n${a}`).join('\n\n'), state))],
+}));
 
 const ROWS = [['horizon', 'releases', 'newvideos'], ['modder']];
 
