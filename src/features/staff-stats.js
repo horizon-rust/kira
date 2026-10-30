@@ -84,8 +84,9 @@ async function fetchAll(now = Date.now()) {
   return { prs: [...byNumber.values()], issues, releases, at: now };
 }
 
+let fetcher = fetchAll;
 function refresh() {
-  running ??= fetchAll()
+  running ??= fetcher()
     .then((r) => { raw = r; console.log(`staff stats: ${r.prs.length} pull requests, ${r.issues.length} open issues, ${r.releases.length} releases`); })
     .catch((e) => console.error('staff stats', e.message))
     .finally(() => { running = null; });
@@ -94,16 +95,19 @@ function refresh() {
 
 export const _test = { fetchAll };
 
-export function statsRoutes({ store }) {
+// deps (the dev server's fakes): fetchAll() → { prs, issues, releases, at }, roadmap() → the public roadmap.
+export function statsRoutes({ store, deps = {} }) {
+  if (deps.fetchAll) fetcher = deps.fetchAll;
+  const roadmapOf = deps.roadmap ?? roadmap;
   if (!statsRoutes.started) { // the first numbers a minute after start, then every hour
     statsRoutes.started = true;
-    setTimeout(refresh, 60_000).unref?.();
+    setTimeout(refresh, deps.fetchAll ? 0 : 60_000).unref?.();
     setInterval(refresh, REFRESH_MS).unref?.();
   }
   return [
     { method: 'GET', path: 'team/stats', role: 'team', handler: async (ctx) => {
       if (!raw) { refresh(); return { status: 503, body: { error: 'Counting from GitHub: try again in a minute.' } }; }
-      return { body: { ...teamStats({ ...raw, roadmap: await roadmap(), data: store.data, now: ctx.now }), githubAt: new Date(raw.at).toISOString() } };
+      return { body: { ...teamStats({ ...raw, roadmap: await roadmapOf(), data: store.data, now: ctx.now }), githubAt: new Date(raw.at).toISOString() } };
     } },
     { method: 'GET', path: 'mod/stats', role: 'mod', handler: (ctx) => ({ body: modStats({ data: store.data, now: ctx.now }) }) },
   ];

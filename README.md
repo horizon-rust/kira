@@ -531,3 +531,6 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   `roadmap:<id>` label), game and launcher releases per week, and Discord activity from the counters. For the Mods,
   the moderation counters per week and over 7 and 30 days, and the applications waiting. Only public GitHub data
   and counts; a failed round keeps the last numbers.
+- **Working on the pages**: `node scripts/staff-dev.mjs` serves the staff API with fake members, applications,
+  decisions and made-up stats on 127.0.0.1 (no Discord, no GitHub, a fresh store in a temporary folder) and prints how
+  to point horizon-site's `serve.mjs` at it, the test logins, a password link and an application link.
