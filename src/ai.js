@@ -1,6 +1,6 @@
 // Kira's answers with the Claude API: the sources she answers from, and the call itself.
 //
-// Sources: the FAQ (config.js), and from horizon-rust/horizon's main branch the README and docs/*.md (refreshed daily),
+// Sources: the FAQ and the server guide (config.js: channels, roles, rules, /help; texts.js builds it), and from horizon-rust/horizon's main branch the README and docs/*.md (refreshed daily),
 // plus the notes of the latest published releases (hourly). They are read through github.js's makePublicGitHub (the
 // GitHub App, else no token; never Ludovic's token); unchanged files cost nothing (a doc is fetched again only when its
 // blob sha changes, and conditional GETs answered 304 aren't counted). A failed refresh keeps the last good copy, and
@@ -11,7 +11,8 @@
 // thread. The model's only tool is read_doc (read one doc in full): it can look things up, never act.
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { FAQ, GITHUB, WORK, RULES } from './config.js';
+import { FAQ, FAQ_MORE, GITHUB, WORK, RULES } from './config.js';
+import { serverGuideText } from './texts.js';
 import * as kit from './ai-kit.js';
 
 const REPO = `${GITHUB.owner}/${WORK.repo}`;
@@ -28,7 +29,7 @@ const decode = (blob) => (blob?.content ? Buffer.from(blob.content, blob.encodin
 const isGame = (r) => /^v\d/.test(r.tag_name) || /^nightly(?:-|$)/.test(r.tag_name);
 const isLauncher = (r) => /^launcher[@-]v?\d/.test(r.tag_name);
 
-export function makeSources({ gh, faq = FAQ, file = null, log = console.error, info = console.log }) {
+export function makeSources({ gh, faq = [...FAQ, ...FAQ_MORE], guide = serverGuideText(), file = null, log = console.error, info = console.log }) {
   const docs = new Map(); // 'docs/x.md' → { sha, text, summary }
   let readme = null;
   let releases = [];
@@ -128,7 +129,7 @@ export function makeSources({ gh, faq = FAQ, file = null, log = console.error, i
     inflight = p;
     return p;
   }
-  // Ready once anything was ever loaded (here or from the saved copy); the FAQ is always there.
+  // Ready once anything was ever loaded (here or from the saved copy); the FAQ and the server guide are always there.
   const ready = () => !!readme || releases.length > 0 || docs.size > 0;
 
   return {
@@ -137,6 +138,7 @@ export function makeSources({ gh, faq = FAQ, file = null, log = console.error, i
     names: () => [...docs.keys()].sort(),
     text: () => kit.sourcesBlock({
       faq,
+      guide,
       readme,
       knownIssues: docs.get('docs/known-issues.md')?.text ?? null,
       releases,

@@ -1,5 +1,6 @@
 // Discord AutoMod rules, applied by setup and by scripts/apply-moderation.js (each rule found again by its name),
-// and a copy of Discord's matching so the piracy list can be tested without Discord.
+// and a copy of Discord's matching so the piracy and Telegram lists can be tested without Discord. Every rule alerts
+// #mod-log; #mod-chat stays for the mods talking (Ludovic, 2026-10-30).
 import {
   AutoModerationRuleTriggerType as T, AutoModerationRuleEventType, AutoModerationActionType as A,
   AutoModerationRuleKeywordPresetType as Preset,
@@ -13,7 +14,19 @@ export const SCAM_PATTERNS = [
   'd[il1][sz]c[o0]r[dcl][a-z]*\\.(?:gift|ru|xyz|top|click|link)',
 ];
 
-// ids: { modlog, modchat (channels), mod, team (roles) }.
+// Telegram links (napkinwastaken in #mod-chat, Ludovic, 2026-10-30): t.me, telegram.me, telegram.dog and telegram.org
+// links, tg:// links, and the dot written out or spaced ("t . me/", "t[.]me/", "t dot me/"). A path is needed after the
+// domain, so "t.me" in a sentence, "tme", "telegraph" and "meet.me/…" pass. Rust regexes (no lookaround); the
+// JavaScript copy reads them the same (test/automod.test.js).
+const DOT = '\\s*(?:\\.|\\[\\s*\\.\\s*\\]|\\(\\s*\\.\\s*\\)|\\[\\s*dot\\s*\\]|\\(\\s*dot\\s*\\)|\\bdot\\b)\\s*';
+export const TELEGRAM_PATTERNS = [
+  `(?i)\\bt${DOT}me\\s*/`,
+  `(?i)\\btelegram${DOT}(?:me|dog|org)\\s*/`,
+  '(?i)\\btg\\s*:\\s*//',
+];
+export const TELEGRAM_MESSAGE = 'Telegram links are not allowed here (rule 2 and 4).';
+
+// ids: { modlog (channel), mod, team (roles) }.
 export function automodRules(ids) {
   const alert = { type: A.SendAlertMessage, metadata: { channel: ids.modlog } };
   const block = (msg) => ({ type: A.BlockMessage, metadata: { customMessage: msg } });
@@ -29,11 +42,17 @@ export function automodRules(ids) {
       },
       actions: [block('Server invites and gift links are not allowed (rule 2 and 4).'), alert], ...exempt,
     },
-    // Rule 3 (Ludovic, 2026-10-28): the alert goes to #mod-chat, where the mods talk, not to the busy #mod-log.
+    // Blocked, and the sender is timed out for an hour.
+    {
+      name: 'Kira · telegram links', triggerType: T.Keyword,
+      triggerMetadata: { regexPatterns: TELEGRAM_PATTERNS },
+      actions: [block(TELEGRAM_MESSAGE), alert, { type: A.Timeout, metadata: { durationSeconds: 3600 } }], ...exempt,
+    },
+    // Rule 3. Its alert went to #mod-chat from 2026-10-28; since 2026-10-30 it goes to #mod-log with the others.
     {
       name: 'Kira · piracy', triggerType: T.Keyword,
       triggerMetadata: { keywordFilter: MOD.piracy.keywords, regexPatterns: MOD.piracy.patterns },
-      actions: [block(MOD.piracy.message), { type: A.SendAlertMessage, metadata: { channel: ids.modchat ?? ids.modlog } }], ...exempt,
+      actions: [block(MOD.piracy.message), alert], ...exempt,
     },
     { name: 'Kira · bad names', triggerType: T.MemberProfile, triggerMetadata: { keywordFilter: ['*nigg*', '*fagg*', '*hitler*', '*nazi*', '*discord.gg*'] }, actions: [{ type: A.BlockMemberInteraction }], ...exempt },
   ];
@@ -70,3 +89,6 @@ export function patternRegex(pattern) {
 export function piracyMatch(text, { keywords, patterns } = MOD.piracy) {
   return keywords.find((k) => keywordRegex(k).test(text)) ?? patterns.find((p) => patternRegex(p).test(text)) ?? null;
 }
+
+// What the Telegram rule catches in a message: the first pattern that matches, or null.
+export const telegramMatch = (text) => TELEGRAM_PATTERNS.find((p) => patternRegex(p).test(text)) ?? null;
