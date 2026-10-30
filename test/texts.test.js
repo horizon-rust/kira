@@ -47,7 +47,8 @@ test('no dates, and what is not out yet says "coming soon"', () => {
 
 test('the new system is described where people look: the hub, the verbs, #updates, ideas not issues', () => {
   for (const where of ['about', 'welcome', 'faq', 'help']) assert.match(READ[where], /playhorizon\.dev\/hub|LINKS\.hub/, where);
-  for (const verb of ['/report', '/suggest', '/roadmap', '/claim', '/status', '@Kira']) assert.ok(READ.help.includes(verb), verb);
+  for (const verb of ['/report', '/roadmap', '/claim', '/status', '@Kira']) assert.ok(READ.help.includes(verb), verb);
+  for (const [where, text] of Object.entries(READ)) assert.doesNotMatch(text, /\/suggest|@Kira suggest/, where);
   assert.match(READ.help, /\/report-member/);
   assert.match(READ.faq, /What happens to my idea\?[\s\S]*not GitHub issues/);
   const ideas = specs.find((c) => c.key === 'horizonideas');

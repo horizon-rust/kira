@@ -1,6 +1,8 @@
-// Kira as the hub's front desk on Discord: the verbs the site has (report, suggest, roadmap, claim, status), as
-// slash commands and as "@Kira <verb>"; the suggestion queue (#roadmap-suggestions, private, its ID in
-// ROADMAP_SUGGESTIONS_CHANNEL_ID); and #horizon-ideas, whose posts go to that queue instead of GitHub.
+// Kira as the hub's front desk on Discord: the verbs (report, roadmap, claim, status), as slash commands and as
+// "@Kira <verb>"; the suggestion queue (#roadmap-suggestions, private, its ID in ROADMAP_SUGGESTIONS_CHANNEL_ID); and
+// #horizon-ideas, whose posts go to that queue instead of GitHub. Ludovic, 2026-10-30: ideas reach the queue only as
+// #horizon-ideas posts (and the hub's own form, relayed below while the site has it): /suggest is gone, and
+// "@Kira suggest" only points to #horizon-ideas.
 // Bugs: /report makes a post in #horizon-bugs in the member's name and sends it to GitHub like any other post,
 // so the answer comes back in that post.
 import {
@@ -16,10 +18,11 @@ import { isOwnPost } from '../adopt.js';
 import * as wb from './workboard.js';
 import * as github from './github.js';
 import { onTemplateOk } from './forums.js';
+import { linkify } from '../texts.js';
 
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
 const nameOf = (member, user) => member?.displayName ?? user.globalName ?? user.username;
-const limits = rateLimiter({ suggest: [HUB.suggestPerHour, 3_600_000], report: [HUB.reportPerHour, 3_600_000] });
+const limits = rateLimiter({ report: [HUB.reportPerHour, 3_600_000] });
 state.suggestions ??= {}; // #horizon-ideas posts already in the queue: thread id → the queue message id
 
 // ── The roadmap, as the website publishes it ────────────────────────────────
@@ -52,15 +55,6 @@ export async function queue({ text, userId, who, source, link }) {
   return ch.send(hub.suggestionPost({ text, who, whoId: userId, source, link }));
 }
 
-export async function suggest(user, member, text, source, link) {
-  const idea = String(text ?? '').trim();
-  if (idea.length < 10) return 'Tell me the idea in a sentence or two: `/suggest` or `@Kira suggest <your idea>`.';
-  if (!HUB.suggestionsChannel) return `The suggestion queue is closed for now. What's planned is on the roadmap: <${HUB.url}>`;
-  if (!limits.take(user.id, 'suggest')) return `That's ${HUB.suggestPerHour} suggestions this hour: send the next one later.`;
-  const msg = await queue({ text: idea, userId: user.id, who: nameOf(member, user), source, link }).catch((e) => { console.error('suggest', e.message); return null; });
-  if (!msg) return 'I could not reach the suggestion queue: try again in a while.';
-  return `💡 Thanks! Your suggestion is in the queue the maintainers read. Good ones become items on the roadmap (<${HUB.url}>); nothing is published by itself.`;
-}
 
 // A #horizon-ideas post that follows the template: into the queue (once), and Kira says so in the post.
 async function ideaPost(thread, starter) {
@@ -193,7 +187,7 @@ export async function onMessage(msg) {
     if (hub.roadmapIsPrivate(msg.channelId, here)) await reply(msg, hub.roadmapElsewhere(here, HUB.url));
     else await replyAll(msg, hub.roadmapMessages(await roadmap(), HUB.url, rest));
   }
-  else if (verb === 'suggest') await reply(msg, await suggest(msg.author, msg.member, rest, 'Discord, @Kira suggest', msg.url));
+  else if (verb === 'suggest') await reply(msg, hub.ideasElsewhere(state.channels.horizonideas, HUB.url));
   else if (verb === 'report') await reply(msg, { content: 'Click to fill in the bug form (it becomes a post in #horizon-bugs and a GitHub issue):', components: [reportButton()] });
   else if (verb === 'claim') {
     const n = board.parseRef(rest);
@@ -201,7 +195,7 @@ export async function onMessage(msg) {
     else if (!n || n.kind === 'card') await reply(msg, 'Which issue? `@Kira claim 123`.');
     else await reply(msg, await wb.claim(msg.author, msg.member, n.number));
   } else if (verb === 'status') await reply(msg, await statusText(msg.author.id, rest));
-  else await reply(msg, hub.helpText(HUB.url));
+  else await reply(msg, linkify(hub.helpText(HUB.url), state));
   return true;
 }
 
@@ -210,8 +204,6 @@ export async function onMessage(msg) {
 export const commands = [
   new SlashCommandBuilder().setName('roadmap').setDescription('The whole roadmap, or one area in full: what is being built, what is next, how to help')
     .addStringOption((o) => o.setName('area').setDescription('One area in full: performance, modpacks, servers, mods…').setMaxLength(40)),
-  new SlashCommandBuilder().setName('suggest').setDescription('Suggest something for Horizon: it goes to the queue the maintainers read')
-    .addStringOption((o) => o.setName('idea').setDescription('Your idea, and why').setRequired(true).setMinLength(10).setMaxLength(1000)),
   new SlashCommandBuilder().setName('report').setDescription('Report a Horizon bug: a form, then a post in #horizon-bugs and a GitHub issue'),
   new SlashCommandBuilder().setName('status').setDescription('Your claims and reports, an issue or roadmap item, or say what you are on')
     .addStringOption((o) => o.setName('of').setDescription('An issue or pull request (#123) or a roadmap item').setMaxLength(60))
@@ -227,11 +219,6 @@ export const handlers = {
     const [first, ...rest] = hub.roadmapMessages(await roadmap(), HUB.url, i.options.getString('area') ?? '');
     await i.editReply(first);
     for (const p of rest) await i.followUp({ ...p, ...flags, allowedMentions: { parse: [] } }).catch((e) => console.error('roadmap', e.message));
-  },
-  async suggest(i) {
-    await i.deferReply({ flags: MessageFlags.Ephemeral });
-    const link = `https://discord.com/channels/${GUILD_ID}/${i.channelId}`;
-    return i.editReply(ephemeral(await suggest(i.user, i.member, i.options.getString('idea'), 'Discord, /suggest', link)));
   },
   report: (i) => i.showModal(reportModal()),
   async status(i) {

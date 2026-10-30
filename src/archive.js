@@ -1,5 +1,6 @@
 // A channel's messages, saved before setup deletes the channel (REPLACED in config.js): every message, oldest
-// first, as JSON (everything Discord gives) and as Markdown (to read). Written to scratch/, which is not committed.
+// first, as JSON (everything Discord gives) and as Markdown (to read), and every attachment as a file (Discord's
+// links expire). Written to scratch/, which is not committed.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -33,15 +34,43 @@ export function markdown(name, records) {
     lines.push(`## ${r.at} · ${r.author.name ?? r.author.id}${r.pinned ? ' · pinned' : ''}`, '');
     if (r.content) lines.push(r.content, '');
     for (const e of r.embeds) lines.push(...[e.title && `**${e.title}**`, e.description, ...(e.fields ?? []).map((f) => `**${f.name}**: ${f.value}`)].filter(Boolean), '');
-    for (const a of r.attachments) lines.push(`[${a.name}](${a.url})`, '');
+    for (const a of r.attachments) lines.push(a.file ? `[${a.name}](${a.file})` : `[${a.name}](${a.url})`, '');
   }
   return lines.join('\n');
 }
 
-// Saves `channel` under `dir` as <name>.json and <name>.md. Returns how many messages were written.
-export async function exportChannel(channel, name, dir) {
+// A file name that is safe on every disk: the message id, the attachment's place in it, and its own name.
+export const fileName = (messageId, i, name) => `${messageId}-${i}-${String(name ?? 'file').replace(/[^\w.-]+/g, '_').slice(-80)}`;
+
+const download = async (url) => {
+  const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+};
+
+// Every attachment of `records`, into <dir>/<name>-files/; each record's attachment gets its `file` (relative to dir).
+// A file that can't be fetched (after one more try) throws: the export fails and the channel stays.
+export async function saveFiles(records, dir, name, get = download) {
+  let n = 0;
+  for (const r of records) {
+    for (const [i, a] of r.attachments.entries()) {
+      const rel = join(`${name}-files`, fileName(r.id, i, a.name));
+      const data = await get(a.url).catch(() => get(a.url)).catch((e) => { throw new Error(`attachment ${a.name} of message ${r.id}: ${e.message}`); });
+      mkdirSync(join(dir, `${name}-files`), { recursive: true });
+      writeFileSync(join(dir, rel), data);
+      a.file = rel;
+      n++;
+    }
+  }
+  return n;
+}
+
+// Saves `channel` under `dir` as <name>.json and <name>.md, its attachments in <name>-files/. Returns how many
+// messages were written.
+export async function exportChannel(channel, name, dir, get = download) {
   const records = (await allMessages(channel)).map(record);
   mkdirSync(dir, { recursive: true });
+  await saveFiles(records, dir, name, get);
   writeFileSync(join(dir, `${name}.json`), JSON.stringify({ channel: { id: channel.id, name }, exportedAt: new Date().toISOString(), messages: records }, null, 2));
   writeFileSync(join(dir, `${name}.md`), markdown(name, records));
   return records.length;

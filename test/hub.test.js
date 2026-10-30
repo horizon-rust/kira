@@ -196,13 +196,17 @@ test('the roadmap is fetched once per 5 minutes; a failure keeps the last good o
   assert.equal(calls, 2);
 });
 
-test('suggest: into the queue with its source, 3 an hour per member, too short refused', async () => {
+test('no more suggesting by command (Ludovic, 2026-10-30): "@Kira suggest" points to #horizon-ideas and queues nothing', async () => {
   queued.length = 0;
-  assert.match(await feature.suggest(user('1'), null, 'hm', 'x'), /a sentence or two/);
-  for (let n = 0; n < 3; n++) assert.match(await feature.suggest(user('1'), null, `An idea number ${n}, please`, 'Discord, /suggest', 'https://discord.com/channels/1/2'), /in the queue/);
-  assert.match(await feature.suggest(user('1'), null, 'One idea too many today', 'x'), /3 suggestions this hour/);
-  assert.equal(queued.length, 3);
-  assert.match(queued[0].embeds[0].fields[1].value, /Discord, \/suggest/);
+  assert.equal(feature.suggest, undefined);
+  core.client.user = { id: '42' };
+  const replies = [];
+  const msg = { content: '<@42> suggest a minimap with waypoints', author: user('1'), member: null, url: 'u', channel: {}, reply: async (p) => { replies.push(p); } };
+  assert.equal(await feature.onMessage(msg), true);
+  assert.equal(queued.length, 0);
+  assert.match(replies[0].content, /Ideas go in (<#\d+>|#horizon-ideas): one post per idea/);
+  assert.doesNotMatch(hub.helpText('https://playhorizon.dev/hub'), /suggest/);
+  assert.match(hub.helpText('https://playhorizon.dev/hub'), /#horizon-ideas/);
 });
 
 test('#horizon-ideas: a post that follows the template goes to the queue once, and Kira says so in the post', async () => {
@@ -225,7 +229,8 @@ test('every slash command name is used once (Discord refuses the whole list othe
   for (const m of mods) assert.ok(Array.isArray(m.commands) && m.handlers, 'every feature exports commands and handlers (bot.js reads them)');
   const names = mods.flatMap((m) => m.commands).map((c) => c.toJSON().name);
   assert.equal(new Set(names).size, names.length, names.filter((n, i) => names.indexOf(n) !== i).join());
-  for (const n of ['report', 'suggest', 'roadmap', 'claim', 'status', 'report-member', 'link-github']) assert.ok(names.includes(n), n);
+  for (const n of ['report', 'roadmap', 'claim', 'status', 'report-member', 'link-github']) assert.ok(names.includes(n), n);
+  assert.ok(!names.includes('suggest'), 'no /suggest: ideas are #horizon-ideas posts');
   for (const m of mods) for (const c of m.commands) if (c.toJSON().type === undefined || c.toJSON().type === 1) assert.ok(m.handlers[c.toJSON().name], `handler for /${c.toJSON().name}`);
 });
 
