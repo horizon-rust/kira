@@ -38,6 +38,18 @@ test('the code is found in the bio, or in a public gist named kira.txt; a wrong 
   assert.equal(await kit.codeIsPublished(fakeGh({}), 'not a login!', code), false, 'nothing is asked for a bad login');
 });
 
+test('a GitHub App token refused the gists (HTTP 403): the public gists are read without it; other errors still throw', async () => {
+  const code = 'kira-abcd2345';
+  const app = (fail) => ({ get: async (path) => {
+    if (path === '/users/ana') return { bio: 'nothing' };
+    throw new Error(`GitHub GET ${path}: HTTP ${fail} {"message":"Resource not accessible by integration"}`);
+  } });
+  const pub = fakeGh({ '/users/ana/gists': [{ id: 'g2', files: { 'kira.txt': {} } }], '/gists/g2': { files: { 'kira.txt': { content: code } } } });
+  assert.equal(await kit.codeIsPublished(app(403), 'ana', code, pub.get), true);
+  assert.deepEqual(pub.calls, ['/users/ana/gists?per_page=30', '/gists/g2']);
+  await assert.rejects(kit.codeIsPublished(app(500), 'ana', code, pub.get), /HTTP 500/);
+});
+
 test('merged pull requests: 0 and 3, counted by the search API for that repo and author', async () => {
   const gh = fakeGh({ '/search/issues': { total_count: 3 } });
   assert.equal(await kit.mergedCount(gh, 'horizon-rust', 'horizon', 'ana-gh'), 3);

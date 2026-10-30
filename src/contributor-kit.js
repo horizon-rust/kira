@@ -57,15 +57,25 @@ export function startChallenge(work, id, login, now, ttlMs, code = newCode()) {
 }
 export const expired = (challenge, now) => challenge.expires <= now;
 
+// Reads a public GitHub API path without a token (60 requests an hour per address).
+export async function publicGet(path) {
+  const r = await fetch(`https://api.github.com${path}`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'kira' } });
+  if (!r.ok) throw new Error(`GitHub GET ${path} without a token: HTTP ${r.status}`);
+  return r.json();
+}
+
 // Looks for the code where only the account's owner can write: the profile bio, then a public gist named kira.txt.
-export async function codeIsPublished(gh, login, code) {
+// A GitHub App's token may not read gists (HTTP 403 "Resource not accessible by integration"), so public gists are
+// then read without it (`pub`).
+export async function codeIsPublished(gh, login, code, pub = publicGet) {
   if (!LOGIN.test(login)) return false;
   const who = encodeURIComponent(login);
   const user = await gh.get(`/users/${who}`);
   if (typeof user?.bio === 'string' && user.bio.includes(code)) return true;
-  const gists = (await gh.get(`/users/${who}/gists?per_page=30`)) ?? [];
+  const get = (path) => gh.get(path).catch((e) => (/HTTP 403/.test(e?.message ?? '') ? pub(path) : Promise.reject(e)));
+  const gists = (await get(`/users/${who}/gists?per_page=30`)) ?? [];
   for (const g of gists.filter((x) => x.files?.[GIST_FILE]).slice(0, 3)) {
-    const full = await gh.get(`/gists/${encodeURIComponent(g.id)}`);
+    const full = await get(`/gists/${encodeURIComponent(g.id)}`);
     if (typeof full?.files?.[GIST_FILE]?.content === 'string' && full.files[GIST_FILE].content.includes(code)) return true;
   }
   return false;
