@@ -239,7 +239,7 @@ export const LAYOUT = [
       { key: 'reports', name: 'reports', type: 'text', staff: true, topic: 'Reports from members: /report-member and "Report to mods" on a message.' },
       { key: 'modmail', name: 'mod-mail', type: 'text', staff: true, topic: "Members DM Kira; each conversation is a thread here. Write in the thread to answer (start with // for a note they don't see, //close to close)." },
       { key: 'discordupdates', name: 'discord-updates', type: 'text', staff: true, topic: 'Messages from Discord to community servers.' },
-      { key: 'roadmapsuggestions', name: 'roadmap-suggestions', type: 'text', staff: true, topic: 'The suggestion queue: #horizon-ideas posts and the hub\'s form. A good one becomes a roadmap item (a pull request to roadmap.toml), never an issue. Kira posts here once ROADMAP_SUGGESTIONS_CHANNEL_ID is this channel\'s ID.' },
+      { key: 'roadmapsuggestions', name: 'roadmap-suggestions', type: 'text', staff: true, topic: 'The suggestion queue: #horizon-ideas posts. A good one becomes a roadmap item (a pull request to roadmap.toml), never an issue. Kira posts here once ROADMAP_SUGGESTIONS_CHANNEL_ID is this channel\'s ID.' },
       { key: 'agentlog', name: 'agent-log', type: 'text', staff: true, topic: "Every call contributors' AI agents make through Kira's MCP server: who (the token's owner), which tool, the outcome. Tokens: /agent tokens member:." },
     ],
   },
@@ -357,17 +357,13 @@ export const ONE_OFFS = [
 
 // The hub (playhorizon.dev/hub): the one public place for the roadmap, the kanban, the journal and how to help.
 // Kira is its front desk on Discord, with the same verbs (src/hub.js, src/features/hub.js). The website publishes
-// the roadmap and the journal as JSON (the horizon repo's roadmap/README.md). Suggestions, from Discord and from
-// the site, go to one private queue: #roadmap-suggestions, whose ID is ROADMAP_SUGGESTIONS_CHANNEL_ID (unset: off).
+// the roadmap and the journal as JSON (the horizon repo's roadmap/README.md). Suggestions come only from #horizon-ideas
+// posts and go to one private queue: #roadmap-suggestions, whose ID is ROADMAP_SUGGESTIONS_CHANNEL_ID (unset: off).
 export const HUB = {
   url: process.env.HUB_URL || LINKS.hub,
   roadmapJson: process.env.HUB_ROADMAP_URL || 'https://playhorizon.dev/data/roadmap.json',
   journalJson: process.env.HUB_JOURNAL_URL || 'https://playhorizon.dev/data/journal.json',
   suggestionsChannel: process.env.ROADMAP_SUGGESTIONS_CHANNEL_ID?.trim() || null,
-  // The suggestions sent from the hub's form, kept by the telemetry server: Kira relays them into the queue.
-  intakeUrl: (process.env.HUB_INTAKE_URL || 'https://telemetry.playhorizon.dev').replace(/\/+$/, ''),
-  token: process.env.HUB_TOKEN?.trim() || null, // its bearer token (HORIZON_TELEMETRY_HUB_TOKEN there); sealed on Railway
-  relayEveryMs: 5 * 60_000,
   cacheMs: 5 * 60_000, // the roadmap is fetched again at most every 5 minutes
   journalEveryMs: 10 * 60_000, // the journal, for #updates
   reportPerHour: 3, // bugs per member an hour (/report); the GitHub limits of GITHUB.rate apply too

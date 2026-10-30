@@ -1,8 +1,7 @@
 // Kira as the hub's front desk on Discord: the verbs (report, roadmap, claim, status), as slash commands and as
 // "@Kira <verb>"; the suggestion queue (#roadmap-suggestions, private, its ID in ROADMAP_SUGGESTIONS_CHANNEL_ID); and
 // #horizon-ideas, whose posts go to that queue instead of GitHub. Ludovic, 2026-10-30: ideas reach the queue only as
-// #horizon-ideas posts (and the hub's own form, relayed below while the site has it): /suggest is gone, and
-// "@Kira suggest" only points to #horizon-ideas.
+// #horizon-ideas posts: /suggest and the hub's form are gone, and "@Kira suggest" only points to #horizon-ideas.
 // Bugs: /report makes a post in #horizon-bugs in the member's name and sends it to GitHub like any other post,
 // so the answer comes back in that post.
 import {
@@ -66,48 +65,6 @@ async function ideaPost(thread, starter) {
   state.suggestions[thread.id] = msg.id;
   save();
   await thread.send({ content: `💡 In the suggestion queue the maintainers read. If it's picked, it becomes an item on the roadmap: <${HUB.url}>. Keep voting 👍 here.`, allowedMentions: { parse: [] } }).catch(() => {});
-}
-
-// The hub's own suggestions (its form on playhorizon.dev/hub), kept by the telemetry server: every HUB.relayEveryMs
-// Kira reads the new ones (GET /hub/suggestions, bearer HUB_TOKEN) and posts them in the queue, oldest first. The last
-// id is saved after each post (state.hubRelay.after), so a failed post is tried again next round. Off without the
-// token or the queue; while the endpoint is missing or failing, one log line per change of error, then retries.
-const relayState = (state.hubRelay ??= { after: 0 });
-let relayProblem = null;
-let fetchQueue = async (url, token) => {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'Kira (Horizon Discord bot)' }, signal: AbortSignal.timeout(15_000) });
-  return { status: res.status, body: res.ok ? await res.json() : null };
-};
-
-export async function relay() {
-  if (!HUB.suggestionsChannel || !HUB.token) return 0;
-  const url = `${HUB.intakeUrl}/hub/suggestions?after=${relayState.after}&limit=100`;
-  const { status, body } = await fetchQueue(url, HUB.token).catch((e) => ({ status: e.message, body: null }));
-  const list = Array.isArray(body?.suggestions) ? body.suggestions : null;
-  if (!list) {
-    if (relayProblem !== status) console.error(`hub suggestions: ${status}, trying again every ${HUB.relayEveryMs / 60_000} min`);
-    relayProblem = status;
-    return 0;
-  }
-  relayProblem = null;
-  let n = 0;
-  for (const s of list) {
-    const id = Number(s?.id);
-    if (!Number.isSafeInteger(id) || id <= relayState.after) continue;
-    const item = typeof s.item === 'string' && /^[a-z0-9-]{1,60}$/.test(s.item) ? s.item : null;
-    const msg = await queue({
-      text: String(s.text ?? ''),
-      who: typeof s.name === 'string' && s.name.trim() ? s.name : 'someone on the hub',
-      source: item ? `the hub, about \`${item}\`` : 'the hub',
-      link: item ? hub.itemUrl(HUB.url, item) : null,
-    }).catch((e) => { console.error('hub suggestions', e.message); return null; });
-    if (!msg) break;
-    relayState.after = id;
-    save();
-    n++;
-  }
-  if (n) console.log(`hub suggestions: ${n} relayed`);
-  return n;
 }
 
 // ── Bug reports ──────────────────────────────────────────────────────────────
@@ -236,19 +193,10 @@ export const handlers = {
   },
 };
 
-export const _test = { setFetch: (fn) => { fetchJson = fn; cached = { at: 0, data: null }; }, setQueueFetch: (fn) => { fetchQueue = fn; }, relayState, ideaPost, submitReport, limits };
+export const _test = { setFetch: (fn) => { fetchJson = fn; cached = { at: 0, data: null }; }, ideaPost, submitReport, limits };
 
 export function setup() {
   console.log(`hub: ${HUB.url}, suggestion queue ${HUB.suggestionsChannel ? 'on' : 'off (ROADMAP_SUGGESTIONS_CHANNEL_ID is not set)'}`);
-  const relaying = HUB.suggestionsChannel && HUB.token;
-  console.log(`hub suggestions from the site: ${relaying ? `on (${HUB.intakeUrl})` : 'off (needs HUB_TOKEN and the queue)'}`);
-  if (relaying) {
-    client.once('clientReady', () => {
-      const run = () => relay().catch((e) => console.error('hub suggestions', e.message));
-      setTimeout(run, 30_000).unref?.();
-      setInterval(run, HUB.relayEveryMs).unref?.();
-    });
-  }
   onTemplateOk((thread, starter) => ideaPost(thread, starter));
   client.on('interactionCreate', async (i) => {
     if (i.guildId !== GUILD_ID) return;
