@@ -1,7 +1,6 @@
 // /apply's texts, with no Discord connection so they can be tested (src/features/apply.js does the talking). The rules
 // (who may apply, the cooldown, who decides) are the staff side's: docs/staff-api.md.
 import { APPLY } from './config.js';
-import { DECISION_TEXTS } from './staff-hooks.js';
 
 const label = (role) => APPLY.roles[role]?.label ?? role;
 const when = (ms) => `<t:${Math.floor(ms / 1000)}:D>`;
@@ -24,6 +23,3 @@ export function decisionDm(role, outcome, cooldownUntil = null) {
   if (outcome === 'accept') return `🎉 Your application for **${label(role)}** on Horizon's Discord was accepted. Welcome! You now have the role. ${APPLY.roles[role]?.intro ?? ''}`.trim();
   return `Thank you for applying for **${label(role)}** on Horizon's Discord. We are not taking your application this time.${cooldownUntil ? ` You can apply again from ${when(cooldownUntil)}.` : ''}`;
 }
-
-// Ludovic's DM when a Team application is accepted.
-export const ownerNotice = ({ userId, decidedBy, url }) => DECISION_TEXTS.ownerTeamAccepted({ userId, decidedBy, url });

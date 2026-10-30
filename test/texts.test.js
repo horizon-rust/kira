@@ -72,3 +72,17 @@ test('#official-server says what the server runs: Pumpkin and its nightly builds
   assert.match(cfg.OFFICIAL_SERVER.description, /Pumpkin's nightly builds/);
   assert.doesNotMatch(cfg.OFFICIAL_SERVER.description, /Horizon's Nightly/);
 });
+
+test('#faq: two messages, each under Discord\'s limits with real channel ids, nothing cut', () => {
+  const ids = Object.fromEntries(specs.map((c) => [c.key, '1559227979002028052']));
+  const msgs = texts.faqMessages({ channels: ids });
+  assert.equal(msgs.length, 2);
+  for (const [i, m] of msgs.entries()) {
+    assert.equal(m.embeds.length, 1);
+    const e = m.embeds[0].data;
+    assert.ok(e.description.length <= 4096, `faq ${i}: ${e.description.length}`);
+    assert.ok(e.description.length + e.title.length <= 6000);
+    const list = i ? cfg.FAQ_MORE : cfg.FAQ;
+    assert.ok(e.description.endsWith(texts.linkify(list.at(-1)[1], { channels: ids })), 'the last answer is whole');
+  }
+});

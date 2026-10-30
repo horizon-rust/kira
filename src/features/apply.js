@@ -1,9 +1,9 @@
 // /apply (Ludovic, 2026-10-30): the Discord side of the applications for 🛡️ Mod, 🤝 Support and 🌌 Horizon Team
-// (docs/staff-api.md). The form and the decisions live on the website's staff dashboards; Kira DMs the member a
-// one-time link to the form, and when the staff decide she gives the role and DMs the member (and Ludovic, for an
-// accepted Team application). The two sides meet only through src/staff-hooks.js.
+// (docs/staff-api.md). The form, the vote and Ludovic's veto live on the website's staff dashboards; Kira DMs the
+// member a one-time link to the form, gives the role and DMs the member once a decision is final, and sends the DMs
+// the staff side asks for (Ludovic's veto window) through dm(). The two sides meet only through src/staff-hooks.js.
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { APPLY, GUILD_ID, OWNER_ID } from '../config.js';
+import { APPLY, GUILD_ID } from '../config.js';
 import { client, state, modlog } from '../core.js';
 import { rateLimiter } from '../agents.js';
 import { APPLY_ROLES, canApply, issueApplyLink, setDiscordSide } from '../staff-hooks.js';
@@ -12,11 +12,11 @@ import { linkify } from '../texts.js';
 
 const limits = rateLimiter({ link: [APPLY.perHour, 3_600_000] });
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
-const TEAM_DASHBOARD = 'https://playhorizon.dev/staff/team';
 
-// What the staff side calls once a decision is recorded: the role on accept, the applicant's DM, Ludovic's notice for
-// the Team. Never throws: { granted, dmSent, error }.
-export async function decide({ applicationId, userId, role, outcome, decidedBy, cooldownUntil, url }) {
+// What the staff side calls once a decision is final (after the vote and Ludovic's veto window): the role on accept and
+// the applicant's DM. Ludovic hears of it through the veto-window DM the staff side sends with dm(), not from here.
+// Never throws: { granted, dmSent, error }.
+export async function decide({ applicationId, userId, role, outcome, decidedBy, cooldownUntil }) {
   const out = { granted: false, dmSent: false, error: null };
   const fail = (e) => { out.error ??= String(e?.message ?? e).slice(0, 200); };
   try {
@@ -31,15 +31,25 @@ export async function decide({ applicationId, userId, role, outcome, decidedBy, 
     const user = member?.user ?? await client.users.fetch(userId).catch(() => null);
     if (!user) fail('no such user');
     else await user.send({ content: linkify(kit.decisionDm(role, outcome, cooldownUntil), state), allowedMentions: { parse: [] } }).then(() => { out.dmSent = true; }, () => fail('their DMs are closed'));
-    if (outcome === 'accept' && role === 'team' && out.granted) {
-      const owner = await client.users.fetch(OWNER_ID).catch(() => null);
-      await owner?.send({ content: kit.ownerNotice({ userId, decidedBy, url: /^https:\/\/playhorizon\.dev\//.test(url ?? '') ? url : TEAM_DASHBOARD }), allowedMentions: { parse: [] } }).catch((e) => console.error('apply owner notice', e.message));
-    }
     await modlog(`📝 Application ${outcome === 'accept' ? 'accepted' : 'declined'}`, `<@${userId}> for ${APPLY.roles[role].label}, by <@${decidedBy}> on the dashboard · role ${out.granted ? 'given' : outcome === 'accept' ? 'NOT given' : '–'} · DM ${out.dmSent ? 'sent' : 'not sent'}${out.error ? ` (${out.error})` : ''}`);
   } catch (e) {
     fail(e);
   }
   return out;
+}
+
+// A DM the staff side asks for (Ludovic's veto window, docs/staff-api.md): the text as given, nobody pinged, at most
+// 2000 characters. Never throws: { sent, error }.
+export async function dm({ userId, content }) {
+  try {
+    const text = String(content ?? '').trim();
+    if (!/^\d{5,25}$/.test(String(userId ?? '')) || !text) return { sent: false, error: 'bad request' };
+    const user = await client.users.fetch(userId).catch(() => null);
+    if (!user) return { sent: false, error: 'no such user' };
+    return await user.send({ content: text.slice(0, 2000), allowedMentions: { parse: [] } }).then(() => ({ sent: true, error: null }), () => ({ sent: false, error: 'their DMs are closed' }));
+  } catch (e) {
+    return { sent: false, error: String(e?.message ?? e).slice(0, 200) };
+  }
 }
 
 export const commands = [
@@ -64,8 +74,8 @@ export const handlers = {
   },
 };
 
-export const _test = { decide };
+export const _test = { decide, dm };
 
 export function setup() {
-  setDiscordSide({ decide });
+  setDiscordSide({ decide, dm });
 }

@@ -75,7 +75,7 @@ const user = (id) => ({ id, send: async (m) => { if (dmsClosed && id !== OWNER_I
 core.client.guilds.cache.set(GUILD_ID, { id: GUILD_ID, members: { fetch: async (id) => (id === 'gone' ? Promise.reject(new Error('Unknown Member')) : { id, user: user(id), roles: { add: async (r) => { given.push([id, r]); } } }) } });
 core.client.users.fetch = async (id) => user(id);
 
-test('a decision from the dashboards: accept gives the role and DMs where to start; the Team also tells Ludovic', async () => {
+test('a decision from the dashboards: accept gives the role and DMs where to start; Ludovic gets no second DM', async () => {
   hooks.setDiscordSide(null);
   feature.setup();
   const r = await hooks.decide({ applicationId: 'a1', userId: 'u5', role: 'support', outcome: 'accept', decidedBy: 'm1' });
@@ -84,9 +84,8 @@ test('a decision from the dashboards: accept gives the role and DMs where to sta
   assert.match(dms.at(-1)[1], /accepted[\s\S]*<#sup>/);
   dms.length = 0;
   await hooks.decide({ applicationId: 'a2', userId: 'u6', role: 'team', outcome: 'accept', decidedBy: 't1', url: 'https://playhorizon.dev/staff/team#a2' });
-  assert.deepEqual(dms.map(([id]) => id), ['u6', OWNER_ID]);
+  assert.deepEqual(dms.map(([id]) => id), ['u6'], 'the veto-window DM was his one DM: none from decide');
   assert.match(dms[0][1], /GitHub organisation or its teams is set up by Ludovic by hand/);
-  assert.match(dms[1][1], /<@u6>, by <@t1>\. https:\/\/playhorizon\.dev\/staff\/team#a2/);
   assert.match(logs.at(-1).title, /accepted/);
 });
 
@@ -103,4 +102,21 @@ test('a decline DMs a polite no with the date; failures are reported, never thro
   assert.deepEqual(closed, { granted: true, dmSent: false, error: 'their DMs are closed' });
   dmsClosed = false;
   assert.equal((await hooks.decide({ applicationId: 'a6', userId: 'u9', role: 'admin', outcome: 'accept', decidedBy: 'm1' })).error, 'unknown role');
+});
+
+test('dm(): the staff side\'s DMs (Ludovic\'s veto window), no pings, never a throw', async () => {
+  dms.length = 0;
+  const until = Date.UTC(2026, 9, 31, 2);
+  const text = hooks.DECISION_TEXTS.vetoWindow({ userId: 'u6', role: 'team', yes: 4, no: 1, url: 'https://playhorizon.dev/staff/team#a2', until });
+  assert.match(text, new RegExp(`^🗳️ The vote passed: <@u6> for 🌌 Horizon Team \\(4 for, 1 against\\)\\. It goes through <t:${until / 1000}:R> unless you veto it on the card: https://playhorizon\\.dev/staff/team#a2\\nOnce it does, GitHub`));
+  assert.doesNotMatch(hooks.DECISION_TEXTS.vetoWindow({ userId: 'u6', role: 'mod', yes: 2, no: 0, url: 'u', until }), /GitHub/);
+  assert.deepEqual(await hooks.dm({ userId: OWNER_ID, content: text }), { sent: true, error: null });
+  assert.deepEqual(dms.at(-1), [OWNER_ID, text]);
+  assert.deepEqual(await hooks.dm({ userId: 'not-an-id', content: 'x' }), { sent: false, error: 'bad request' });
+  dmsClosed = true;
+  assert.deepEqual(await hooks.dm({ userId: '123456789012345678', content: 'x' }), { sent: false, error: 'their DMs are closed' });
+  dmsClosed = false;
+  hooks.setDiscordSide(null);
+  assert.deepEqual(await hooks.dm({ userId: OWNER_ID, content: 'x' }), { sent: false, error: 'discord side not loaded' });
+  feature.setup();
 });
