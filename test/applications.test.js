@@ -7,7 +7,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openStaffStore } from '../src/staff-store.js';
 import * as apps from '../src/applications.js';
-import { setStaffSide, canApply as hookCanApply } from '../src/staff-hooks.js';
+import { setStaffSide, canApply as hookCanApply, CLOSED_ROLES } from '../src/staff-hooks.js';
+import { refusal } from '../src/apply-kit.js';
+
+// These tests cover every role's flow, so they run with every role open; the closed list has its own test below.
+const CLOSED_NOW = CLOSED_ROLES.splice(0);
 import { finalize, castBallot } from '../src/application-votes.js';
 import { DAY } from '../src/staff-auth.js';
 
@@ -93,4 +97,19 @@ test('the hooks answer for the staff side once registered', async () => {
   setStaffSide({ canApply: async (u, r) => apps.canApply(store, u, r, false, T0) });
   assert.deepEqual(await hookCanApply('1', 'team'), { ok: true });
   setStaffSide(null);
+});
+
+test('a closed role offers no link and refuses its form, while the others stay open', () => {
+  assert.deepEqual(CLOSED_NOW, ['team']); // Horizon Team closed by Ludovic, 2026-10-30
+  CLOSED_ROLES.push(...CLOSED_NOW);
+  try {
+    const store = fresh();
+    assert.deepEqual(apps.canApply(store, '42', 'team', false), { ok: false, why: 'role-closed' });
+    assert.equal(apps.issueApplyLink(store, '42', 'team', false, 'https://playhorizon.dev').ok, false);
+    assert.equal(apps.canApply(store, '42', 'mod', false).ok, true);
+    assert.equal(apps.canApply(store, '42', 'support', false).ok, true);
+    assert.equal(refusal('role-closed', 'team'), 'Applications for 🌌 Horizon Team are closed for now.');
+  } finally {
+    CLOSED_ROLES.splice(0);
+  }
 });

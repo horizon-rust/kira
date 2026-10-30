@@ -6,7 +6,7 @@ import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { APPLY, GUILD_ID } from '../config.js';
 import { client, state, modlog } from '../core.js';
 import { rateLimiter } from '../agents.js';
-import { APPLY_ROLES, canApply, issueApplyLink, setDiscordSide } from '../staff-hooks.js';
+import { APPLY_ROLES, CLOSED_ROLES, canApply, issueApplyLink, setDiscordSide } from '../staff-hooks.js';
 import * as kit from '../apply-kit.js';
 import { linkify } from '../texts.js';
 
@@ -71,9 +71,9 @@ export async function dm({ userId, content }) {
 }
 
 export const commands = [
-  new SlashCommandBuilder().setName('apply').setDescription('Apply for 🤝 Support, 🛡️ Mod or 🌌 Horizon Team: Kira DMs you the form')
+  new SlashCommandBuilder().setName('apply').setDescription('Apply for 🤝 Support or 🛡️ Mod: Kira DMs you the form')
     .addStringOption((o) => o.setName('role').setDescription('Which role').setRequired(true)
-      .addChoices(...Object.entries(APPLY.roles).map(([value, r]) => ({ name: r.label, value })))),
+      .addChoices(...Object.entries(APPLY.roles).filter(([value]) => !CLOSED_ROLES.includes(value)).map(([value, r]) => ({ name: r.label, value })))),
 ];
 
 export const handlers = {
