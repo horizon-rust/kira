@@ -42,14 +42,14 @@ import { setDiscordSide } from './staff-hooks.js';
 setDiscordSide({
   // A moderator or Team member decided an application on the website. Grant the role (accept), DM the applicant,
   // tell the owner when a Team application is accepted. Never throws: report what happened.
-  async decide({ applicationId, userId, role, outcome, decidedBy, cooldownUntil }) {
+  async decide({ applicationId, userId, role, outcome, decidedBy, cooldownUntil, url }) {
     return { granted, dmSent, error }; // granted: false on a decline; error: a short text, or null
   },
 });
 ```
 
 - `outcome` is `accept` or `decline`; `decidedBy` the deciding member's Discord id; `cooldownUntil` (declines) ms
-  since epoch.
+  since epoch; `url` the application's card on its dashboard (for the owner's notice).
 - The staff side has already recorded the decision when it calls `decide`; it stores the result (`granted`,
   `dmSent`, `error`) on the application and shows it on the card, so a failed grant or DM is visible and can be done
   by hand.
