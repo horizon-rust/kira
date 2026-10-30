@@ -4,10 +4,14 @@
 // Discord side's (src/staff-hooks.js, docs/staff-api.md). No Discord and no network here: `deps` brings them.
 import { randomBytes } from 'node:crypto';
 import * as auth from './staff-auth.js';
-import { APPLY_ROLES, DECLINE_COOLDOWN_DAYS, decide as discordDecide } from './staff-hooks.js';
+import { APPLY_ROLES, DECLINE_COOLDOWN_DAYS } from './staff-hooks.js';
+import { newVote, voteView, auditView, FINAL } from './application-votes.js';
 
 export const RETENTION_DAYS = 90;
+// Where an application lives (its link), and the dashboards that show it: Support ones also on the Team's, whose members
+// vote on them too.
 export const DASHBOARD_OF = { mod: 'mod', support: 'mod', team: 'team' };
+export const SHOWN_ON = { mod: ['mod'], support: ['mod', 'team'], team: ['team'] };
 export const ROLE_NAMES = { mod: '🛡️ Mod', support: '🤝 Support', team: '🌌 Horizon Team' };
 const refuse = (message) => Object.assign(new Error(message), { expose: true });
 
@@ -31,7 +35,7 @@ export function canApply(store, userId, role, hasRole, now = Date.now()) {
   if (!APPLY_ROLES.includes(role)) return { ok: false, why: 'role' };
   if (hasRole) return { ok: false, why: 'has-role' };
   const mine = Object.values(store.data.applications).filter((a) => a.user === userId && a.role === role);
-  if (mine.some((a) => a.status === 'open')) return { ok: false, why: 'open' };
+  if (mine.some((a) => !FINAL.includes(a.status))) return { ok: false, why: 'open' };
   const until = Math.max(0, ...mine.filter((a) => a.status === 'declined').map((a) => a.decidedAt + DECLINE_COOLDOWN_DAYS * auth.DAY));
   if (until > now) return { ok: false, why: 'cooldown', retryAt: until };
   return { ok: true };
@@ -65,14 +69,14 @@ export function submit(store, { token, answers, name, contributor = null, hasRol
   const clean = cleanAnswers(link.role, answers);
   if (!auth.useLink(store, token, 'apply', now)) throw refuse('This link was just used.');
   const id = randomBytes(6).toString('hex');
-  const app = { id, user: link.user, name: String(name ?? '').slice(0, 64), role: link.role, answers: clean, contributor, submittedAt: now, status: 'open', decidedBy: null, decidedAt: null, result: null };
+  const app = { id, user: link.user, name: String(name ?? '').slice(0, 64), role: link.role, answers: clean, contributor, submittedAt: now, status: 'open', vote: newVote(now), decidedBy: null, decidedAt: null, result: null };
   store.update((d) => { d.applications[id] = app; });
   return app;
 }
 
 // Applications older than RETENTION_DAYS after their decision keep only what the cooldown needs.
 export function sweep(store, now = Date.now()) {
-  const old = Object.values(store.data.applications).filter((a) => a.status !== 'open' && a.decidedAt < now - RETENTION_DAYS * auth.DAY && a.answers);
+  const old = Object.values(store.data.applications).filter((a) => FINAL.includes(a.status) && a.decidedAt < now - RETENTION_DAYS * auth.DAY && a.answers);
   if (!old.length) return 0;
   store.update((d) => {
     for (const a of old) d.applications[a.id] = { id: a.id, user: a.user, role: a.role, status: a.status, decidedAt: a.decidedAt };
@@ -81,26 +85,15 @@ export function sweep(store, now = Date.now()) {
 }
 
 const contributes = (a) => (a.contributor?.verified ? a.contributor.merged ?? 0 : 0);
-// A dashboard's applications: open first, verified contributors with merged pull requests first among them (most
-// merged first), then oldest first; decided ones after, newest decision first.
-export function list(store, dashboard, now = Date.now()) {
-  sweep(store, now);
-  const mine = Object.values(store.data.applications).filter((a) => DASHBOARD_OF[a.role] === dashboard && a.answers);
-  const open = mine.filter((a) => a.status === 'open').sort((a, b) => contributes(b) - contributes(a) || a.submittedAt - b.submittedAt);
-  const done = mine.filter((a) => a.status !== 'open').sort((a, b) => b.decidedAt - a.decidedAt);
-  return [...open, ...done].map((a) => ({ ...a, questions: questions(a.role).map(({ id, label }) => ({ id, label })), githubManual: a.role === 'team' }));
-}
-
-// A decision from a dashboard: recorded, then handed to the Discord side, whose result is stored on it.
-export async function decideApp(store, { id, outcome, by, dashboard, site }, now = Date.now()) {
-  const a = store.data.applications[id];
-  if (!a || DASHBOARD_OF[a.role] !== dashboard || !a.answers) throw refuse('No such application here.');
-  if (a.status !== 'open') throw refuse('This application was already decided.');
-  if (!['accept', 'decline'].includes(outcome)) throw refuse('Accept or decline.');
-  if (a.user === by) throw refuse('You can\'t decide your own application.');
-  const cooldownUntil = outcome === 'decline' ? now + DECLINE_COOLDOWN_DAYS * auth.DAY : null;
-  store.update(() => Object.assign(a, { status: outcome === 'accept' ? 'accepted' : 'declined', decidedBy: by, decidedAt: now }));
-  const result = await discordDecide({ applicationId: id, userId: a.user, role: a.role, outcome, decidedBy: by, cooldownUntil, url: `${site}/staff/${dashboard}#application-${id}` });
-  store.update(() => { a.result = result; });
-  return a;
+// A dashboard's applications for `viewer`: not final first (verified contributors with merged pull requests first, most
+// merged first, then oldest first), then final ones, newest decision first. ctx: application-votes.js's.
+export function list(store, dashboard, viewer, ctx) {
+  sweep(store, ctx.now);
+  const mine = Object.values(store.data.applications).filter((a) => SHOWN_ON[a.role].includes(dashboard) && a.answers);
+  const open = mine.filter((a) => !FINAL.includes(a.status)).sort((a, b) => contributes(b) - contributes(a) || a.submittedAt - b.submittedAt);
+  const done = mine.filter((a) => FINAL.includes(a.status)).sort((a, b) => b.decidedAt - a.decidedAt);
+  return [...open, ...done].map(({ vote, ...a }) => ({
+    ...a, questions: questions(a.role).map(({ id, label }) => ({ id, label })), githubManual: a.role === 'team',
+    vote: voteView({ ...a, vote }, viewer, ctx), audit: auditView(store, a), owner: viewer === ctx.owner,
+  }));
 }

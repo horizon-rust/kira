@@ -6,7 +6,7 @@ export const APPLY_ROLES = ['mod', 'support', 'team'];
 export const DECLINE_COOLDOWN_DAYS = 14;
 
 let staff = null; // { canApply, issueApplyLink }: src/applications.js
-let discord = null; // { decide, dm }: the Discord side (src/features/apply.js)
+let discord = null; // { decide, dm, revokeRole? }: the Discord side (src/features/apply.js)
 
 export const setStaffSide = (side) => { staff = side; };
 export const setDiscordSide = (side) => { discord = side; };
@@ -24,6 +24,17 @@ export async function decide(event) {
     return { granted: !!r?.granted, dmSent: !!r?.dmSent, error: r?.error ?? null };
   } catch (e) {
     return { granted: false, dmSent: false, error: String(e?.message ?? e).slice(0, 200) };
+  }
+}
+
+// The owner takes back a role an accepted application gave (from the dashboard). Never throws.
+export async function revokeRole(event) {
+  if (!discord?.revokeRole) return { removed: false, error: 'discord side not loaded: remove the role in Discord by hand' };
+  try {
+    const r = await discord.revokeRole(event);
+    return { removed: !!r?.removed, error: r?.error ?? null };
+  } catch (e) {
+    return { removed: false, error: String(e?.message ?? e).slice(0, 200) };
   }
 }
 
