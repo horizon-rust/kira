@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 process.env.KIRA_STATE = join(mkdtempSync(join(tmpdir(), 'kira-apply-')), 'state.json');
+process.env.APPLY_FORM_LIVE = '1';
 const { APPLY, GUILD_ID, OWNER_ID, LAYOUT } = await import('../src/config.js');
 const core = await import('../src/core.js');
 const hooks = await import('../src/staff-hooks.js');
@@ -51,6 +52,16 @@ test('/apply: the link goes by DM only, the answer in the channel is ephemeral a
   const closed = slash('mod', { dmOk: false });
   await feature.handlers.apply(closed);
   assert.match(closed.said[0].content, /couldn't DM you/);
+});
+
+test('/apply: "open soon" and no link until APPLY_FORM_LIVE=1 (the website\'s form is deployed)', async () => {
+  delete process.env.APPLY_FORM_LIVE;
+  hooks.setStaffSide({ canApply: async () => assert.fail('not asked'), issueApplyLink: async () => assert.fail('not asked') });
+  const early = slash('support');
+  await feature.handlers.apply(early);
+  assert.match(early.said[0].content, /Applications open soon/);
+  assert.equal(early.dms.length, 0);
+  process.env.APPLY_FORM_LIVE = '1';
 });
 
 test('/apply: refusals in words, from the staff side\'s reasons; closed when the staff side isn\'t loaded', async () => {
