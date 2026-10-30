@@ -37,7 +37,7 @@ const linksEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horiz
 const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Kira, Horizon's front desk").setDescription([
   `**The hub**: ${LINKS.hub} has the roadmap, the kanban, the journal and how to help. I do the same things here, as commands or as \`@Kira <verb>\`:`,
   '• `/report`: a bug, as a form; it becomes a post in <#' + state.channels.horizonbugs + '> and a GitHub issue, and you are pinged there when it is answered or fixed',
-  '• `/suggest`: an idea, for the suggestion queue the maintainers read (posts in <#' + state.channels.horizonideas + '> go there too)',
+  '• an idea: a post in <#' + state.channels.horizonideas + '>, with its template; it goes to the suggestion queue the maintainers read',
   '• `/roadmap` (`area:` for one area in full): the whole roadmap, what is being built, what is next',
   '• `/claim <issue>` before you start, `/unclaim` · `/status`: your claims and reports, an issue, a roadmap item, or set what you are on',
   `**What changed**: <#${state.channels.updates}> (merged work, the week, the board at a glance) · releases in <#${state.channels.releases}>`,

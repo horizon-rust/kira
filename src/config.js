@@ -9,7 +9,7 @@ export const SERVER = {
   name: 'Horizon',
   description: 'Minecraft Java Edition rewritten in Rust. Bugs, ideas, releases. playhorizon.dev · Not affiliated with Mojang/Microsoft.', // 120 max
   // Kira's About me (the application's description, 400 max).
-  about: "Kira, Horizon's front desk 🌅 /report a bug (it becomes a GitHub issue), /suggest an idea, ask /roadmap what's being built, /claim a task. I post every release and what changed in #updates, and help the mods keep things friendly. /help for the rest, or DM me to reach the mods. playhorizon.dev/hub",
+  about: "Kira, Horizon's front desk 🌅 /report a bug (it becomes a GitHub issue), ask /roadmap what's being built, /claim a task, /apply to help. I post every release and what changed in #updates, and help the mods keep things friendly. /help for the rest, or DM me to reach the mods. playhorizon.dev/hub",
   // Horizon's mark (horizon repo, docs/media/brand/social): the server icon and Kira's own avatar, on violet so
   // Kira reads apart from the project. src/brand.js applies them when they change.
   icon: 'assets/horizon-icon.png', // Horizon's avatar.svg at 512 px (README: Discord brand assets)
@@ -150,7 +150,7 @@ export const LAYOUT = [
         key: 'horizonideas', name: 'horizon-ideas', type: 'forum', react: ['👍', '👎'],
         topic: 'One idea per post, with the template. Vote with 👍 and 👎. Kira sends each idea to the suggestion queue; picked ones become roadmap items (playhorizon.dev/hub).',
         tags: [['⚡', 'performance'], ['🧩', 'modding'], ['🌐', 'multiplayer'], ['🤖', 'mcp / agents'], ['🎬', 'video studio'], ['🎮', 'gameplay'], ['🚀', 'launcher'], ['💡', 'other'], ['📌', 'planned', true], ['✅', 'done', true], ['❌', "won't do", true]],
-        guide: 'One idea per post. **Search first** and vote 👍 on the existing post rather than making a new one. Title: the idea in a few words. Horizon aims at 100% vanilla behaviour first: ideas that change gameplay come after that. Kira closes posts without the template after an hour. Each post goes to the suggestion queue the maintainers read (`/suggest` does the same from any channel); the ones they pick become items on the roadmap at playhorizon.dev/hub. Ideas are not GitHub issues.',
+        guide: 'One idea per post. **Search first** and vote 👍 on the existing post rather than making a new one. Title: the idea in a few words. Horizon aims at 100% vanilla behaviour first: ideas that change gameplay come after that. Kira closes posts without the template after an hour. Each post goes to the suggestion queue the maintainers read: this forum is the only way in from Discord. The ones they pick become items on the roadmap at playhorizon.dev/hub. Ideas are not GitHub issues.',
         template: '**The idea:**\n**Why:** what it makes better\n**How it could work:** (optional)',
         check: { min: 40, needs: [['The idea', /the idea|idea/i], ['Why', /why/i]] },
       },
@@ -224,7 +224,7 @@ export const LAYOUT = [
       { key: 'reports', name: 'reports', type: 'text', staff: true, topic: 'Reports from members: /report-member and "Report to mods" on a message.' },
       { key: 'modmail', name: 'mod-mail', type: 'text', staff: true, topic: "Members DM Kira; each conversation is a thread here. Write in the thread to answer (start with // for a note they don't see, //close to close)." },
       { key: 'discordupdates', name: 'discord-updates', type: 'text', staff: true, topic: 'Messages from Discord to community servers.' },
-      { key: 'roadmapsuggestions', name: 'roadmap-suggestions', type: 'text', staff: true, topic: 'The suggestion queue: /suggest, @Kira suggest, #horizon-ideas posts and the hub\'s form. A good one becomes a roadmap item (a pull request to roadmap.toml), never an issue. Kira posts here once ROADMAP_SUGGESTIONS_CHANNEL_ID is this channel\'s ID.' },
+      { key: 'roadmapsuggestions', name: 'roadmap-suggestions', type: 'text', staff: true, topic: 'The suggestion queue: #horizon-ideas posts and the hub\'s form. A good one becomes a roadmap item (a pull request to roadmap.toml), never an issue. Kira posts here once ROADMAP_SUGGESTIONS_CHANNEL_ID is this channel\'s ID.' },
       { key: 'agentlog', name: 'agent-log', type: 'text', staff: true, topic: "Every call contributors' AI agents make through Kira's MCP server: who (the token's owner), which tool, the outcome. Tokens: /agent tokens member:." },
     ],
   },
@@ -355,7 +355,6 @@ export const HUB = {
   relayEveryMs: 5 * 60_000,
   cacheMs: 5 * 60_000, // the roadmap is fetched again at most every 5 minutes
   journalEveryMs: 10 * 60_000, // the journal, for #updates
-  suggestPerHour: 3, // suggestions per member an hour (/suggest, @Kira suggest)
   reportPerHour: 3, // bugs per member an hour (/report); the GitHub limits of GITHUB.rate apply too
 };
 
@@ -508,7 +507,7 @@ export const WELCOME = {
     '**How it works**',
     `• Get Horizon at ${LINKS.horizonSite}: download the launcher; you need your own copy of Minecraft: Java Edition.`,
     `• Everything that is happening, in one place: the roadmap, the kanban and the journal at ${LINKS.hub}. Here, \`/roadmap\` sums it up.`,
-    '• Found a bug? `/report`, or post in #horizon-bugs (read its 📌 **How to post here** post first): it becomes a GitHub issue, and you hear back in your post. An idea? `/suggest`, or post in #horizon-ideas: it goes to the suggestion queue.',
+    '• Found a bug? `/report`, or post in #horizon-bugs (read its 📌 **How to post here** post first): it becomes a GitHub issue, and you hear back in your post. An idea? Post it in #horizon-ideas: it goes to the suggestion queue.',
     '• Want to contribute? Pick a good first task on the hub, `/claim` it before you start, and open your pull request with "Fixes #<number>". Coding with an AI agent? `/agent connect` gives it the board (how-to in #horizon-info).',
     '• Questions? Everything is in #faq. Need a mod? Send Kira a DM.',
     '',
@@ -537,7 +536,7 @@ export const FAQ = [
   ['What is Horizon?', 'Minecraft: Java Edition rewritten from scratch in Rust, with AI agents, and checked against the real game with differential tests so it behaves exactly like vanilla. It uses the textures and sounds of your own copy of the game. More in #horizon-info.'],
   ['Where do I download it?', `Get the launcher from ${LINKS.horizonSite} (or the [launcher releases](${LINKS.horizonLauncher})). It installs Horizon and keeps it up to date. You need your own copy of Minecraft: Java Edition.`],
   ['Is it official?', 'No. Horizon is an unofficial fan project, not affiliated with, endorsed by or connected to Mojang Studios or Microsoft. It contains none of their code or files.'],
-  ['Where do I post…?', '• a bug → `/report` or #horizon-bugs · an idea → `/suggest` or #horizon-ideas (search first)\n• a video, clip, screenshot or build made in Horizon → #showcase\n• a question or just talking → #horizon-chat\n• anything that isn\'t Horizon (other games, music, AI coding, life) → #general\n• your language → its channel in 🌍 languages\n• new versions → #releases · what changed → #updates'],
+  ['Where do I post…?', '• a bug → `/report` or #horizon-bugs · an idea → #horizon-ideas (search first)\n• a video, clip, screenshot or build made in Horizon → #showcase\n• a question or just talking → #horizon-chat\n• anything that isn\'t Horizon (other games, music, AI coding, life) → #general\n• your language → its channel in 🌍 languages\n• new versions → #releases · what changed → #updates'],
   ['What is being worked on?', `The hub, ${LINKS.hub}: what is being done now, what comes next, the kanban and the journal, in simple or technical words. \`/roadmap\` (or \`@Kira roadmap\`) sums it up here.`],
   ['What happens to my bug report?', 'Kira sends it to GitHub as an issue and pings you in your post when a maintainer answers, and when it is fixed (with the release it ships in). `/status` lists your reports.'],
   ['What happens to my idea?', 'It goes to the suggestion queue the maintainers read. Good ones become items on the roadmap; nothing is published by itself. Ideas are not GitHub issues.'],

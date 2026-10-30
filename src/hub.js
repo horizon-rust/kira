@@ -1,6 +1,7 @@
 // The hub (playhorizon.dev/hub) as Kira reads it: the roadmap and the journal the website publishes as JSON
 // (the horizon repo's roadmap/README.md documents both), and the texts of the verbs Kira shares with the site
-// (report, suggest, roadmap, claim, status). No Discord here: src/features/hub.js does the talking.
+// (report, roadmap, claim, status; "suggest" only points to #horizon-ideas). No Discord here: src/features/hub.js does
+// the talking.
 
 import { COLOR } from './config.js';
 
@@ -206,12 +207,18 @@ export function helpText(hubUrl) {
   return [
     "I'm Kira, Horizon's front desk. The same things you can do on the hub:",
     '• `@Kira report` (or `/report`): a bug, which becomes a GitHub issue; you hear back in its post',
-    '• `@Kira suggest <your idea>` (or `/suggest`): an idea, which goes to the suggestion queue',
     '• `@Kira roadmap` (or `/roadmap`), `@Kira roadmap <area>`: the whole roadmap, or one area in full',
     '• `@Kira claim <issue>` (or `/claim`): tell everyone you are working on an issue',
     '• `@Kira status` (or `/status`): your claims and reports; `@Kira status #123` or `@Kira status <roadmap item>`',
+    '• an idea: a post in #horizon-ideas, with its template; the maintainers read every one',
     `The hub: <${hubUrl}> · everything else: \`/help\``,
   ].join('\n');
+}
+
+// "@Kira suggest …": ideas are posts in #horizon-ideas now (Ludovic, 2026-10-30), so the votes and the talk stay with them.
+export function ideasElsewhere(ideasId, hubUrl) {
+  const where = ideasId ? `<#${ideasId}>` : '#horizon-ideas';
+  return `💡 Ideas go in ${where}: one post per idea, with its template. Others vote 👍 there, and the maintainers read every one; the ones they pick become roadmap items (<${hubUrl}>).`;
 }
 
 // The open idea issues, for the one-off move to the roadmap (scripts/idea-issues.mjs): pull requests left out,
