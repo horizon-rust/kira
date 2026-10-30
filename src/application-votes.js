@@ -147,18 +147,22 @@ export async function ownerAct(store, app, action, ctx, { note = '' } = {}) {
   throw refuse(`Can't ${action} an application that is ${app.status}.`);
 }
 
-// Whether `viewer` sees the others' ballots: once they voted (not recused), once the vote closed, or the owner.
+// Whether `viewer` sees the others' ballots: once they voted (not recused), or once the vote closed. The owner
+// doesn't vote and sees no names while it runs: only the counts and the Against comments (voteView).
 export function seesBallots(app, viewer, ctx) {
-  if (app.status !== 'open' || viewer === ctx.owner) return true;
+  if (app.status !== 'open') return true;
+  if (viewer === ctx.owner) return false;
   return !!app.vote?.ballots[viewer] && !app.vote.recused.includes(viewer);
 }
 
 // What a dashboard shows of the vote to `viewer`: until they vote, the count and their own state; then the ballots and
-// the running tally; everything once it closed.
+// the running tally; everything once it closed. The owner, while it runs: the running tally and the Against comments,
+// without names (sorted, so their order says nothing either).
 export function voteView(app, viewer, ctx) {
   const c = count(app, ctx);
   const closed = app.status !== 'open';
   const sees = seesBallots(app, viewer, ctx);
+  const ownerOpen = !closed && viewer === ctx.owner;
   return {
     closesAt: app.vote.closesAt, firstBallotAt: app.vote.firstBallotAt, extended: app.vote.extended,
     cast: c.cast, quorum: c.quorum, active: c.active, eligible: c.eligible,
@@ -168,7 +172,8 @@ export function voteView(app, viewer, ctx) {
     needed: Math.max(0, c.quorum - c.cast), // ballots still missing for the quorum
     seen: sees,
     ballots: sees ? Object.entries(app.vote.ballots).map(([by, b]) => ({ by, ...b })) : null,
-    tally: closed ? app.tally ?? null : sees ? { for: c.for, against: c.against, abstain: c.abstain, quorum: c.quorum } : null,
+    tally: closed ? app.tally ?? null : sees || ownerOpen ? { for: c.for, against: c.against, abstain: c.abstain, quorum: c.quorum } : null,
+    againstComments: ownerOpen ? Object.entries(app.vote.ballots).filter(([id, b]) => b.choice === 'against' && b.comment && !app.vote.recused.includes(id)).map(([, b]) => b.comment).sort() : null,
   };
 }
 
