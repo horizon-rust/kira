@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeGitHub, makePublicGitHub, _budget, _appBudget, _anonBudget, KEEP, PUBLIC_KEEP } from '../src/github.js';
+import { makeGitHub, makePublicGitHub, _budget, _appBudget, _anonBudget, KEEP, FLOOR, PUBLIC_KEEP } from '../src/github.js';
 import { appToken, githubToken } from '../src/github-app.js';
 
 // A fake GitHub: answers 304 when the request's If-None-Match matches the path's current ETag.
@@ -36,6 +36,18 @@ test('below KEEP calls left, GETs wait for the reset but writes still go', async
   await assert.rejects(gh.get('/b'), /holding back/);
   await gh.write('POST', '/c', { x: 1 });
   assert.deepEqual(f.calls.map((c) => c[0] + ' ' + c[1]), ['GET /b', 'POST /c']);
+  _budget.remaining = Infinity;
+});
+
+test("inside the reserve, a person's GET still goes; below FLOOR it waits too", async () => {
+  const f = fakeGitHub({ remaining: KEEP - 1 });
+  const gh = makeGitHub({ token: 't', fetchImpl: f.fetchImpl });
+  await gh.get('/b');
+  await assert.rejects(gh.get('/b'), /holding back/);
+  await gh.get('/b', { person: true });
+  _budget.remaining = FLOOR - 1;
+  await assert.rejects(gh.get('/b', { person: true }), /holding back/);
+  assert.deepEqual(f.calls.map((c) => c[0] + ' ' + c[1]), ['GET /b', 'GET /b']);
   _budget.remaining = Infinity;
 });
 
