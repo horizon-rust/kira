@@ -489,7 +489,8 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   only by the bot. Before the first write of each day the file is copied to `/data/staff-backups/staff-<date>.json`
   (mode 600, the last 7 days kept). A file Kira can't read stops the staff side with a message; nothing else of
   Kira stops.
-- **Restoring a backup**: `railway ssh --project kira --service kira`, then
+- **Restoring a backup**: `railway ssh --project kira --service kira` (it needs an SSH key on the Railway account
+  first: `railway ssh keys add`, Ludovic's call), then
   `ls -l /data/staff-backups/` and `cp /data/staff-backups/staff-<date>.json /data/staff.json`, then restart the
   service (`railway redeploy --service kira` or the dashboard). Everything since that copy is lost (sessions,
   decisions, applications), and members whose password was set later need a new link.
