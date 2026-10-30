@@ -1,3 +1,6 @@
+import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+
 // A small GitHub REST client for Kira's issues feature. Writes are only logged in dry-run mode.
 //
 // With GITHUB_TOKEN only (a fine-grained one of Ludovic's), every call Kira makes comes out of his 5000 an hour, which
@@ -25,8 +28,79 @@ export const _budget = userBudget; // for tests
 export const _appBudget = appBudget;
 export const _anonBudget = anonBudget;
 
+// The ETag caches survive a restart: a deploy would otherwise start with none, and the first board refresh, the polls
+// and the releases fetch would all count against the hour where a 304 is free (five deploys in an hour drained the
+// App's on 2026-10-30). One file, an entry list per identity (the same three as the budgets): an ETag names a
+// representation, so any client with that identity can use another's. Only a 304 ever returns a cached body.
+const ETAG_BODY_MAX = 200_000; // a body whose JSON is longer than this is not saved
+const ETAG_FILE_MAX = 8_000_000; // nor more than this much in total (newest first)
+const live = { user: new Set(), app: new Set(), anon: new Set() }; // every client's cache, by identity
+let saved = null; // { user: [[path, entry]…], app, anon } as loaded; null: nothing is persisted
+let lastWritten = '';
+
+function bodySize(entry) {
+  try {
+    return JSON.stringify(entry.body).length;
+  } catch {
+    return Infinity;
+  }
+}
+
+function seed(cache, entries) {
+  for (const [path, entry] of entries ?? []) if (!cache.has(path)) cache.set(path, entry);
+}
+
+// Call once at start, after the clients exist or before them. Loads `file` (a missing or corrupt one is an empty
+// cache), then saves it every `every` ms, and `save()` is for shutdown. `stop()` ends the timer and forgets the file.
+export function persistEtags(file, { every = 5 * 60_000, log = console.error } = {}) {
+  saved = { user: [], app: [], anon: [] };
+  lastWritten = '';
+  try {
+    const disk = JSON.parse(readFileSync(file, 'utf8'));
+    for (const kind of Object.keys(saved)) {
+      if (!Array.isArray(disk[kind])) continue;
+      saved[kind] = disk[kind].filter((pair) => Array.isArray(pair) && typeof pair[0] === 'string' && typeof pair[1]?.etag === 'string' && pair[1].body !== undefined);
+      for (const cache of live[kind]) seed(cache, saved[kind]);
+    }
+  } catch (e) {
+    if (e.code !== 'ENOENT') log('github etags: saved copy not read', e.message);
+  }
+  function save() {
+    try {
+      const out = {};
+      let room = ETAG_FILE_MAX;
+      for (const kind of Object.keys(live)) {
+        const merged = new Map(saved[kind]); // clients made later or never asked keep what was loaded
+        for (const cache of live[kind]) for (const [path, e] of cache) { merged.delete(path); merged.set(path, e); }
+        const keep = [];
+        for (const pair of [...merged].reverse().slice(0, CACHE_MAX)) {
+          const size = bodySize(pair[1]);
+          if (size > ETAG_BODY_MAX || size > room) continue;
+          room -= size;
+          keep.unshift(pair);
+        }
+        out[kind] = keep;
+      }
+      const text = JSON.stringify(out);
+      if (text === lastWritten) return;
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file + '.tmp', text, { mode: 0o600 });
+      renameSync(file + '.tmp', file);
+      lastWritten = text;
+    } catch (e) {
+      log('github etags: not saved', e.message);
+    }
+  }
+  const timer = setInterval(save, every);
+  timer.unref();
+  return { save, stop() { clearInterval(timer); saved = null; } };
+}
+
 export function makeGitHub({ token, keep: reserve = KEEP, dryRun = false, fetchImpl = fetch, log = console.log } = {}) {
   const cache = new Map(); // GET path → { etag, body }
+  const kind = typeof token === 'function' ? 'app' : token ? 'user' : 'anon';
+  live[kind].add(cache);
+  if (saved) seed(cache, saved[kind]);
   const budget = typeof token === 'function' ? appBudget : token ? userBudget : anonBudget;
   const floor = token ? reserve : 1;
   async function call(method, path, body, { cache: keep = true, person = false } = {}) {

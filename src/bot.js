@@ -6,7 +6,7 @@ import { GUILD_ID, RELEASE_EVERY_MS, VIDEOS, RELEASE_REPOS, ONE_OFFS, COLOR, WOR
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
 import { releaseMessage, remember, announced, pingDecision } from './releases.js';
-import { makeGitHub } from './github.js';
+import { makeGitHub, persistEtags } from './github.js';
 import { githubToken } from './github-app.js';
 import * as videos from './videos.js';
 import { linkify } from './texts.js';
@@ -183,5 +183,8 @@ client.on('messageCreate', async (msg) => {
 });
 
 process.on('unhandledRejection', (e) => console.error('unhandled', e));
-process.on('SIGTERM', () => { save(); process.exit(0); });
+// The ETag caches of the GitHub clients, kept on the volume (data/github-etags.json, KIRA_GITHUB_ETAGS): after a
+// deploy the first reads are conditional, and a 304 costs nothing.
+const etags = persistEtags(process.env.KIRA_GITHUB_ETAGS || dataFile('github-etags.json'));
+process.on('SIGTERM', () => { save(); etags.save(); process.exit(0); });
 if (DISCORD) client.login(process.env.DISCORD_TOKEN);
