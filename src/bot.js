@@ -27,6 +27,7 @@ import * as kiraAi from './features/ai.js';
 import { gameRoutes, gameTokens, openServers } from './features/game.js';
 import * as chatclear from './features/chatclear.js';
 import * as sponsors from './features/sponsors.js';
+import * as staff from './features/staff.js';
 import { startServer } from './mcp.js';
 import { adminRoutes } from './admin.js';
 import { rateLimiter } from './agents.js';
@@ -34,7 +35,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors];
+const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
@@ -129,6 +130,7 @@ if (port) {
       res.end(JSON.stringify({ contributors: workboard.creditedPairs() }));
     },
     ...kiraAi.usageRoutes({ limiter }),
+    ...(DISCORD ? staff.routes() : {}), // the staff dashboards' API, only through the website's proxy (STAFF_PROXY_KEY)
     ...gameRoutes({ store: gameServers, ask: kiraAi.askInGame, limiter }),
     ...adminRoutes({ hash: process.env.KIRA_ADMIN_TOKEN_SHA256, limiter, save, freeze, gameTokens: gameTokens({ store: gameServers, dm: async (id, text) => (await client.users.fetch(id)).send({ content: text, allowedMentions: { parse: [] } }), endpoint: `${AGENTS.url.replace(/\/mcp$/, '')}/game/ask` }), cleanup: DISCORD && contributors.enabled ? contributors.cleanup : null, files: { state: dataFile('state.json'), agents: process.env.KIRA_AGENTS || dataFile('agents.json') } }),
   };
