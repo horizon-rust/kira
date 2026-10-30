@@ -56,7 +56,7 @@ beforeEach(() => {
   f._test.limits.prune(Date.now() + 10 * 3_600_000);
 });
 
-test('who gets an answer: a mention or a reply to Kira; not bots, not other servers, not the hub\'s verbs, not a bare mention', async () => {
+test('who gets an answer: a mention or a reply to Kira; not bots, not other servers, not the hub\'s verbs, not a bare mention, not a // staff note', async () => {
   const yes = [message(`<@${ME}> is this official?`), message(`hey <@!${ME}> how do I zoom`), message('and on Linux?', { repliedTo: ME, ref: { id: 'k1', content: 'Earlier answer', author: { id: ME } } })];
   for (const m of yes) assert.equal(await f.onMessage(m), true, m.content);
   assert.equal(asked.length, 3);
@@ -71,6 +71,8 @@ test('who gets an answer: a mention or a reply to Kira; not bots, not other serv
     Object.assign(message(`<@${ME}> hi`), { guildId: 'other' }),
     message('here is my OS', { repliedTo: ME, parent: 'bugs', ref: { id: 'k2', content: 'What is missing: OS', author: { id: ME } } }), // a template notice
     message('thanks', { repliedTo: 'someone-else', ref: { id: 'x', content: 'hi', author: { id: 'someone-else' } } }),
+    message('//close', { repliedTo: ME, ref: { id: 'k3', content: 'new mod-mail', author: { id: ME } } }), // mod-mail staff command
+    message(`// <@${ME}> note for the mods`), // a staff note
   ];
   for (const m of no) assert.equal(await f.onMessage(m), false, m.content);
   assert.equal(asked.length, 3);

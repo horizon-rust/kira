@@ -66,6 +66,7 @@ const helpChannel = (msg) => AI.helpChannels.some((k) => state.channels[k] && [m
 // answers Kira's own template notices there, so only a mention counts in those.
 export function trigger(msg, me) {
   if (!me || msg.author?.bot || msg.guildId !== GUILD_ID) return null;
+  if ((msg.content ?? '').trimStart().startsWith('//')) return null; // mod-mail notes and //close are for staff, not questions
   if (new RegExp(`<@!?${me}>`).test(msg.content ?? '')) return 'mention';
   if (msg.reference?.messageId && msg.mentions?.repliedUser?.id === me && !forumThread(msg)) return 'reply';
   if (AI.mode === 'all' && helpChannel(msg) && /\?/.test(msg.content ?? '')) return 'help';
