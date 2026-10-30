@@ -1,6 +1,7 @@
 // The dashboards' statistics, computed from public GitHub data (pull requests, issues, releases), the website's
 // roadmap and Kira's daily counters (counts only). No network here: src/features/staff-stats.js fetches.
 import { series } from './staff-counters.js';
+import { FINAL } from './application-votes.js';
 
 export const WEEKS = 12;
 const DAY = 86_400_000;
@@ -120,8 +121,8 @@ export function modStats({ data, now = Date.now() }) {
   });
   const last = (n) => Object.fromEntries(MOD_KEYS.map((k) => [k, sum(days.slice(-n), k)]));
   const apps = Object.values(data.applications ?? {});
-  const openApps = Object.fromEntries(['mod', 'support'].map((r) => [r, apps.filter((a) => a.role === r && a.status === 'open').length]));
-  const decided30 = apps.filter((a) => ['mod', 'support'].includes(a.role) && a.status !== 'open' && a.decidedAt >= now - 30 * DAY);
+  const openApps = Object.fromEntries(['mod', 'support'].map((r) => [r, apps.filter((a) => a.role === r && !FINAL.includes(a.status)).length]));
+  const decided30 = apps.filter((a) => ['mod', 'support'].includes(a.role) && FINAL.includes(a.status) && a.decidedAt >= now - 30 * DAY);
   return {
     generatedAt: new Date(now).toISOString(),
     weeks,

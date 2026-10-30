@@ -60,6 +60,14 @@ export function applicationRoutes({ store, site, log, deps = {} }) {
     if (!a?.answers || !apps.SHOWN_ON[a.role].includes(dashboard)) throw Object.assign(new Error('No such application here.'), { expose: true });
     return a;
   };
+  // The names behind the ids in ballots and history: staff members' usernames (their staff account, else Discord's
+  // cache), nothing about anyone else.
+  const nameOf = deps.name ?? ((id) => client.users.cache.get(id)?.username ?? null);
+  const people = (list) => {
+    const ids = new Set(list.flatMap((a) => [...(a.vote?.ballots ?? []).map((b) => b.by), ...a.audit.map((e) => e.by)]));
+    ids.delete('vote');
+    return Object.fromEntries([...ids].map((id) => [id, store.data.accounts[id]?.name ?? nameOf(id)]).filter(([, n]) => n));
+  };
   const view = (dashboard, viewer, id, now) => apps.list(store, dashboard, viewer, ctxAt(now)).find((x) => x.id === id);
   const said = { accepted: 'accepted', declined: 'declined', passed: 'passed the vote: veto window open', stalled: 'stalled: the owner decides', owner: 'too few active voters: the owner decides', extended: 'extended by 48 hours (no quorum)' };
 
@@ -83,7 +91,10 @@ export function applicationRoutes({ store, site, log, deps = {} }) {
   setInterval(() => tick(), 60_000).unref?.();
 
   const actions = (dashboard) => [
-    { method: 'GET', path: `${dashboard}/applications`, role: dashboard, handler: (ctx) => ({ body: { applications: apps.list(store, dashboard, ctx.user, ctxAt(ctx.now)) } }) },
+    { method: 'GET', path: `${dashboard}/applications`, role: dashboard, handler: (ctx) => {
+      const applications = apps.list(store, dashboard, ctx.user, ctxAt(ctx.now));
+      return { body: { applications, people: people(applications) } };
+    } },
     { method: 'POST', path: `${dashboard}/applications/vote`, role: dashboard, handler: async (ctx) => {
       const a = find(dashboard, ctx.body.id);
       if (ctx.body.recuse) votes.recuse(store, a, ctx.user, ctxAt(ctx.now));
