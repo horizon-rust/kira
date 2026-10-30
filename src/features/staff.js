@@ -59,11 +59,12 @@ function revoke(userId, why) {
   if (store && auth.forget(store, userId)) log(`🔒 <@${userId}>: dashboard access removed (${why}).`);
 }
 
-export function routes(extra = []) {
+// deps: the dev server's fakes for Discord and GitHub (scripts/staff-dev.mjs); none in production.
+export function routes(extra = [], deps = {}) {
   if (!store) return {};
   // Last login or write per member (at most one write an hour each): who counts as an active voter.
   const onActive = (user, now) => { if ((store.data.activity?.[user] ?? 0) < now - auth.HOUR) store.update((d) => { (d.activity ??= {})[user] = now; }); };
-  return staffRoutes({ store, key: process.env.STAFF_PROXY_KEY, origin: SITE, access, log, onActive, extra: [...applicationRoutes({ store, site: SITE, log }), ...teamRoutes({ store, log }), ...statsRoutes({ store }), ...extra] });
+  return staffRoutes({ store, key: process.env.STAFF_PROXY_KEY, origin: SITE, access: deps.access ?? access, log, onActive, extra: [...applicationRoutes({ store, site: SITE, log, deps }), ...teamRoutes({ store, log, deps }), ...statsRoutes({ store, deps }), ...extra] });
 }
 
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });

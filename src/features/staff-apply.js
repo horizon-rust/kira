@@ -20,10 +20,6 @@ const gh = makeGitHub({ token: githubToken() });
 async function member(userId) {
   try { return await client.rest.get(Routes.guildMember(GUILD_ID, userId)); } catch { return null; }
 }
-const hasRole = async (userId, role) => {
-  const id = roleId(role);
-  return !!id && !!(await member(userId))?.roles?.includes(id);
-};
 
 // What GitHub says about the member: their linked login, whether it is verified, their merged pull requests in Horizon.
 async function contributor(userId) {
@@ -40,16 +36,21 @@ async function contributor(userId) {
   }
 }
 
-export function applicationRoutes({ store, site, log }) {
+// deps (the dev server's fakes, scripts/staff-dev.mjs): member(id) → Discord's member object or null,
+// contributor(id), holders(roleKey) → Set of ids.
+export function applicationRoutes({ store, site, log, deps = {} }) {
+  const memberOf = deps.member ?? member;
+  const contributorOf = deps.contributor ?? contributor;
+  const hasRoleOf = async (userId, role) => { const id = roleId(role); return !!id && !!(await memberOf(userId))?.roles?.includes(id); };
   setStaffSide({
-    canApply: async (userId, role) => apps.canApply(store, userId, role, await hasRole(userId, role)),
-    issueApplyLink: async (userId, role) => apps.issueApplyLink(store, userId, role, await hasRole(userId, role), site),
+    canApply: async (userId, role) => apps.canApply(store, userId, role, await hasRoleOf(userId, role)),
+    issueApplyLink: async (userId, role) => apps.issueApplyLink(store, userId, role, await hasRoleOf(userId, role), site),
   });
   const limits = failures({ staffIp: [20, auth.MIN] });
   const bad = (ip) => { limits.fail('staffIp', ip); return { status: 404, body: { error: 'This link is unknown, used or expired. Ask Kira for a new one with /apply.' } }; };
   const slow = { status: 429, body: { error: 'Too many failed attempts. Try again later.' } };
 
-  const holders = (key) => new Set(client.guilds.cache.get(GUILD_ID)?.roles.cache.get(roleId(key))?.members.keys() ?? []);
+  const holders = deps.holders ?? ((key) => new Set(client.guilds.cache.get(GUILD_ID)?.roles.cache.get(roleId(key))?.members.keys() ?? []));
   const ctxAt = (now) => ({
     now, owner: OWNER_ID, holders: { mod: holders('mod'), team: holders('team') }, lastActive: store.data.activity ?? {},
     hooks: { decide, dm, revokeRole }, url: (a) => `${site}/staff/${apps.DASHBOARD_OF[a.role]}#application-${a.id}`,
@@ -104,17 +105,17 @@ export function applicationRoutes({ store, site, log }) {
       if (limits.blocked('staffIp', ctx.ip)) return slow;
       const link = auth.peekLink(store, ctx.body.token, 'apply', ctx.now);
       if (!link) return bad(ctx.ip);
-      const m = await member(link.user);
+      const m = await memberOf(link.user);
       return { body: { role: link.role, roleName: apps.ROLE_NAMES[link.role], name: m?.user?.username ?? null, questions: apps.questions(link.role), expiresAt: link.expiresAt } };
     } },
     { method: 'POST', path: 'apply/submit', role: 'public', handler: async (ctx) => {
       if (limits.blocked('staffIp', ctx.ip)) return slow;
       const link = auth.peekLink(store, ctx.body.token, 'apply', ctx.now);
       if (!link) return bad(ctx.ip);
-      const m = await member(link.user);
+      const m = await memberOf(link.user);
       if (!m) return { status: 403, body: { error: 'You need to be on Horizon\'s Discord server to apply.' } };
       apps.cleanAnswers(link.role, ctx.body.answers); // refuse before the GitHub lookup
-      const a = apps.submit(store, { token: ctx.body.token, answers: ctx.body.answers, name: m.user.username, contributor: await contributor(link.user), hasRole: m.roles.includes(roleId(link.role)) }, ctx.now);
+      const a = apps.submit(store, { token: ctx.body.token, answers: ctx.body.answers, name: m.user.username, contributor: await contributorOf(link.user), hasRole: m.roles.includes(roleId(link.role)) }, ctx.now);
       log(`📝 New ${apps.ROLE_NAMES[a.role]} application from <@${a.user}>${a.contributor?.verified && a.contributor.merged ? ` (${a.contributor.merged} merged pull requests)` : ''}: ${site}/staff/${apps.DASHBOARD_OF[a.role]}#application-${a.id}`);
       return { body: { ok: true, role: a.role } };
     } },

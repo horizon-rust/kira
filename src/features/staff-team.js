@@ -25,11 +25,15 @@ const boardView = () => {
   return { generatedAt: s.generatedAt, columns: s.columns.map((c) => ({ key: c.key, name: c.name, cards: c.cards.map((k) => ({ id: k.id, kind: k.kind, number: k.number, title: k.title, url: k.url, labels: k.labels, people: k.people, claim: k.claim ? { name: k.claim.name } : null, prs: k.prs, moved: !!k.moved })) })) };
 };
 
-export function teamRoutes({ store, log }) {
-  const publicIds = async () => new Set(((await roadmap())?.items ?? []).map((i) => i.id));
+// deps (the dev server's fakes): people() → { id: name }, board() → the board view, roadmap() → the public roadmap.
+export function teamRoutes({ store, log, deps = {} }) {
+  const peopleOf = deps.people ?? people;
+  const boardOf = deps.board ?? boardView;
+  const roadmapOf = deps.roadmap ?? roadmap;
+  const publicIds = async () => new Set(((await roadmapOf())?.items ?? []).map((i) => i.id));
   return [
     { method: 'GET', path: 'team/overview', role: 'team', handler: async (ctx) => ({
-      body: { people: people(), board: boardView(), cards: team.cards(store, ctx.now), decisions: team.decisions(store), roadmap: team.roadmapView(store, await roadmap(), ctx.now) },
+      body: { people: peopleOf(), board: boardOf(), cards: team.cards(store, ctx.now), decisions: team.decisions(store), roadmap: team.roadmapView(store, await roadmapOf(), ctx.now) },
     }) },
     { method: 'POST', path: 'team/decisions', role: 'team', handler: (ctx) => {
       const b = ctx.body;
