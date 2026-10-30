@@ -38,6 +38,24 @@ export async function decide({ applicationId, userId, role, outcome, decidedBy, 
   return out;
 }
 
+// Ludovic took back, on the dashboard, the role an accepted application gave: a normal removal, logged in #mod-log,
+// no DM. Never throws: { removed, error }.
+export async function revokeRole({ applicationId, userId, role, by }) {
+  try {
+    if (!APPLY_ROLES.includes(role)) return { removed: false, error: 'unknown role' };
+    if (!state.roles[role]) return { removed: false, error: `no ${role} role on the server` };
+    const guild = client.guilds.cache.get(GUILD_ID) ?? await client.guilds.fetch(GUILD_ID).catch(() => null);
+    const member = await guild?.members.fetch(userId).catch(() => null);
+    if (!member) return { removed: false, error: 'not on the server' };
+    const out = await member.roles.remove(state.roles[role], `application ${applicationId}: role taken back by ${by}`)
+      .then(() => ({ removed: true, error: null }), (e) => ({ removed: false, error: String(e?.message ?? e).slice(0, 200) }));
+    await modlog('📝 Role taken back', `<@${userId}>: ${APPLY.roles[role].label} (application ${applicationId}), by <@${by}> on the dashboard${out.error ? ` · NOT removed (${out.error})` : ''}`);
+    return out;
+  } catch (e) {
+    return { removed: false, error: String(e?.message ?? e).slice(0, 200) };
+  }
+}
+
 // A DM the staff side asks for (Ludovic's veto window, docs/staff-api.md): the text as given, nobody pinged, at most
 // 2000 characters. Never throws: { sent, error }.
 export async function dm({ userId, content }) {
@@ -76,8 +94,8 @@ export const handlers = {
   },
 };
 
-export const _test = { decide, dm };
+export const _test = { decide, dm, revokeRole };
 
 export function setup() {
-  setDiscordSide({ decide, dm });
+  setDiscordSide({ decide, dm, revokeRole });
 }
