@@ -290,7 +290,7 @@ async function posts(guild) {
       new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horizon').setURL(LINKS.horizon).setDescription(HORIZON.description)
         .addFields(
           { name: 'Get it', value: HORIZON.get },
-          { name: 'Talk about it', value: L('#horizon-chat · bugs: `/report` or #horizon-bugs · ideas: #horizon-ideas') },
+          { name: 'Talk about it', value: L('#horizon-chat · help: #horizon-support · bugs: `/report` or #horizon-bugs · ideas: #horizon-ideas') },
           { name: "What's happening", value: L(`${LINKS.hub}: the roadmap, the kanban, the journal and how to help · what changed: #updates · \`/roadmap\``) },
         ),
       new EmbedBuilder().setColor(0x555555).setTitle('⚠️ Disclaimer').setDescription(HORIZON.disclaimer),
@@ -329,7 +329,7 @@ async function onboarding(guild) {
         {
           id: id(), type: 0, title: 'What brings you to Horizon?', single_select: false, required: false, in_onboarding: true,
           options: [
-            option('🎮', 'Playing it', 'Download, help, chat, share your creations', [], [c.horizoninfo, c.horizonchat, c.showcase]),
+            option('🎮', 'Playing it', 'Download, help, chat, share your creations', [], [c.horizoninfo, c.horizonsupport, c.horizonchat, c.showcase]),
             option('🐛', 'Testing and bug reports', 'Find bugs and report them', [], [c.horizonbugs, c.releases]),
             option('💡', 'Ideas', 'Suggest and vote on what comes next', [], [c.horizonideas]),
             // No role: 🛠️ Contributor is earned with a merged PR and /verify-github (src/features/contributors.js).

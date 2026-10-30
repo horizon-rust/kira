@@ -55,7 +55,7 @@ export function record(r, now = Date.now()) {
 
 const name = (m) => m.member?.displayName ?? m.author?.globalName ?? m.author?.username ?? 'someone';
 const channelName = (msg) => msg.channel?.name ?? 'unknown';
-const forumThread = (msg) => ['horizonbugs', 'horizonideas'].some((k) => state.channels[k] && msg.channel?.parentId === state.channels[k]);
+const forumThread = (msg) => ['horizonbugs', 'horizonsupport', 'horizonideas'].some((k) => state.channels[k] && msg.channel?.parentId === state.channels[k]);
 const helpChannel = (msg) => AI.helpChannels.some((k) => state.channels[k] && [msg.channelId, msg.channel?.parentId].includes(state.channels[k]));
 
 // Why Kira answers this message: 'mention', 'reply', 'help', or null. A reply in a #horizon-bugs or #horizon-ideas post
@@ -162,6 +162,23 @@ function logGame(server, player, text, r) {
     { name: 'Model', value: r.models?.length ? r.models.join(' → ') : 'none', inline: true },
     { name: 'Cost', value: `$${(r.cost ?? 0).toFixed(4)} (today $${spentToday().toFixed(2)} of $${AI.dailyUsd})`, inline: true },
   ]);
+}
+
+// A new #horizon-support post (src/features/support.js): one first answer from the sources, posted in the post, or
+// nothing when they don't settle it (🤝 Support answers; no hand-off for the team). Logged in #mod-log like any answer.
+// Off, budget spent or sources missing: nothing. Returns the reply posted, or null.
+export async function supportAnswer(thread, starter) {
+  if (!enabled || !store.on || spentToday() >= AI.dailyUsd) return null;
+  if (!(await sources.refresh()) && !(await sources.refresh(Date.now(), { force: true }))) return null;
+  const text = `${thread.name}\n${starter.content ?? ''}`.slice(0, 3000);
+  thread.sendTyping?.().catch(() => {});
+  const r = await answer({ author: name(starter), channel: thread.parent?.name ?? 'horizon-support', text });
+  record(r);
+  save();
+  await logAnswer(starter, text, { ...r, reason: r.status === 'answer' ? r.reason : `${r.reason ?? 'not in the sources'} (left to 🤝 Support)` });
+  if (r.status !== 'answer' || !r.reply) return null;
+  await thread.send({ content: `${r.reply}\n-# 🤖 A first answer from Kira, from the FAQ and Horizon's docs. 🤝 Support can add more.`, allowedMentions: { parse: [] } });
+  return r.reply;
 }
 
 // Set by src/features/github.js: (msg) → true when the mention in a bug post was dealt with (it replied itself).

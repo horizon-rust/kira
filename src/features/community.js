@@ -36,6 +36,7 @@ const linksEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horiz
 // /help: what Kira does, by topic (only the asker sees it).
 const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Kira, Horizon's front desk").setDescription([
   `**The hub**: ${LINKS.hub} has the roadmap, the kanban, the journal and how to help. I do the same things here, as commands or as \`@Kira <verb>\`:`,
+  '• Need help (it won\'t start, it\'s slow, sign-in, multiplayer)? A post in <#' + state.channels.horizonsupport + '>: I give a first answer, 🤝 Support helps',
   '• `/report`: a bug, as a form; it becomes a post in <#' + state.channels.horizonbugs + '> and a GitHub issue, and you are pinged there when it is answered or fixed',
   '• an idea: a post in <#' + state.channels.horizonideas + '>, with its template; it goes to the suggestion queue the maintainers read',
   '• `/roadmap` (`area:` for one area in full): the whole roadmap, what is being built, what is next',

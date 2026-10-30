@@ -28,6 +28,10 @@ export function overwrites(ids, spec, staffCategory) {
       role(everyone, { deny: [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads] }),
       ...[mod, ...spec.writers.map((key) => roles[key])].filter(Boolean).map((id) => role(id, { allow: [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads] })),
     );
+  } else if (spec.helpers) {
+    // A help forum: everyone opens posts and writes in them; these roles also manage its posts (tags, close, lock),
+    // in this channel only.
+    ow.push(...spec.helpers.map((key) => roles[key]).filter(Boolean).map((id) => role(id, { allow: [P.SendMessagesInThreads, P.ManageThreads] })));
   } else if (spec.posts === 'staff') {
     ow.push(role(everyone, { deny: [P.SendMessages], allow: [P.SendMessagesInThreads] }), ...[mod, roles.team].filter(Boolean).map((id) => role(id, { allow: [P.SendMessages] })));
   } else if (spec.locked) {

@@ -72,6 +72,9 @@ export const ROLES = [
   { key: 'tester', name: '🧪 Horizon Tester', color: 0xffd166, hoist: true },
   // Given by Ludovic by hand. 💚 Sponsor: who sponsors Horizon (Sculk Hosting's owner, 2026-10-27).
   { key: 'sponsor', name: '💚 Sponsor', color: 0x2ecc40, hoist: true },
+  // Ludovic, 2026-10-30: members who help players in #horizon-support. No permission of its own: it answers anywhere in
+  // that forum and manages its posts (the solved tag, closing) there only (`helpers` in LAYOUT). Given through /apply.
+  { key: 'support', name: '🤝 Support', color: 0x1abc9c, hoist: true, label: 'Support' },
   {
     // No kick or ban (dezer-x in #horizon-team, 2026-10-29: a rogue mod could ban people for no reason): mods time
     // out and delete; a ban goes through the Team.
@@ -140,11 +143,23 @@ export const LAYOUT = [
     channels: [
       {
         key: 'horizonbugs', name: 'horizon-bugs', type: 'forum',
-        topic: 'One bug per post, with the template. Search first: if it\'s already reported, add your details in that post.',
+        // Ludovic, 2026-10-30: confirmed, reproducible bugs only; "I can't start or play" goes to #horizon-support.
+        topic: 'Reproducible bugs in the game or the launcher: something that goes wrong every time you do the same thing. One bug per post, with the template. Can\'t start or play, or need help? #horizon-support. Search first: if it\'s already reported, add your details in that post.',
         tags: [['💥', 'crash'], ['🖼️', 'rendering'], ['🎮', 'gameplay'], ['🌍', 'world gen'], ['⚡', 'performance'], ['🔊', 'sound'], ['🖥️', 'install / launch'], ['🔍', 'confirmed', true], ['🔁', 'duplicate', true], ['✅', 'fixed', true], ['📝', 'via /report', true]],
-        guide: 'One bug per post. **Search first**: if someone already reported it, reply in their post instead. Update first: the launcher installs the newest Nightly by itself, and many bugs are already fixed there. Title: what\'s broken, in a few words ("Water renders black on AMD"). Pick a tag. Kira checks that the template is filled in; posts without it are closed after an hour. Each post becomes a GitHub issue, and you are pinged here when it is answered or fixed. `/report` (anywhere) opens a form that makes the post for you.',
-        template: '**What I did:** the steps, one per line\n**What happened:**\n**What I expected:**\n**Horizon version:** as the game shows it (Nightly <date> · <commit>)\n**OS, CPU, GPU:**\n+ a screenshot, a video or the log file if you have one',
+        guide: 'For **bugs you can make happen again** in the game or the launcher, with the steps. Horizon won\'t start, runs slowly, sign-in fails, or you\'re not sure it\'s a bug? Ask in #horizon-support: posts here that are requests for help are pointed there. One bug per post. **Search first**: if someone already reported it, reply in their post instead. Update first: the launcher installs the newest Nightly by itself, and many bugs are already fixed there. Title: what\'s broken, in a few words ("Water renders black on AMD"). Pick a tag. Kira checks that the template is filled in; posts without it are closed after an hour. Each post becomes a GitHub issue, and you are pinged here when it is answered or fixed. `/report` (anywhere) opens a form that makes the post for you.',
+        template: '**What I did:** the steps that make it happen, one per line\n**What happened:**\n**What I expected:**\n**Does it happen every time?**\n**Horizon version:** as the game shows it (Nightly <date> · <commit>)\n**OS, CPU, GPU:**\n+ a screenshot, a video or the log file if you have one',
         check: { min: 80, needs: [['What I did', /what i did|steps/i], ['What happened', /what happened|happen/i], ['What I expected', /expect/i], ['OS, CPU, GPU', /\b(os|windows|linux|mac|macos|gpu|nvidia|amd|intel|radeon|geforce)\b/i]] },
+      },
+      {
+        // Ludovic, 2026-10-30: help with Horizon, apart from the bugs. Everyone opens posts and writes in their own;
+        // 🤝 Support (and the staff) answer in every post, tag them solved and close them (`helpers`, src/permissions.js;
+        // `replies: 'helpers'`: Kira removes other members' replies, src/features/support.js). Never GitHub issues.
+        key: 'horizonsupport', name: 'horizon-support', type: 'forum', helpers: ['support'], replies: 'helpers', done: '✅ solved',
+        topic: 'Help with Horizon: it won\'t start, it runs slowly, the launcher, sign-in, multiplayer. One post per problem, with the template. Kira gives a first answer, 🤝 Support helps.',
+        tags: [['🚀', 'launcher'], ['⛔', "can't start"], ['⚡', 'performance'], ['👤', 'account'], ['🌐', 'multiplayer'], ['❓', 'other'], ['✅', 'solved', true]],
+        guide: 'Something not working? Ask here: Horizon or the launcher won\'t start or install, it runs slowly, sign-in fails, you can\'t join a server. **One problem per post**, and **search first**: someone may have had the same one. Title: the problem in a few words ("Black screen after Play on Windows 11"). Pick a tag. Kira may give a first answer from the FAQ and Horizon\'s docs; then a 🤝 Support member or a mod helps you. Only you and 🤝 Support write in your post. Solved? Type `/done` in it. A bug you can make happen again, with the steps, goes in #horizon-bugs instead. Want to help people here? `/apply` for 🤝 Support.',
+        template: '**What\'s wrong:**\n**What I tried:**\n**Horizon or launcher version:** if you know it\n**OS, CPU, GPU:**\n+ a screenshot or the log file if you have one',
+        check: { min: 40, needs: [["What's wrong", /what'?s wrong|wrong|problem|issue/i], ['OS, CPU, GPU', /\b(os|windows|linux|mac|macos|gpu|nvidia|amd|intel|radeon|geforce)\b/i]] },
       },
       {
         key: 'horizonideas', name: 'horizon-ideas', type: 'forum', react: ['👍', '👎'],
@@ -154,7 +169,7 @@ export const LAYOUT = [
         template: '**The idea:**\n**Why:** what it makes better\n**How it could work:** (optional)',
         check: { min: 40, needs: [['The idea', /the idea|idea/i], ['Why', /why/i]] },
       },
-      { key: 'horizonchat', name: 'horizon-chat', type: 'text', topic: 'Talk about Horizon. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' + CLEARED },
+      { key: 'horizonchat', name: 'horizon-chat', type: 'text', topic: 'Talk about Horizon. Need help (it won\'t start, it\'s slow, sign-in)? #horizon-support. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' + CLEARED },
       {
         key: 'showcase', was: 'videofeedback', name: 'showcase', type: 'forum', gallery: true, reaction: '🔥', react: ['🔥'],
         topic: 'Your Horizon creations: YouTube videos, clips, screenshots, builds, worlds, redstone, benchmarks. One post each, with the template.',
@@ -182,7 +197,7 @@ export const LAYOUT = [
     key: 'general', category: '💬 general',
     channels: [
       // Ludovic, 2026-10-30: #off-topic merged into #general (REPLACED): one chat for anything.
-      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything: other games, music, AI coding, life. Horizon talk is welcome too, though #horizon-chat is its home. English please, so everyone can follow; other languages have their own channels in 🌍 languages.' + CLEARED },
+      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything: other games, music, AI coding, life. Horizon talk is welcome too, though #horizon-chat is its home; problems with Horizon go in #horizon-support. English please, so everyone can follow; other languages have their own channels in 🌍 languages.' + CLEARED },
       { key: 'introductions', name: 'introductions', type: 'text', pin: 'intro', topic: 'Say hi once, with the template in the pinned message. One introduction per person.' },
       { key: 'halloffame', name: 'hall-of-fame', type: 'text', readonly: true, topic: 'Messages that got 5 ⭐. React ⭐ to a message you love to send it here.' },
       { key: 'memes', name: 'memes', type: 'text', topic: 'Memes and funny stuff (Minecraft ones welcome). SFW only. No XP here.' },
@@ -195,15 +210,15 @@ export const LAYOUT = [
     // 2026-11-11: a channel with fewer than ~5 people writing is proposed for removal.
     key: 'languages', category: '🌍 languages',
     channels: [
-      { key: 'russian', name: 'русский', type: 'text', topic: 'Общение на русском: Horizon и всё остальное. Баги — в #horizon-bugs, идеи — в #horizon-ideas.' },
-      { key: 'portuguese', name: 'português', type: 'text', topic: 'Conversa em português: o Horizon e tudo mais. Bugs vão em #horizon-bugs e ideias em #horizon-ideas.' },
-      { key: 'spanish', name: 'español', type: 'text', topic: 'Charla en español: Horizon y todo lo demás. Los bugs van en #horizon-bugs y las ideas en #horizon-ideas.' },
-      { key: 'french', name: 'français', type: 'text', topic: 'On parle français : Horizon et tout le reste. Les bugs vont dans #horizon-bugs et les idées dans #horizon-ideas (en anglais).' },
-      { key: 'german', name: 'deutsch', type: 'text', topic: 'Auf Deutsch: Horizon und alles andere. Bugs gehören in #horizon-bugs, Ideen in #horizon-ideas (auf Englisch).' },
-      { key: 'polish', name: 'polski', type: 'text', topic: 'Rozmowy po polsku: Horizon i wszystko inne. Błędy zgłaszaj w #horizon-bugs, pomysły w #horizon-ideas (po angielsku).' },
-      { key: 'turkish', name: 'türkçe', type: 'text', topic: 'Türkçe sohbet: Horizon ve diğer her şey. Hatalar #horizon-bugs kanalına, fikirler #horizon-ideas kanalına (İngilizce).' },
-      { key: 'chinese', name: '中文', type: 'text', topic: '用中文聊天：Horizon 和其他一切。Bug 请发到 #horizon-bugs，想法请发到 #horizon-ideas（用英文）。' },
-      { key: 'japanese', name: '日本語', type: 'text', topic: '日本語で話そう：Horizon のことも、それ以外も。バグは #horizon-bugs へ、アイデアは #horizon-ideas へ（英語で）。' },
+      { key: 'russian', name: 'русский', type: 'text', topic: 'Общение на русском: Horizon и всё остальное. Баги — в #horizon-bugs, проблемы (не запускается, тормозит, вход в аккаунт) — в #horizon-support, идеи — в #horizon-ideas.' },
+      { key: 'portuguese', name: 'português', type: 'text', topic: 'Conversa em português: o Horizon e tudo mais. Bugs vão em #horizon-bugs, problemas (não abre, lento, login) em #horizon-support e ideias em #horizon-ideas.' },
+      { key: 'spanish', name: 'español', type: 'text', topic: 'Charla en español: Horizon y todo lo demás. Los bugs van en #horizon-bugs, los problemas (no arranca, va lento, inicio de sesión) en #horizon-support y las ideas en #horizon-ideas.' },
+      { key: 'french', name: 'français', type: 'text', topic: 'On parle français : Horizon et tout le reste. Les bugs vont dans #horizon-bugs, les problèmes (ne démarre pas, lent, connexion) dans #horizon-support et les idées dans #horizon-ideas (en anglais).' },
+      { key: 'german', name: 'deutsch', type: 'text', topic: 'Auf Deutsch: Horizon und alles andere. Bugs gehören in #horizon-bugs, Probleme (startet nicht, langsam, Anmeldung) in #horizon-support, Ideen in #horizon-ideas (auf Englisch).' },
+      { key: 'polish', name: 'polski', type: 'text', topic: 'Rozmowy po polsku: Horizon i wszystko inne. Błędy zgłaszaj w #horizon-bugs, problemy (nie uruchamia się, działa wolno, logowanie) w #horizon-support, pomysły w #horizon-ideas (po angielsku).' },
+      { key: 'turkish', name: 'türkçe', type: 'text', topic: 'Türkçe sohbet: Horizon ve diğer her şey. Hatalar #horizon-bugs kanalına, sorunlar (açılmıyor, yavaş, giriş) #horizon-support kanalına, fikirler #horizon-ideas kanalına (İngilizce).' },
+      { key: 'chinese', name: '中文', type: 'text', topic: '用中文聊天：Horizon 和其他一切。Bug 请发到 #horizon-bugs，问题（无法启动、卡顿、登录）请发到 #horizon-support，想法请发到 #horizon-ideas（用英文）。' },
+      { key: 'japanese', name: '日本語', type: 'text', topic: '日本語で話そう：Horizon のことも、それ以外も。バグは #horizon-bugs へ、困りごと（起動しない、重い、ログイン）は #horizon-support へ、アイデアは #horizon-ideas へ（英語で）。' },
     ],
   },
   {
@@ -235,7 +250,7 @@ export const LAYOUT = [
 export const HOWTO = { name: '📌 How to post here: read me first', tag: ['📌', 'read me', true], mention: 'the 📌 **How to post here** post' };
 
 // What everyone sees in the channel list from the start; the Onboarding answers add the rest.
-export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'officialserver', 'horizonchat', 'contributors', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'polish', 'turkish', 'chinese', 'japanese'];
+export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'officialserver', 'horizonchat', 'contributors', 'horizonbugs', 'horizonsupport', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'polish', 'turkish', 'chinese', 'japanese'];
 
 // Replaced by another channel (2026-10-25: #updates replaces #work-board and #dev-log; 2026-10-30: #general replaces
 // #off-topic). Setup exports every message of each one, with its attachments, to scratch/ (not committed), then deletes
@@ -394,6 +409,17 @@ export const WORK = {
   },
 };
 
+// #horizon-support (src/features/support.js): a new post that follows its template gets Kira's first answer (when her AI
+// is on) and a note for 🤝 Support, pinging the role at most once every `pingEveryMs` (later posts are named in the next
+// ping). Replies from members other than the poster, 🤝 Support and the staff are removed with a short note, at most one
+// note per member every `noteEveryMs`.
+export const SUPPORT = {
+  role: 'support', forum: 'horizonsupport',
+  pingEveryMs: 15 * 60_000,
+  noteEveryMs: 10 * 60_000,
+  noteMs: 20_000, // the note under a removed reply goes after this long
+};
+
 // Contributors (src/features/contributors.js): 🛠️ Contributor = a member whose GitHub account is verified
 // (/verify-github) and has at least one merged pull request in GITHUB.owner/WORK.repo. It opens #contributors.
 export const CONTRIBUTORS = {
@@ -498,7 +524,7 @@ export const WELCOME = {
     '',
     '**Where things are**',
     '👋 **start here**: #horizon-info (what it is, **the download**), #faq, #rules, #announcements',
-    '🌅 **horizon**: #horizon-bugs, #horizon-ideas, #horizon-chat, #showcase (your videos, screenshots, builds), #releases, #updates (what changed)',
+    '🌅 **horizon**: #horizon-support (help), #horizon-bugs, #horizon-ideas, #horizon-chat, #showcase (your videos, screenshots, builds), #releases, #updates (what changed)',
     '🛠️ **contributing**: #contributors (read by all, written by people with a merged PR)',
     '💬 **general**: #general for anything (other games, music, AI coding, life), introductions, memes, the #hall-of-fame.',
     '🌍 **languages**: #русский, #español, #português, #français, #deutsch, #polski, #türkçe, #中文, #日本語',
@@ -507,7 +533,8 @@ export const WELCOME = {
     '**How it works**',
     `• Get Horizon at ${LINKS.horizonSite}: download the launcher; you need your own copy of Minecraft: Java Edition.`,
     `• Everything that is happening, in one place: the roadmap, the kanban and the journal at ${LINKS.hub}. Here, \`/roadmap\` sums it up.`,
-    '• Found a bug? `/report`, or post in #horizon-bugs (read its 📌 **How to post here** post first): it becomes a GitHub issue, and you hear back in your post. An idea? Post it in #horizon-ideas: it goes to the suggestion queue.',
+    '• Need help? Horizon won\'t start, runs slowly, sign-in, multiplayer: post in #horizon-support (not in the chats). Kira gives a first answer and 🤝 Support helps.',
+    '• Found a bug you can make happen again? `/report`, or post in #horizon-bugs (read its 📌 **How to post here** post first): it becomes a GitHub issue, and you hear back in your post. An idea? Post it in #horizon-ideas: it goes to the suggestion queue.',
     '• Want to contribute? Pick a good first task on the hub, `/claim` it before you start, and open your pull request with "Fixes #<number>". Coding with an AI agent? `/agent connect` gives it the board (how-to in #horizon-info).',
     '• Questions? Everything is in #faq. Need a mod? Send Kira a DM.',
     '',
@@ -524,7 +551,7 @@ export const RULES = [
   ['No piracy, no leaks', "Don't share or ask for game files, cracked launchers, accounts, leaked code or keys. Horizon needs your own legal copy of Minecraft: Java Edition, and it ships none of Mojang's files."],
   ['No scams or malware', 'No phishing, fake "free Nitro", or executables. Accounts younger than 3 days can\'t post links. Download Horizon only from playhorizon.dev or its GitHub releases.'],
   ['Keep it SFW', 'No NSFW, gore or shock content, anywhere: names, avatars and statuses included.'],
-  ['Right channel, right format', 'Every channel says what it\'s for in its description. Bugs and ideas have a template in their 📌 How to post here post, pinned at the top: posts without it are closed after an hour.'],
+  ['Right channel, right format', 'Every channel says what it\'s for in its description. Help requests go in #horizon-support, not in the chats. Bugs, help and ideas have a template in their 📌 How to post here post, pinned at the top: posts without it are closed after an hour.'],
   ['Contributing', 'Working on an issue? `/claim` it first, so two people don\'t do the same work. Pull requests go to github.com/horizon-rust/horizon.'],
   ['English in the main channels', 'So everyone can follow. These languages have their own channels in 🌍 languages: #русский, #español, #português, #français, #deutsch, #polski, #türkçe, #中文, #日本語.'],
   ['No drama with the mods in public', 'Disagree with a decision? DM Kira: it reaches the mods privately.'],
@@ -536,7 +563,7 @@ export const FAQ = [
   ['What is Horizon?', 'Minecraft: Java Edition rewritten from scratch in Rust, with AI agents, and checked against the real game with differential tests so it behaves exactly like vanilla. It uses the textures and sounds of your own copy of the game. More in #horizon-info.'],
   ['Where do I download it?', `Get the launcher from ${LINKS.horizonSite} (or the [launcher releases](${LINKS.horizonLauncher})). It installs Horizon and keeps it up to date. You need your own copy of Minecraft: Java Edition.`],
   ['Is it official?', 'No. Horizon is an unofficial fan project, not affiliated with, endorsed by or connected to Mojang Studios or Microsoft. It contains none of their code or files.'],
-  ['Where do I post…?', '• a bug → `/report` or #horizon-bugs · an idea → #horizon-ideas (search first)\n• a video, clip, screenshot or build made in Horizon → #showcase\n• a question or just talking → #horizon-chat\n• anything that isn\'t Horizon (other games, music, AI coding, life) → #general\n• your language → its channel in 🌍 languages\n• new versions → #releases · what changed → #updates'],
+  ['Where do I post…?', '• a problem (it won\'t start, it\'s slow, sign-in, multiplayer) → #horizon-support\n• a bug you can make happen again → `/report` or #horizon-bugs · an idea → #horizon-ideas (search first)\n• a video, clip, screenshot or build made in Horizon → #showcase\n• talking about Horizon → #horizon-chat\n• anything that isn\'t Horizon (other games, music, AI coding, life) → #general\n• your language → its channel in 🌍 languages\n• new versions → #releases · what changed → #updates'],
   ['What is being worked on?', `The hub, ${LINKS.hub}: what is being done now, what comes next, the kanban and the journal, in simple or technical words. \`/roadmap\` (or \`@Kira roadmap\`) sums it up here.`],
   ['What happens to my bug report?', 'Kira sends it to GitHub as an issue and pings you in your post when a maintainer answers, and when it is fixed (with the release it ships in). `/status` lists your reports.'],
   ['What happens to my idea?', 'It goes to the suggestion queue the maintainers read. Good ones become items on the roadmap; nothing is published by itself. Ideas are not GitHub issues.'],
@@ -556,9 +583,9 @@ export const FAQ_MORE = [
   ['Shaders?', 'Java shader packs (Iris, OptiFine) don\'t run in Horizon. Horizon\'s own shader support is being built: follow #updates.'],
   ['Can I play on servers (2b2t, Hypixel…)?', 'Horizon is Minecraft Java Edition 26.3: it joins servers that accept 26.3 clients. Online-mode servers need Microsoft sign-in (see above). A server\'s own rules and anti-cheat still apply: check them before you join with a different client.'],
   ['Which computers? Linux, Mac, Windows?', 'Windows (x64), macOS (Apple Silicon) and Linux (x86_64), from https://playhorizon.dev. Phones, consoles, Bedrock and app stores: no, Horizon is Java Edition for computers.'],
-  ['It crashes or closes when I click Play', 'Post it in #horizon-bugs with the template (your system, the launcher version, what happened). Kira turns it into a GitHub issue and pings you when it\'s fixed.'],
+  ['It crashes or closes when I click Play', 'Post it in #horizon-support with the template (your system, the launcher version, what happened, the log if you have it). If it turns out to be a bug in Horizon, it goes to #horizon-bugs and becomes a GitHub issue.'],
   ['Is it legal? Does Mojang approve it?', 'Horizon ships none of Mojang\'s code or files, and you need your own copy of Minecraft: Java Edition. Microsoft sign-in working doesn\'t mean Mojang or Microsoft endorse Horizon: it\'s an unofficial fan project.'],
-  ['Where do I get help?', 'Ask in #horizon-chat, or mention @Kira with your question. For something private, DM Kira: it reaches the mods.'],
+  ['Where do I get help?', 'In #horizon-support: one post per problem. Kira gives a first answer, then 🤝 Support helps. Quick questions: mention @Kira anywhere. For something private, DM Kira: it reaches the mods.'],
 ];
 
 export const HORIZON = {

@@ -28,6 +28,7 @@ import { gameRoutes, gameTokens, openServers } from './features/game.js';
 import * as chatclear from './features/chatclear.js';
 import * as sponsors from './features/sponsors.js';
 import * as staff from './features/staff.js';
+import * as support from './features/support.js';
 import { startServer } from './mcp.js';
 import { adminRoutes } from './admin.js';
 import { rateLimiter } from './agents.js';
@@ -35,7 +36,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff];
+const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
