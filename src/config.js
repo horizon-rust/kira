@@ -409,6 +409,18 @@ export const WORK = {
   },
 };
 
+// /apply (src/features/apply.js): Discord's way into the application form on the website (docs/staff-api.md). The
+// staff side (the dashboards) owns the form, who may apply and the decisions; Kira DMs the form's link, and when a
+// decision comes back she gives the role and DMs the member. `intro`: where a newly accepted member starts.
+export const APPLY = {
+  perHour: 3, // links asked for per member an hour (each one voids the one before)
+  roles: {
+    support: { label: '🤝 Support', intro: 'Start in #horizon-support: you can answer in every post there, tag posts ✅ solved and close them (`/done` works on any post). Kira gives a first answer on new posts; yours is the one that counts.' },
+    mod: { label: '🛡️ Mod', intro: 'Start in #mod-chat: you can time out members, delete messages and manage threads, and #mod-log, #reports and #mod-mail are open to you. Bans go through the Horizon Team.' },
+    team: { label: '🌌 Horizon Team', intro: 'Start in #horizon-team. Only the Discord role was given: access to the GitHub organisation or its teams is set up by Ludovic by hand, and he has been told.' },
+  },
+};
+
 // #horizon-support (src/features/support.js): a new post that follows its template gets Kira's first answer (when her AI
 // is on) and a note for 🤝 Support, pinging the role at most once every `pingEveryMs` (later posts are named in the next
 // ping). Replies from members other than the poster, 🤝 Support and the staff are removed with a short note, at most one
@@ -535,6 +547,7 @@ export const WELCOME = {
     `• Everything that is happening, in one place: the roadmap, the kanban and the journal at ${LINKS.hub}. Here, \`/roadmap\` sums it up.`,
     '• Need help? Horizon won\'t start, runs slowly, sign-in, multiplayer: post in #horizon-support (not in the chats). Kira gives a first answer and 🤝 Support helps.',
     '• Found a bug you can make happen again? `/report`, or post in #horizon-bugs (read its 📌 **How to post here** post first): it becomes a GitHub issue, and you hear back in your post. An idea? Post it in #horizon-ideas: it goes to the suggestion queue.',
+    '• Want to help run the server? `/apply` for 🤝 Support (helping players), 🛡️ Mod or 🌌 Horizon Team: Kira DMs you the form. Merged pull requests in Horizon count, so verify your GitHub first (`/link-github`, `/verify-github`).',
     '• Want to contribute? Pick a good first task on the hub, `/claim` it before you start, and open your pull request with "Fixes #<number>". Coding with an AI agent? `/agent connect` gives it the board (how-to in #horizon-info).',
     '• Questions? Everything is in #faq. Need a mod? Send Kira a DM.',
     '',
@@ -585,6 +598,7 @@ export const FAQ_MORE = [
   ['Which computers? Linux, Mac, Windows?', 'Windows (x64), macOS (Apple Silicon) and Linux (x86_64), from https://playhorizon.dev. Phones, consoles, Bedrock and app stores: no, Horizon is Java Edition for computers.'],
   ['It crashes or closes when I click Play', 'Post it in #horizon-support with the template (your system, the launcher version, what happened, the log if you have it). If it turns out to be a bug in Horizon, it goes to #horizon-bugs and becomes a GitHub issue.'],
   ['Is it legal? Does Mojang approve it?', 'Horizon ships none of Mojang\'s code or files, and you need your own copy of Minecraft: Java Edition. Microsoft sign-in working doesn\'t mean Mojang or Microsoft endorse Horizon: it\'s an unofficial fan project.'],
+  ['How do I become a mod, 🤝 Support or Horizon Team?', '`/apply` and pick the role: Kira DMs you a link to a short form on playhorizon.dev (yours only, it works once). The mods and the Team read it, and you get the answer by DM. Merged pull requests in Horizon count: link and verify your GitHub first (`/link-github`, then `/verify-github`). One application per role at a time; after a no, you can apply again 14 days later.'],
   ['Where do I get help?', 'In #horizon-support: one post per problem. Kira gives a first answer, then 🤝 Support helps. Quick questions: mention @Kira anywhere. For something private, DM Kira: it reaches the mods.'],
 ];
 
