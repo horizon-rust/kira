@@ -296,7 +296,8 @@ Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`
 - **From what:**
   - the FAQ in `config.js`;
   - from horizon-rust/horizon main, the README and `docs/*.md` (refreshed daily) and the notes of the latest published releases (hourly).
-  - All of it is read through `github.js`, so it counts against the shared budget; a doc is fetched again only when its sha changes.
+  - All of it is read through `github.js`'s `makePublicGitHub`: the GitHub App with a reserve of its own (`KIRA_GITHUB_PUBLIC_KEEP`, default 100, so the sources still load when the board has stopped for the hour at `KIRA_GITHUB_KEEP`), else without a token (60 an hour per IP); never Ludovic's token. A doc is fetched again only when its sha changes.
+  - A failed refresh keeps the last good copy, saved in `/data/ai-sources.json` (`KIRA_AI_SOURCES`): a restart during a GitHub outage or a held-back hour still answers from it. "Sources not loaded" (passed to the team) only when nothing was ever loaded. A failure is logged once until that part loads again.
   - When sources disagree, the FAQ wins, then the release notes, known issues, the README and the docs.
 - **Models:** `claude-haiku-5-5`. `claude-sonnet-5-5` only when Haiku says it is unsure, or for a reply chain of 4 messages or more. The model's only tool is `read_doc` (read-only). Its output is JSON: answer, pass, or unsure.
 - **Safety:**
@@ -339,7 +340,7 @@ body `{ "player": "<Minecraft name>", "question": "kira why …" }` (the `kira`/
 ## Hosting (Railway)
 
 Kira runs on Railway (project **kira**, service **kira**, volume `kira-data` at `/data`: `state.json`,
-`board.json`, `agents.json`, `seal-key.pem`), built from this repo's `Dockerfile` on every push to `main`.
+`board.json`, `agents.json`, `seal-key.pem`, `ai-sources.json`), built from this repo's `Dockerfile` on every push to `main`.
 Variables: `KIRA_STATE=/data/state.json`, `DISCORD_TOKEN_SEALED`, `GITHUB_TOKEN_SEALED`, `GITHUB_APP_ID` +
 `GITHUB_APP_PRIVATE_KEY_SEALED` (the GitHub App kira-horizon: Kira's own hour of calls; `/sponsor` keeps
 `GITHUB_TOKEN`; key in 1Password `GitHub App Kira`, a document: `op document get`),

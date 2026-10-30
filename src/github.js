@@ -8,22 +8,28 @@
 // - Below KEEP calls left in the hour, GETs stop until the hour resets (writes still go: they are a person's
 //   command). The board just waits for the next refresh.
 export const KEEP = Number(process.env.KIRA_GITHUB_KEEP ?? 1500);
+// The reserve of makePublicGitHub's App client: its few reads an hour (Kira's AI sources) go on long after the board
+// has stopped for the hour, and a held-back one is read without a token instead.
+export const PUBLIC_KEEP = Number(process.env.KIRA_GITHUB_PUBLIC_KEEP ?? 100);
 const CACHE_MAX = 2000;
 
 // Shared by every client in the process that uses the same identity: they all spend the same hour. `token` is a
 // string (Ludovic's token) or a function giving the GitHub App's current installation token (src/github-app.js),
-// which has an hour of its own.
+// which has an hour of its own. No token: public reads only, 60 an hour for the host's IP; they stop at 0.
 const userBudget = { remaining: Infinity, reset: 0 };
 const appBudget = { remaining: Infinity, reset: 0 };
+const anonBudget = { remaining: Infinity, reset: 0 };
 export const _budget = userBudget; // for tests
 export const _appBudget = appBudget;
+export const _anonBudget = anonBudget;
 
-export function makeGitHub({ token, dryRun = false, fetchImpl = fetch, log = console.log } = {}) {
+export function makeGitHub({ token, keep: reserve = KEEP, dryRun = false, fetchImpl = fetch, log = console.log } = {}) {
   const cache = new Map(); // GET path → { etag, body }
-  const budget = typeof token === 'function' ? appBudget : userBudget;
+  const budget = typeof token === 'function' ? appBudget : token ? userBudget : anonBudget;
+  const floor = token ? reserve : 1;
   async function call(method, path, body, { cache: keep = true } = {}) {
     const get = method === 'GET';
-    if (get && token && budget.remaining < KEEP && Date.now() < budget.reset) {
+    if (get && budget.remaining < floor && Date.now() < budget.reset) {
       throw new Error(`GitHub GET ${path}: holding back, ${budget.remaining} calls left until ${new Date(budget.reset).toISOString()}`);
     }
     const auth = typeof token === 'function' ? await token() : token;
@@ -73,6 +79,32 @@ export function makeGitHub({ token, dryRun = false, fetchImpl = fetch, log = con
         return null;
       }
       return call(method, path, body);
+    },
+  };
+}
+
+// Reads of public horizon-rust content (Kira's AI sources: docs, README, releases). Through the GitHub App when it is
+// set up (`appToken`, src/github-app.js), with the small PUBLIC_KEEP reserve; when the App isn't set up, or its GET
+// fails or is held back, the same GET goes without a token. Never Ludovic's token: other tools drain its hour.
+// Switching to tokenless reads and back is logged once each way.
+export function makePublicGitHub({ appToken, keep = PUBLIC_KEEP, fetchImpl = fetch, log = console.log } = {}) {
+  const app = appToken ? makeGitHub({ token: appToken, keep, fetchImpl }) : null;
+  const anon = makeGitHub({ fetchImpl });
+  let tokenless = false;
+  return {
+    async get(path, opts) {
+      if (app) {
+        try {
+          const data = await app.get(path, opts);
+          if (tokenless) log('github public reads: through the GitHub App again');
+          tokenless = false;
+          return data;
+        } catch (e) {
+          if (!tokenless) log(`github public reads: without a token until the GitHub App works again (${e.message})`);
+          tokenless = true;
+        }
+      }
+      return anon.get(path, opts);
     },
   };
 }
