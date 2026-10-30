@@ -505,3 +505,11 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   (`docs/staff-api.md`); what it reports (role granted, DM sent, error) shows on the card. A Team accept grants only
   the Discord role: GitHub organisation or team access stays Ludovic's, by hand. Answers are deleted 90 days after the
   decision; a decline keeps only its member, role and date, for the 14-day cooldown.
+- **The Team dashboard's data** ([`src/team-data.js`](src/team-data.js), routes in
+  [`src/features/staff-team.js`](src/features/staff-team.js)): the decisions log (who, what, when, a link, a roadmap
+  item; an edit keeps the previous version, a withdrawn decision stays listed), the Team kanban (To do, Doing, Done:
+  coordination that is not a GitHub issue), and the roadmap's Team layer: notes on public items (owner, priority,
+  note) and **Team-only items**, which stay in staff.json. "Publish" gives the item's `roadmap.toml` entry for a
+  person or an agent to propose in a pull request to horizon; when the website's roadmap.json lists the id, the item
+  is marked public. Kira never writes to the public repo for this. The work board is shown read-only (moves stay
+  `/move` and the MCP tools).

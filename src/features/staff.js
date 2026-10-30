@@ -11,6 +11,7 @@ import * as auth from '../staff-auth.js';
 import { staffRoutes } from '../staff-http.js';
 import { counters as makeCounters } from '../staff-counters.js';
 import { applicationRoutes } from './staff-apply.js';
+import { teamRoutes } from './staff-team.js';
 
 // The roles' ids by key; setup's ids win, these are the server's as of 2026-10-30.
 const ROLE_IDS = { team: '1564768999655481485', mod: '1559242168864997537' };
@@ -59,7 +60,7 @@ function revoke(userId, why) {
 
 export function routes(extra = []) {
   if (!store) return {};
-  return staffRoutes({ store, key: process.env.STAFF_PROXY_KEY, origin: SITE, access, log, extra: [...applicationRoutes({ store, site: SITE, log }), ...extra] });
+  return staffRoutes({ store, key: process.env.STAFF_PROXY_KEY, origin: SITE, access, log, extra: [...applicationRoutes({ store, site: SITE, log }), ...teamRoutes({ store, log }), ...extra] });
 }
 
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
@@ -134,7 +135,9 @@ export function setup() {
   setInterval(() => { try { countWarns(); count.flush(); } catch (e) { console.error('staff counters', e.message); } }, 60_000);
 
   // At start: accounts whose owner lost every dashboard role while Kira was away.
-  client.once('clientReady', async () => {
+  // (Polled rather than another clientReady listener: the client has ten already.)
+  const whenReady = (fn) => (client.isReady() ? fn() : setTimeout(() => whenReady(fn), 5_000));
+  whenReady(async () => {
     // Only on a sure answer: a member without the roles, or Discord's "Unknown Member". Any other error keeps them.
     for (const userId of Object.keys(store.data.accounts)) {
       try {
