@@ -470,3 +470,21 @@ the website). Moved from horizon's `docs/media/brand` on 2026-10-15.
 
 Uploading (Ludovic's accounts): server icon and banner in *Server Settings › Server Profile*; Kira's avatar in
 discord.com/developers/applications › Kira › *Bot* (the running bot also applies both icons when they change).
+
+## Staff dashboards
+
+Two dashboards on the website, each behind a password its member sets: **playhorizon.dev/staff/team** (🌌 Horizon
+Team) and **playhorizon.dev/staff/mod** (🛡️ Mod); Ludovic sees both. Applications for Mod, Support and the Team are
+a form at playhorizon.dev/apply. Who owns what between the dashboards and the Discord side:
+[`docs/staff-api.md`](docs/staff-api.md).
+
+- **Passwords and sessions** ([`src/staff-auth.js`](src/staff-auth.js)): scrypt hashes; one-time links (30 minutes to
+  set a password, 24 hours to apply) and sessions (12 hours idle, 7 days at most) are kept as SHA-256 only.
+- **The file** ([`src/staff-store.js`](src/staff-store.js)): `/data/staff.json` (`KIRA_STAFF`), mode 600, written
+  only by the bot. Before the first write of each day the file is copied to `/data/staff-backups/staff-<date>.json`
+  (mode 600, the last 7 days kept). A file Kira can't read stops the staff side with a message; nothing else of
+  Kira stops.
+- **Restoring a backup**: `railway ssh --project kira --service kira`, then
+  `ls -l /data/staff-backups/` and `cp /data/staff-backups/staff-<date>.json /data/staff.json`, then restart the
+  service (`railway redeploy --service kira` or the dashboard). Everything since that copy is lost (sessions,
+  decisions, applications), and members whose password was set later need a new link.
