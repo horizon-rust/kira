@@ -131,7 +131,7 @@ test('nobody votes within 72 hours: treated as no quorum', async () => {
   assert.equal(await v.advance(s.store, s.app, s.ctx(T0 + 72 * H)), 'extended');
 });
 
-test('blind until you vote: your ballot opens the others\' and the running tally; recused stays blind; the owner sees', () => {
+test('blind until you vote: your ballot opens the others\' and the running tally; recused stays blind; the owner sees counts and Against comments, no names', () => {
   const s = setup();
   v.castBallot(s.store, s.app, { voter: 'm1', choice: 'against', comment: 'Too new here.' }, s.ctx(T0));
   const before = v.voteView(s.app, 'm2', s.ctx(T0));
@@ -149,7 +149,14 @@ test('blind until you vote: your ballot opens the others\' and the running tally
   v.castBallot(s.store, s.app, { voter: 'm4', choice: 'for' }, s.ctx(T0 + H));
   v.recuse(s.store, s.app, 'm4', s.ctx(T0 + H)); // recusing after voting: blind again, the ballot no longer counts
   assert.equal(v.voteView(s.app, 'm4', s.ctx(T0 + H)).ballots, null);
-  assert.deepEqual(v.voteView(s.app, OWNER, s.ctx(T0 + H)).ballots.map((b) => b.by), ['m1', 'm2']); // m4's went with the recusal
+  const owner = v.voteView(s.app, OWNER, s.ctx(T0 + H));
+  assert.deepEqual([owner.seen, owner.ballots], [false, null]);
+  assert.deepEqual(owner.tally, { for: 1, against: 1, abstain: 0, quorum: 2 }); // m4's ballot went with the recusal
+  assert.deepEqual(owner.againstComments, ['Too new here.']);
+  assert.ok(v.auditView(s.store, s.app, OWNER, s.ctx(T0 + H)).every((e) => !e.choice && !e.comment));
+  assert.equal(v.voteView(s.app, 'm2', s.ctx(T0 + H)).againstComments, null);
+  s.app.status = 'declined'; // closed: names for everyone, the owner included
+  assert.deepEqual(v.voteView(s.app, OWNER, s.ctx(T0 + H)).ballots.map((b) => b.by), ['m1', 'm2']);
 });
 
 test('a veto: declined at once, the note only Ludovic sees, and the applicant\'s DM carries no votes', async () => {
