@@ -508,7 +508,8 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   (their linked login, whether `/verify-github` proved it, their merged pull requests in Horizon: verified
   contributors are listed first). Then a vote on the dashboards ([`src/application-votes.js`](src/application-votes.js)):
   Mods vote on Mod and Support applications (shown on /staff/mod), the Team on Team and Support ones (/staff/team);
-  blind For / Against (with a comment) / Abstain, changeable until it closes, recusal; quorum max(2, ceil(40% of
+  For / Against (with a comment) / Abstain, blind until you vote (then the others' ballots show), changeable until
+  it closes, recusal; quorum max(2, ceil(40% of
   the voters active in the last 30 days: logged in or acted)); it passes with 2/3 of For and Against; it closes 72 h
   after the first ballot or once every active voter voted; without quorum it is extended once by 48 h, then Ludovic
   decides. A decline goes out at once; a pass opens Ludovic's 12-hour veto window (one DM), after which the Discord side

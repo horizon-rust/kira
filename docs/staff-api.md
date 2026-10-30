@@ -80,11 +80,11 @@ The staff side calls them through `staff-hooks.js`: `decide(event)`, `dm({ userI
 ## The vote (the staff side's)
 
 The rules are in [`src/application-votes.js`](../src/application-votes.js): who votes (Mods on Mod and Support, the
-Team on Team and Support; never the applicant or the owner), blind ballots (For, Against with a comment, Abstain;
-changeable while open; recusal), quorum max(2, ceil(40% of the voters active in the last 30 days)), 2/3 of For and
+Team on Team and Support; never the applicant or the owner), ballots blind until you vote (For, Against with a comment,
+Abstain; the others' ballots and comments show once you cast yours or the vote closes; changeable while open; recusal), quorum max(2, ceil(40% of the voters active in the last 30 days)), 2/3 of For and
 Against to pass, 72 hours from the first ballot or once every active voter voted, one 48-hour extension without
-quorum and then the owner decides, a 12-hour veto window after a pass (one DM to the owner), the owner's veto,
-approval and later removal of the role. Every step is in the append-only audit log (`audit` in staff.json).
+quorum and then the owner decides, a 12-hour veto window after a pass (one DM to the owner), the owner's veto (with an
+optional note only he sees), approval and later removal of the role. Every step is in the append-only audit log (`audit` in staff.json).
 
 ## Rules both sides keep
 
