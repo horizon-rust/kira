@@ -94,6 +94,10 @@ test('a member holds at most 8 claims, and waits between claims across issues; m
   assert.match(await wb.claim(u, null, 102), /a moment ago: try again in \d+ s/); // per-member pause, another issue
   for (const n of [102, 103, 104, 105, 106, 107, 108]) { later(); assert.match(await wb.claim(u, null, n), /is yours/); }
   later(); assert.match(await wb.claim(u, null, 109), /already have 8 claimed issues/);
+  // An issue an open pull request already fixes no longer counts: #101's PR frees a slot.
+  wb._test.setRaw({ pulls: [{ state: 'open', title: 'Fix it', body: 'Fixes #101' }], issues: [], branches: [] });
+  later(); assert.match(await wb.claim(u, null, 109), /is yours/);
+  wb._test.setRaw(null);
   const mod = { id: '666666666666666666', displayName: 'Mod', permissions: { has: () => true } };
   for (const n of [111, 112, 113, 114]) assert.match(await wb.claim({ id: mod.id, globalName: 'Mod' }, mod, n), /is yours/);
 });

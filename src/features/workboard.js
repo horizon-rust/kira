@@ -82,7 +82,9 @@ export async function claim(user, member, n) {
   if (wait) return `#${n} was claimed or unclaimed a moment ago: try again in ${Math.ceil(wait / 60_000)} min.`;
   // Per member, across issues (N1): a few claims at once, and a pause between two claims or unclaims.
   if (!isStaff(member)) {
-    const held = Object.values(work.claims).filter((c) => c.user === user.id).length;
+    // An issue an open pull request already fixes doesn't count: a review can take days (rdbtCVS, 2026-10-30).
+    const fixed = new Set((raw?.pulls ?? []).filter((p) => p.state === 'open').flatMap((p) => board.fixesIn(`${p.title}\n${p.body ?? ''}`)));
+    const held = Object.entries(work.claims).filter(([k, c]) => c.user === user.id && !fixed.has(Number(k))).length;
     if (held >= WORK.maxClaims) return `You already have ${held} claimed issues: finish or \`/unclaim\` one before claiming another.`;
     const pause = wk.cooldownLeft(work.memberGithubAt?.[user.id], Date.now(), WORK.memberCooldownMs);
     if (pause) return `You claimed or unclaimed an issue a moment ago: try again in ${Math.ceil(pause / 1000)} s.`;
