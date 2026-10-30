@@ -518,3 +518,11 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   person or an agent to propose in a pull request to horizon; when the website's roadmap.json lists the id, the item
   is marked public. Kira never writes to the public repo for this. The work board is shown read-only (moves stay
   `/move` and the MCP tools).
+- **Statistics** ([`src/team-stats.js`](src/team-stats.js), fetched by
+  [`src/features/staff-stats.js`](src/features/staff-stats.js) a minute after start and then every hour, through
+  GraphQL's own budget, ~2.5 minutes a round): for the Team, the last 12 weeks of horizon's pull requests (opened and
+  merged per week and per person, median hours to the first review by someone else and to merge, the share reviewed),
+  the open ones' CI state, open bugs (by area label, by source, crucial), pull requests per roadmap item (their
+  `roadmap:<id>` label), game and launcher releases per week, and Discord activity from the counters. For the Mods,
+  the moderation counters per week and over 7 and 30 days, and the applications waiting. Only public GitHub data
+  and counts; a failed round keeps the last numbers.
