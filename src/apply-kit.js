@@ -11,6 +11,7 @@ export function refusal(why, role, retryAt = null) {
   if (why === 'open') return `Your application for ${label(role)} is still waiting for an answer: you'll get it by DM.`;
   if (why === 'cooldown') return retryAt ? `You can apply for ${label(role)} again from ${when(retryAt)}.` : `You can't apply for ${label(role)} again yet.`;
   if (why === 'role') return 'Pick one of the roles in the list.';
+  if (why === 'role-closed') return `Applications for ${label(role)} are closed for now.`;
   if (why === 'soon') return 'Applications open soon: the form on playhorizon.dev isn\'t online yet. Watch #announcements.';
   return 'Applications are closed right now.';
 }

@@ -3,6 +3,9 @@
 // docs/staff-api.md is the contract.
 
 export const APPLY_ROLES = ['mod', 'support', 'team'];
+// Roles nobody can apply for right now: /apply doesn't offer them and the staff side refuses new links and forms for them.
+// Applications already open still go through their vote. Horizon Team closed by Ludovic, 2026-10-30 (no announcement).
+export const CLOSED_ROLES = ['team'];
 export const DECLINE_COOLDOWN_DAYS = 14;
 
 let staff = null; // { canApply, issueApplyLink }: src/applications.js

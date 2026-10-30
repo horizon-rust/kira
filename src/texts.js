@@ -123,7 +123,7 @@ const HELP = [
   '**Contributing**: `/goodfirst` · `/working` · `/board` · `/mytasks` · `/link-github` (`credit:True` lists you on the hub) · `/verify-github` proves the account is yours, and with a merged PR it gives you 🛠️ Contributor · `/notify` DMs when CI fails · `/agent connect` gives your AI coding agent the board (setup in #horizon-info). Maintainers: `/move`.',
   '**Horizon**: `/horizon` what it is and where to get it · `/links` · `/sponsor github:<you>`: you sponsor Horizon on GitHub? Get 💚 Sponsor',
   '**You**: `/rank`, `/leaderboard`, `/remind`, `/userinfo`, `/avatar`, `/room` (your own voice channel: join ➕ create your room).',
-  '**Help run the server**: `/apply` for 🤝 Support, 🛡️ Mod or 🌌 Horizon Team.',
+  '**Help run the server**: `/apply` for 🤝 Support or 🛡️ Mod.',
   '**The mods**: DM me to reach them privately, `/report-member` or right-click a message → Apps → Report to mods. `/modmail`.',
 ].join('\n\n');
 export const helpText = (state) => linkify(HELP, state);

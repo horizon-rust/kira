@@ -4,7 +4,7 @@
 // Discord side's (src/staff-hooks.js, docs/staff-api.md). No Discord and no network here: `deps` brings them.
 import { randomBytes } from 'node:crypto';
 import * as auth from './staff-auth.js';
-import { APPLY_ROLES, DECLINE_COOLDOWN_DAYS } from './staff-hooks.js';
+import { APPLY_ROLES, CLOSED_ROLES, DECLINE_COOLDOWN_DAYS } from './staff-hooks.js';
 import { newVote, voteView, auditView, FINAL } from './application-votes.js';
 
 export const RETENTION_DAYS = 90;
@@ -33,6 +33,7 @@ export const questions = (role) => [...COMMON, ...BY_ROLE[role], { id: 'other', 
 // deps: { hasRole(userId, role) → bool, site: 'https://playhorizon.dev' }
 export function canApply(store, userId, role, hasRole, now = Date.now()) {
   if (!APPLY_ROLES.includes(role)) return { ok: false, why: 'role' };
+  if (CLOSED_ROLES.includes(role)) return { ok: false, why: 'role-closed' };
   if (hasRole) return { ok: false, why: 'has-role' };
   const mine = Object.values(store.data.applications).filter((a) => a.user === userId && a.role === role);
   if (mine.some((a) => !FINAL.includes(a.status))) return { ok: false, why: 'open' };
