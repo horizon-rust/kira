@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { openStaffStore } from '../src/staff-store.js';
 import * as apps from '../src/applications.js';
 import { setStaffSide, canApply as hookCanApply } from '../src/staff-hooks.js';
-import { finalize } from '../src/application-votes.js';
+import { finalize, castBallot } from '../src/application-votes.js';
 import { DAY } from '../src/staff-auth.js';
 
 const T0 = Date.UTC(2026, 9, 30, 12);
@@ -79,10 +79,13 @@ test('each dashboard sees its roles (Support on both); verified contributors wit
 test('90 days after the decision only what the cooldown needs is kept', async () => {
   const store = fresh();
   const a = apply(store, '1', 'support', T0, { login: 'x', verified: true, merged: 1, prs: [] });
+  castBallot(store, a, { voter: '9', choice: 'against', comment: 'Too new here.' }, ctx(T0));
   await finalize(store, a, 'decline', 'vote', ctx(T0));
   assert.equal(apps.list(store, 'mod', '9', ctx(T0 + 89 * DAY)).length, 1);
   assert.equal(apps.list(store, 'mod', '9', ctx(T0 + 91 * DAY)).length, 0);
   assert.deepEqual(store.data.applications[a.id], { id: a.id, user: '1', role: 'support', status: 'declined', decidedAt: T0 });
+  const ballot = store.data.audit.find((e) => e.app === a.id && e.action === 'ballot');
+  assert.deepEqual(ballot, { at: T0, by: '9', app: a.id, action: 'ballot', choice: 'against' });
 });
 
 test('the hooks answer for the staff side once registered', async () => {
