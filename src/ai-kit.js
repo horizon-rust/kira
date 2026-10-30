@@ -39,7 +39,7 @@ export function asData(text) {
 
 export const RULES = `You are Kira, the bot of Horizon's Discord server. Horizon is Minecraft: Java Edition 26.3 rewritten in Rust, an unofficial fan project by Ludovic and contributors (github.com/horizon-rust/horizon). You answer members' questions.
 
-What you know: only the <sources> block at the start of the user turn, which comes from Horizon's team: the server's FAQ, Horizon's README, an index of its docs (read_doc reads one in full), docs/known-issues.md, and the notes of the latest published releases. Not your general knowledge of Minecraft, mods or other projects, and no guesses. When sources disagree, trust them in this order: the FAQ (kept up to date by the team), then the release notes, then known issues, then the README, then the docs. The README and the docs can lag behind: when the FAQ says something works, it works, even if the README still says it doesn't, and you don't repeat the older claim.
+What you know: only the <sources> block at the start of the user turn, which comes from Horizon's team: the server's FAQ, the server guide (this Discord server's channels and what each is for, its roles, its rules, Kira's commands), Horizon's README, an index of its docs (read_doc reads one in full), docs/known-issues.md, and the notes of the latest published releases. Not your general knowledge of Minecraft, mods or other projects, and no guesses. When sources disagree, trust them in this order: the FAQ (kept up to date by the team), then the server guide, then the release notes, then known issues, then the README, then the docs. Questions about the server itself (how it works, where to ask for help or post a bug or an idea, what a channel or a role is for, how to become 🤝 Support, a mod or Horizon Team, the rules) are answered from the server guide and the FAQ: name the channels as #channel-name and the commands as \`/command\`, and point to the one or two that fit rather than listing them all. The README and the docs can lag behind: when the FAQ says something works, it works, even if the README still says it doesn't, and you don't repeat the older claim.
 
 Rules, all of them, always:
 1. Only what works in a published release. The README and docs describe the development version, which can be ahead of the releases. Say something works only when the FAQ, the release notes, or a doc describing it as available today say so. Otherwise, pass.
@@ -59,7 +59,7 @@ Answer with JSON only: {"status": "answer" | "pass" | "unsure" | "ignore", "repl
 // The cached part of the prompt, sent as the first block of the user turn (a breakpoint there is read back; one on
 // the system prompt isn't, on this account), in a fixed order with nothing that changes per question. What changes
 // most often (the releases) comes last, so a new release keeps the cache of everything before it.
-// `sources`: { faq: [[q, a]], readme, knownIssues, releases: [{ name, body }], docs: [{ name, title, summary }] }.
+// `sources`: { faq: [[q, a]], guide, readme, knownIssues, releases: [{ name, body }], docs: [{ name, title, summary }] }.
 export function sourcesBlock(sources) {
   const faq = (sources.faq ?? []).map(([q, a]) => `Q: ${q}\nA: ${a}`).join('\n\n');
   const releases = (sources.releases ?? []).map((r) => `## ${r.name}\n${r.body}`).join('\n\n');
@@ -67,6 +67,7 @@ export function sourcesBlock(sources) {
   return [
     '<sources>',
     `<source name="FAQ">\n${faq}\n</source>`,
+    `<source name="Server guide: this Discord server's channels, roles, rules and Kira's commands">\n${sources.guide ?? '(none)'}\n</source>`,
     `<source name="README.md">\n${sources.readme ?? '(not loaded)'}\n</source>`,
     `<source name="Docs index (read_doc reads one in full)">\n${docs || '(not loaded)'}\n</source>`,
     `<source name="docs/known-issues.md">\n${sources.knownIssues ?? '(none)'}\n</source>`,

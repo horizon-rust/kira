@@ -1,5 +1,5 @@
 // Kira answers on her own (src/ai.js asks the model): a message that mentions Kira or replies to her gets one answer,
-// from Horizon's FAQ, docs and release notes only. Off unless KIRA_AI is set and ANTHROPIC_API_KEY exists; `/kira-ai off`
+// from Horizon's FAQ, the server guide, docs and release notes only. Off unless KIRA_AI is set and ANTHROPIC_API_KEY exists; `/kira-ai off`
 // stops it at once. Limits: AI.perMemberHour questions per member, AI.dailyUsd dollars a day (UTC), counted from each
 // response's usage. Every answer is logged in #mod-log (the question, the model, tokens, cost). A question Kira can't
 // answer is passed to the team: she says so, and it is kept in state.kiraAi.handoffs for the orchestrator.
@@ -17,6 +17,7 @@ import { parseVerb } from '../hub.js';
 import * as ai from '../ai.js';
 import * as kit from '../ai-kit.js';
 import * as game from '../game-kit.js';
+import { linkify } from '../texts.js';
 
 const KEY = !!process.env.ANTHROPIC_API_KEY?.trim();
 export const enabled = !!AI.mode && KEY;
@@ -113,7 +114,8 @@ function logAnswer(msg, text, r) {
 }
 
 async function respond(msg, text) {
-  const send = (content) => msg.reply({ content, allowedMentions: { parse: [], repliedUser: false } });
+  // #channel-name in a reply (the server guide names channels that way) becomes a clickable mention.
+  const send = (content) => msg.reply({ content: linkify(content, state), allowedMentions: { parse: [], repliedUser: false } });
   if (!limits.take(msg.author.id, 'ask')) {
     if (limits.take(msg.author.id, 'notice')) await send(`I answer ${AI.perMemberHour} questions an hour per member: ask again a bit later.`);
     return;
@@ -180,7 +182,7 @@ export async function supportAnswer(thread, starter) {
   save();
   await logAnswer(starter, text, { ...r, reason: r.status === 'answer' ? r.reason : `${r.reason ?? 'not in the sources'} (left to 🤝 Support)` });
   if (r.status !== 'answer' || !r.reply) return null;
-  await thread.send({ content: `${r.reply}\n-# 🤖 A first answer from Kira, from the FAQ and Horizon's docs. 🤝 Support can add more.`, allowedMentions: { parse: [] } });
+  await thread.send({ content: `${linkify(r.reply, state)}\n-# 🤖 A first answer from Kira, from the FAQ and Horizon's docs. 🤝 Support can add more.`, allowedMentions: { parse: [] } });
   return r.reply;
 }
 

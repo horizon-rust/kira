@@ -1,6 +1,6 @@
 // Texts shared by setup and the bot.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
-import { COLOR, LAYOUT, ROLES, HOWTO, FAQ, FAQ_MORE } from './config.js';
+import { COLOR, LAYOUT, ROLES, HOWTO, FAQ, FAQ_MORE, LINKS, WELCOME, RULES, RULES_FOOTER, OFFICIAL_SERVER } from './config.js';
 
 const byName = new Map(LAYOUT.flatMap((g) => g.channels).filter((c) => c.type !== 'voice').map((c) => [c.name, c.key]));
 
@@ -104,4 +104,64 @@ export function welcomeMessage(people, memberCount, state) {
         : `👋 Welcome to the **${people.length}** people who just joined! We're **${count}** now.\n\n${guide}`)],
     allowedMentions: { users: few ? people : [] },
   };
+}
+
+// /help (only the asker sees it): a short tour of the server, then what Kira does, by topic. Channels are written as
+// #names; linkify() makes them mentions for Discord, the server guide keeps them as text.
+export const HELP_TITLE = "👋 I'm Kira, Horizon's front desk";
+const HELP = [
+  '**The server in short**: #welcome (your roles) · #rules · #faq · #horizon-info (what Horizon is, the download) · #announcements\n'
+    + '• need help (it won\'t start, it\'s slow, sign-in, multiplayer)? #horizon-support · a bug you can make happen again? #horizon-bugs · an idea? #horizon-ideas\n'
+    + '• talk: #horizon-chat (Horizon), #general (anything else), your language in 🌍 languages · show what you made: #showcase\n'
+    + '• what changed: #updates · new versions: #releases · questions: mention me anywhere · the mods: DM me',
+  `**The hub**: ${LINKS.hub} has the roadmap, the kanban, the journal and how to help. I do the same things here, as commands or as \`@Kira <verb>\`:`,
+  '• Need help? A post in #horizon-support: I give a first answer, 🤝 Support helps',
+  '• `/report`: a bug, as a form; it becomes a post in #horizon-bugs and a GitHub issue, and you are pinged there when it is answered or fixed',
+  '• an idea: a post in #horizon-ideas, with its template; it goes to the suggestion queue the maintainers read',
+  '• `/roadmap` (`area:` for one area in full): the whole roadmap, what is being built, what is next',
+  '• `/claim <issue>` before you start, `/unclaim` · `/status`: your claims and reports, an issue, a roadmap item, or set what you are on',
+  '**Contributing**: `/goodfirst` · `/working` · `/board` · `/mytasks` · `/link-github` (`credit:True` lists you on the hub) · `/verify-github` proves the account is yours, and with a merged PR it gives you 🛠️ Contributor · `/notify` DMs when CI fails · `/agent connect` gives your AI coding agent the board (setup in #horizon-info). Maintainers: `/move`.',
+  '**Horizon**: `/horizon` what it is and where to get it · `/links` · `/sponsor github:<you>`: you sponsor Horizon on GitHub? Get 💚 Sponsor',
+  '**You**: `/rank`, `/leaderboard`, `/remind`, `/userinfo`, `/avatar`, `/room` (your own voice channel: join ➕ create your room).',
+  '**Help run the server**: `/apply` for 🤝 Support, 🛡️ Mod or 🌌 Horizon Team.',
+  '**The mods**: DM me to reach them privately, `/report-member` or right-click a message → Apps → Report to mods. `/modmail`.',
+].join('\n\n');
+export const helpText = (state) => linkify(HELP, state);
+
+// The server guide, one of the sources Kira's AI answers from (src/ai.js): what the server is, every channel and what
+// it's for (forums with their how-to-post guide and template), the roles, the rules and /help. Built from this repo's
+// config, so it is always there and never costs a GitHub call. Plain text: channels as #names.
+export function serverGuideText() {
+  const channel = (c) => {
+    if (c.type === 'voice') return `- ${c.name} (voice)${c.lobby ? ': join it and Kira makes you your own voice room (`/room` to lock, invite, rename it)' : c.locked ? ': nobody joins by themselves; a mod moves people in' : ''}`;
+    const who = c.readonly ? ' Only the staff and Kira post here.' : c.writers ? ' Everyone reads; only the roles that may write post.' : c.members ? ' Only its members see it.' : '';
+    const topic = (c.topic ?? '').replace(/([^.!?])$/, '$1.');
+    const lines = [`- #${c.name}${c.type === 'forum' ? ' (forum: one post per topic)' : ''}: ${topic}${who}`];
+    if (c.guide) lines.push(`  How to post (${HOWTO.name}, pinned at the top): ${c.guide}`);
+    if (c.template) lines.push(`  Template: ${c.template.replace(/\*\*/g, '').replace(/\n/g, ' | ')}`);
+    return lines.join('\n');
+  };
+  const categories = LAYOUT.map((g) => (g.staff
+    ? `### ${g.category}\nOnly the mods, the Horizon Team and Kira see these: ${g.channels.map((c) => `#${c.name}`).join(', ')}. Members reach the mods by DMing Kira.`
+    : `### ${g.category}\n${g.channels.map(channel).join('\n')}`));
+  const levels = ROLES.filter((r) => r.level);
+  const roles = [
+    ...ROLES.filter((r) => r.about).reverse().map((r) => `- ${r.name}: ${r.about}`),
+    `- ${levels.map((r) => r.name).join(', ')}: come by themselves with levels (XP for talking, once a minute, and for time in voice with others; \`/rank\`).`,
+  ];
+  return [
+    "# Horizon's Discord server",
+    WELCOME.description,
+    '## Channels, by category',
+    ...categories,
+    '## Roles, highest first',
+    ...roles,
+    '## Rules (#rules)',
+    RULES.map(([title, text], i) => `${i + 1}. ${title}: ${text}`).join('\n'),
+    RULES_FOOTER,
+    "## Kira's /help",
+    HELP,
+    `## ${OFFICIAL_SERVER.name} (#official-server)`,
+    [OFFICIAL_SERVER.description, `Address: ${OFFICIAL_SERVER.address}.`, OFFICIAL_SERVER.join, OFFICIAL_SERVER.problems].join(' '),
+  ].join('\n\n');
 }

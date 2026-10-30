@@ -53,32 +53,34 @@ export const agentSnippets = (url, token) => [
 ].join('\n');
 
 // Roles, from lowest to highest. `self`: members can pick it (Onboarding and the buttons in #welcome).
-// `was`: the key it had before, so setup renames the role instead of making a new one.
+// `was`: the key it had before, so setup renames the role instead of making a new one. `about`: what it is and how
+// you get it, for Kira's AI answers (the server guide, src/texts.js); level roles share one line there.
 export const ROLES = [
-  { key: 'releases', name: '📦 Releases', color: 0x5aa9ff, self: true, label: 'Every release' },
-  { key: 'horizon', name: '📣 Big news', color: COLOR, self: true, label: 'Big news' },
+  { key: 'releases', name: '📦 Releases', color: 0x5aa9ff, self: true, label: 'Every release', about: 'pinged for every new Horizon version and launcher in #releases. A button in #welcome.' },
+  { key: 'horizon', name: '📣 Big news', color: COLOR, self: true, label: 'Big news', about: 'pinged for big Horizon news in #announcements. A button in #welcome.' },
   // Not key 'videos': that is the old role of the all-projects server (🔔 Videos), in RETIRED_ROLES, which setup
   // deletes by key when nobody holds it. Pinged by every post of src/videos.js.
-  { key: 'newvideos', name: '🎬 Videos', color: 0xff4d4d, self: true, label: 'New videos' },
+  { key: 'newvideos', name: '🎬 Videos', color: 0xff4d4d, self: true, label: 'New videos', about: "pinged for Ludovic's new videos in #ludovic-videos. A button in #welcome." },
   // Not a role to pick: a merged PR in Horizon, verified with /verify-github (src/features/contributors.js). It opens #contributors.
-  { key: 'contributor', was: 'ai', name: '🛠️ Contributor', color: 0x9b7bff, self: false, label: 'Contributor' },
-  { key: 'modder', name: '🧩 Modder', color: 0x4cc38a, self: true, label: 'Modder' },
+  { key: 'contributor', was: 'ai', name: '🛠️ Contributor', color: 0x9b7bff, self: false, label: 'Contributor', about: 'for a merged pull request in Horizon, not a button: `/link-github`, then `/verify-github`. It lets you write in #contributors.' },
+  { key: 'modder', name: '🧩 Modder', color: 0x4cc38a, self: true, label: 'Modder', about: 'you make or use Horizon mods. A button in #welcome.' },
   { key: 'lvl5', name: 'lvl 5', color: 0x95a5a6, level: 5 },
   { key: 'lvl10', name: 'lvl 10', color: 0x7ed6df, level: 10 },
   { key: 'lvl20', name: 'lvl 20', color: 0x22a6b3, level: 20 },
   { key: 'lvl30', name: 'lvl 30', color: 0xf0932b, level: 30 },
   { key: 'lvl50', name: 'lvl 50', color: 0xeb4d4b, level: 50, hoist: true },
-  { key: 'booster', managed: 'premium_subscriber', name: '💎 Booster', color: 0xf47fff, hoist: true },
-  { key: 'tester', name: '🧪 Horizon Tester', color: 0xffd166, hoist: true },
+  { key: 'booster', managed: 'premium_subscriber', name: '💎 Booster', color: 0xf47fff, hoist: true, about: 'given by Discord to members who boost the server.' },
+  { key: 'tester', name: '🧪 Horizon Tester', color: 0xffd166, hoist: true, about: 'given by the staff by hand.' },
   // Given by Ludovic by hand. 💚 Sponsor: who sponsors Horizon (Sculk Hosting's owner, 2026-10-27).
-  { key: 'sponsor', name: '💚 Sponsor', color: 0x2ecc40, hoist: true },
+  { key: 'sponsor', name: '💚 Sponsor', color: 0x2ecc40, hoist: true, about: 'for sponsors of Horizon on GitHub: `/sponsor github:<you>`. Every way to support Horizon is in #support-horizon.' },
   // Ludovic, 2026-10-30: members who help players in #horizon-support. No permission of its own: it answers anywhere in
   // that forum and manages its posts (the solved tag, closing) there only (`helpers` in LAYOUT). Given through /apply.
-  { key: 'support', name: '🤝 Support', color: 0x1abc9c, hoist: true, label: 'Support' },
+  { key: 'support', name: '🤝 Support', color: 0x1abc9c, hoist: true, label: 'Support', about: 'members who help players in #horizon-support: they answer every post there and mark it solved. `/apply` for it.' },
   {
     // No kick or ban (dezer-x in #horizon-team, 2026-10-29: a rogue mod could ban people for no reason): mods time
     // out and delete; a ban goes through the Team.
     key: 'mod', name: '🛡️ Mod', color: 0x2ecc71, hoist: true,
+    about: 'the moderators: they time out members and delete messages (bans go through the Horizon Team). `/apply` for it.',
     permissions: ['ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps'],
   },
   // The core contributors who review and merge (GitHub team horizon-team). Ludovic, 2026-10-28: they moderate too, with
@@ -86,9 +88,10 @@ export const ROLES = [
   // #horizon-team.
   {
     key: 'team', name: '🌌 Horizon Team', color: 0x9b59b6, hoist: true,
+    about: "Horizon's maintainers and core contributors: they review and merge, and moderate too. `/apply` for it.",
     permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps'],
   },
-  { key: 'owner', name: '👑 ludovic', color: 0xf2a33a, hoist: true, owner: true },
+  { key: 'owner', name: '👑 ludovic', color: 0xf2a33a, hoist: true, owner: true, about: "Ludovic, who started Horizon and owns the server." },
 ];
 
 // Roles of the old, all-projects server. Setup deletes each one nobody holds; one a member holds stays
@@ -488,7 +491,7 @@ export const MOD = {
   // No slowmode (Ludovic, 2026-10-28): none set (`slowmode` in LAYOUT would set one), none added when busy.
   // [[messages per minute, seconds of slowmode], …] turns the automatic one on.
   autoSlowmode: [],
-  // Piracy (rule 3): a Discord AutoMod rule blocks these and alerts #mod-chat; mods and the Horizon Team are exempt
+  // Piracy (rule 3): a Discord AutoMod rule blocks these and alerts #mod-log; mods and the Horizon Team are exempt
   // (src/automod.js). `keywords` use Discord's wildcards (`word`: the whole word, `word*`: a word that starts with it,
   // `*word*`: anywhere). `patterns` are the Rust regexes Discord runs (10 at most, no lookaround), written so JavaScript
   // reads them the same: test/automod.test.js checks what they catch and what they must not. "crack" and "cracked"

@@ -1,21 +1,66 @@
-// Unit tests for the AutoMod rules (src/automod.js): the piracy list catches piracy and leaves ordinary talk alone.
+// Unit tests for the AutoMod rules (src/automod.js): the piracy and Telegram lists catch what they should and leave
+// ordinary talk alone; every rule alerts #mod-log.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { automodRules, keywordRegex, patternRegex, piracyMatch } from '../src/automod.js';
+import { automodRules, keywordRegex, patternRegex, piracyMatch, telegramMatch, TELEGRAM_PATTERNS, TELEGRAM_MESSAGE } from '../src/automod.js';
 import { MOD } from '../src/config.js';
 
-const ids = { modlog: '1', modchat: '2', mod: '3', team: '4' };
+const ids = { modlog: '1', mod: '3', team: '4' };
 
-test('automod: the piracy rule blocks, alerts #mod-chat and exempts the mods and the Horizon Team', () => {
+test('automod: the piracy rule blocks, alerts #mod-log and exempts the mods and the Horizon Team', () => {
   const rules = automodRules(ids);
   assert.equal(new Set(rules.map((r) => r.name)).size, rules.length, 'names are how setup finds a rule again');
   const piracy = rules.find((r) => r.name === 'Kira · piracy');
   assert.deepEqual(piracy.exemptRoles, ['3', '4']);
   assert.equal(piracy.actions[0].metadata.customMessage, MOD.piracy.message);
-  assert.equal(piracy.actions[1].metadata.channel, '2');
+  assert.equal(piracy.actions[1].metadata.channel, '1');
   assert.ok(MOD.piracy.message.length <= 150, "Discord's limit for a block message");
-  // The other rules still alert #mod-log.
-  assert.equal(rules.find((r) => r.name === 'Kira · spam').actions[1].metadata.channel, '1');
+});
+
+test('automod: every rule that alerts, alerts #mod-log (#mod-chat is for the mods talking)', () => {
+  const alerts = automodRules({ ...ids, modchat: '2' }).flatMap((r) => r.actions.filter((a) => a.type === 2));
+  assert.ok(alerts.length >= 5);
+  for (const a of alerts) assert.equal(a.metadata.channel, '1');
+});
+
+test('automod: the Telegram rule blocks naming the rules, alerts #mod-log, times out for an hour, exempts staff', () => {
+  const tg = automodRules(ids).find((r) => r.name === 'Kira · telegram links');
+  assert.equal(tg.triggerType, 1, 'a keyword rule (the only kind that can time out besides mention spam)');
+  assert.deepEqual(tg.triggerMetadata.regexPatterns, TELEGRAM_PATTERNS);
+  assert.deepEqual(tg.exemptRoles, ['3', '4']);
+  const [block, alert, timeout] = tg.actions;
+  assert.equal(block.type, 1);
+  assert.equal(block.metadata.customMessage, TELEGRAM_MESSAGE);
+  assert.match(TELEGRAM_MESSAGE, /rule 2 and 4/);
+  assert.ok(TELEGRAM_MESSAGE.length <= 150);
+  assert.equal(alert.type, 2);
+  assert.equal(alert.metadata.channel, '1');
+  assert.equal(timeout.type, 3);
+  assert.equal(timeout.metadata.durationSeconds, 3600);
+  assert.ok(TELEGRAM_PATTERNS.length <= 10);
+  for (const p of TELEGRAM_PATTERNS) {
+    assert.ok(p.length <= 260 && p.startsWith('(?i)') && !/\(\?<?[=!]/.test(p), p);
+  }
+});
+
+const TELEGRAM = [
+  'join https://t.me/freestuff', 't.me/joinchat/AAAAAEj', 'http://t.me/+AbCdEf123', 'T.ME/somechannel', 'www.telegram.me/someone',
+  'telegram.me/joinchat/xyz', 'https://telegram.dog/cheats', 'telegram.org/joinchat/abc', 'open tg://join?invite=abc',
+  'tg://resolve?domain=x', 't . me/channel', 't .me/channel', 't[.]me/channel', 't(.)me/channel', 't [dot] me/channel',
+  't dot me/channel', 't.me / channel', 'telegram . me/channel', 'telegram[.]org/x', 'go to (t.me/abc)',
+];
+const NOT_TELEGRAM = [
+  'tme', 'telegraph', 'the telegraph article', 'meet.me/abc', 'https://meet.me/room', 'about.me/ludovic', 'it.me/x',
+  'let me/us know', 'is t.me a thing?', 'I use telegram', 'telegram is blocked here', 'what time is it', 'art.me/gallery',
+  'tg is short for telegram', 'the tgx file', 'https://playhorizon.dev/hub', 'just.me/abc', 'smart.me/x',
+];
+
+test('automod: the Telegram rule catches t.me, telegram.me/.dog/.org, tg:// and spaced or written-out dots', () => {
+  for (const text of TELEGRAM) assert.ok(telegramMatch(text), `should block: ${text}`);
+});
+
+test('automod: the Telegram rule leaves "tme", "telegraph", meet.me and talk about Telegram alone', () => {
+  for (const text of NOT_TELEGRAM) assert.equal(telegramMatch(text), null, `should pass: ${text}`);
 });
 
 test("automod: the piracy list fits Discord's limits and reads the same in Rust and JavaScript", () => {

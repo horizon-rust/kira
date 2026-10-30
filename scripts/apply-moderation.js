@@ -30,7 +30,7 @@ client.once('clientReady', async () => {
     const state = { channels: {} };
     for (const spec of specs) { const ch = byName(spec); if (ch) state.channels[spec.key] = ch.id; }
     const role = (key) => roles.find((r) => r.name === ROLES.find((x) => x.key === key).name)?.id;
-    const ids = { modlog: state.channels.modlog, modchat: state.channels.modchat, mod: role('mod'), team: role('team') };
+    const ids = { modlog: state.channels.modlog, mod: role('mod'), team: role('team') };
     if (Object.values(ids).some((v) => !v)) throw new Error(`missing: ${Object.keys(ids).filter((k) => !ids[k]).join(', ')}`);
 
     for (const spec of specs.filter((c) => c.slowmode !== undefined)) {

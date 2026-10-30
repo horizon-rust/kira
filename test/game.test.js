@@ -46,6 +46,7 @@ test("AutoMod's piracy and scam rules apply in game too", () => {
   assert.ok(g.blockedBy('where do I get tlauncher'));
   assert.ok(g.blockedBy('free nitro for everyone'));
   assert.ok(g.blockedBy('cracked minecraft download?'));
+  assert.ok(g.blockedBy('join t.me/somewhere'));
   assert.equal(g.blockedBy("why can't I break this block"), null);
   assert.equal(g.blockedBy('crackers and cracked deepslate'), null);
   assert.equal(g.gameReply('Try tlauncher instead.'), null);

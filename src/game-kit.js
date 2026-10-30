@@ -1,7 +1,7 @@
 // Kira in a Minecraft server's chat (POST /game/ask, src/features/game.js): the rules her answers follow there, the
 // checks on what a player asks and what she says back. No network, no Discord: tested in test/game.test.js.
 import { RULES, checkReply } from './ai-kit.js';
-import { piracyMatch, patternRegex, SCAM_PATTERNS } from './automod.js';
+import { piracyMatch, telegramMatch, patternRegex, SCAM_PATTERNS } from './automod.js';
 
 export const GAME = {
   maxReply: 256, // one Minecraft chat message
@@ -35,9 +35,9 @@ export function parseAsk(text) {
 // A Minecraft name: 3 to 16 letters, digits or underscores.
 export const validPlayer = (name) => typeof name === 'string' && /^[A-Za-z0-9_]{3,16}$/.test(name);
 
-// What Discord's AutoMod would block in this text (Kira's rules for piracy, invites and scams), or null.
+// What Discord's AutoMod would block in this text (Kira's rules for piracy, invites and scams, Telegram links), or null.
 export function blockedBy(text) {
-  return piracyMatch(text) ?? SCAM_PATTERNS.find((p) => patternRegex(p).test(text)) ?? null;
+  return piracyMatch(text) ?? SCAM_PATTERNS.find((p) => patternRegex(p).test(text)) ?? telegramMatch(text);
 }
 
 const LINK = /\b(?:https?:\/\/|www\.)[^\s]+|\b(?:[a-z0-9-]+\.)+(?:gg|com|net|org|io|dev|xyz|me|co|link|ly|ru|cn|tk|gl)(?:\/\S*)?/gi;

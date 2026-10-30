@@ -313,7 +313,7 @@ async function posts(guild) {
   save();
 }
 
-const automod = (guild) => applyAutomod(guild, { modlog: state.channels.modlog, modchat: state.channels.modchat, mod: state.roles.mod, team: state.roles.team }, log);
+const automod = (guild) => applyAutomod(guild, { modlog: state.channels.modlog, mod: state.roles.mod, team: state.roles.team }, log);
 
 async function onboarding(guild) {
   let n = 0;
