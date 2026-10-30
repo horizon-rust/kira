@@ -79,7 +79,10 @@ export function sweep(store, now = Date.now()) {
   const old = Object.values(store.data.applications).filter((a) => FINAL.includes(a.status) && a.decidedAt < now - RETENTION_DAYS * auth.DAY && a.answers);
   if (!old.length) return 0;
   store.update((d) => {
+    const ids = new Set(old.map((a) => a.id));
     for (const a of old) d.applications[a.id] = { id: a.id, user: a.user, role: a.role, status: a.status, decidedAt: a.decidedAt };
+    // The audit log keeps every entry, but a ballot's comment goes with the answers (the privacy page says so).
+    for (const e of d.audit ?? []) if (ids.has(e.app) && 'comment' in e) delete e.comment;
   });
   return old.length;
 }
