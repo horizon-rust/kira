@@ -488,3 +488,11 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   `ls -l /data/staff-backups/` and `cp /data/staff-backups/staff-<date>.json /data/staff.json`, then restart the
   service (`railway redeploy --service kira` or the dashboard). Everything since that copy is lost (sessions,
   decisions, applications), and members whose password was set later need a new link.
+- **Getting in**: `/staff password` (Team and Mods; `member:` sends it to another of them) DMs a one-time link
+  `playhorizon.dev/staff/setup#…`; the username is the Discord username. Losing the role, or leaving, removes the
+  password and ends the sessions at once (and at start, for what happened while Kira was away).
+- **Counters** ([`src/staff-counters.js`](src/staff-counters.js)): per day, counts only (messages, distinct authors,
+  joins, leaves, reports, mod-mail threads, warns, timeouts, kicks, bans, AutoMod blocks), 120 days kept.
+- **Variables**: `STAFF_PROXY_KEY` (the same secret as the site's, `op://Agents/Horizon staff proxy key/credential`;
+  unset: no `/staff/api` routes at all), `STAFF_SITE_URL` (default `https://playhorizon.dev`: the Origin writes must
+  come from, and the links' host), `KIRA_STAFF` (the file).
