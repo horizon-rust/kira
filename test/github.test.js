@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeGitHub, makePublicGitHub, _budget, _appBudget, _anonBudget, KEEP, FLOOR, PUBLIC_KEEP } from '../src/github.js';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { makeGitHub, makePublicGitHub, persistEtags, _budget, _appBudget, _anonBudget, KEEP, FLOOR, PUBLIC_KEEP } from '../src/github.js';
 import { appToken, githubToken } from '../src/github-app.js';
 
 // A fake GitHub: answers 304 when the request's If-None-Match matches the path's current ETag.
@@ -124,4 +127,63 @@ test('public reads: without the App, tokenless; appToken never gives GITHUB_TOKE
   await makePublicGitHub({ appToken: appToken(env), fetchImpl: headersOf(calls) }).get('/a');
   assert.deepEqual(calls, ['none']);
   _anonBudget.remaining = Infinity;
+});
+
+test('the ETag cache survives a restart: a new client sends If-None-Match on its first GET and a 304 returns the saved body', async () => {
+  _budget.remaining = Infinity;
+  const file = join(mkdtempSync(join(tmpdir(), 'kira-etags-')), 'github-etags.json');
+  const f = fakeGitHub();
+  const before = persistEtags(file);
+  const gh = makeGitHub({ token: 't', fetchImpl: f.fetchImpl });
+  const first = await gh.get('/a');
+  before.save();
+  before.stop(); // the process ends here
+
+  const after = persistEtags(file);
+  const fresh = makeGitHub({ token: 't', fetchImpl: f.fetchImpl }); // made after the load
+  assert.deepEqual(await fresh.get('/a'), first);
+  assert.deepEqual(f.calls.map((c) => c[2]), [null, '"1"']);
+  // Another identity has its own entries: the tokenless client got nothing from the user's list.
+  const anon = makeGitHub({ fetchImpl: f.fetchImpl });
+  await anon.get('/a');
+  assert.equal(f.calls.at(-1)[2], null);
+  after.stop();
+});
+
+test('a client made before the load is seeded too; a changed ETag still brings the new body', async () => {
+  _budget.remaining = Infinity;
+  const file = join(mkdtempSync(join(tmpdir(), 'kira-etags-')), 'github-etags.json');
+  writeFileSync(file, JSON.stringify({ user: [['/a', { etag: '"1"', body: { saved: true } }]] }));
+  const f = fakeGitHub();
+  const gh = makeGitHub({ token: 't', fetchImpl: f.fetchImpl }); // at import time, before bot.js loads the file
+  const p = persistEtags(file);
+  assert.deepEqual(await gh.get('/a'), { saved: true });
+  f.etags['/a'] = '"2"';
+  assert.equal((await gh.get('/a')).n, 2);
+  p.stop();
+});
+
+test('a missing or corrupt ETag file is an empty cache, not a crash; huge bodies are not saved', async () => {
+  _budget.remaining = Infinity;
+  const dir = mkdtempSync(join(tmpdir(), 'kira-etags-'));
+  const logs = [];
+  for (const [name, text] of [['missing.json', null], ['corrupt.json', '{"user": [[['], ['wrong.json', '{"user":"x","app":[1,null,["/a",{}]]}']]) {
+    const file = join(dir, name);
+    if (text != null) writeFileSync(file, text);
+    const f = fakeGitHub();
+    const p = persistEtags(file, { log: (...a) => logs.push(a.join(' ')) });
+    const gh = makeGitHub({ token: 't', fetchImpl: f.fetchImpl });
+    await gh.get('/a');
+    assert.equal(f.calls[0][2], null);
+    p.save();
+    p.stop();
+  }
+  assert.equal(logs.filter((l) => /not read/.test(l)).length, 1); // the corrupt file; a missing one is silent
+  const big = join(dir, 'big.json');
+  const p = persistEtags(big);
+  const gh = makeGitHub({ token: 't', fetchImpl: async () => new Response(JSON.stringify({ x: 'y'.repeat(300_000) }), { status: 200, headers: { etag: '"big"' } }) });
+  await gh.get('/big');
+  p.save();
+  p.stop();
+  assert.deepEqual(JSON.parse(readFileSync(big, 'utf8')).user.filter(([path]) => path === '/big'), []);
 });

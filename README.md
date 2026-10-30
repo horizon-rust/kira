@@ -341,7 +341,7 @@ body `{ "player": "<Minecraft name>", "question": "kira why …" }` (the `kira`/
 ## Hosting (Railway)
 
 Kira runs on Railway (project **kira**, service **kira**, volume `kira-data` at `/data`: `state.json`,
-`board.json`, `agents.json`, `seal-key.pem`, `ai-sources.json`), built from this repo's `Dockerfile` on every push to `main`.
+`board.json`, `agents.json`, `seal-key.pem`, `ai-sources.json`, `github-etags.json`: the GitHub clients' ETag caches, saved every 5 minutes and on SIGTERM so a deploy starts with conditional reads; `KIRA_GITHUB_ETAGS`), built from this repo's `Dockerfile` on every push to `main`.
 Variables: `KIRA_STATE=/data/state.json`, `DISCORD_TOKEN_SEALED`, `GITHUB_TOKEN_SEALED`, `GITHUB_APP_ID` +
 `GITHUB_APP_PRIVATE_KEY_SEALED` (the GitHub App kira-horizon: Kira's own hour of calls; `/sponsor` keeps
 `GITHUB_TOKEN`; key in 1Password `GitHub App Kira`, a document: `op document get`),
