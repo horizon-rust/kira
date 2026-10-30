@@ -237,7 +237,7 @@ const MISSING_TEXT = { version: 'the Horizon version (or the launcher version)',
 export const missingAsk = (missing) => `To help fix it, could you add: ${missing.map((m) => MISSING_TEXT[m]).join(', ')}? Your replies in this post are added to the issue.`;
 
 // ── Moderation in every language (src/features/moderation.js) ────────────────
-// Messages in the 🌍 languages channels, #off-topic, and non-English messages anywhere are read by one cheap call per
+// Messages in the 🌍 languages channels, #horizon-chat, #general, and non-English messages anywhere are read by one call per
 // batch. The model only judges and translates: code decides what happens, and only "remove" with one of the clear
 // categories deletes anything. checkModeration() rejects the whole batch on any doubt, and then nothing happens.
 

@@ -91,9 +91,9 @@ test('the Horizon-only layout: #updates replaces the board channels, the old sco
   assert.equal(horizon.channels.find((c) => c.key === 'updates').readonly, true);
   for (const r of REPLACED) {
     assert.ok(!LAYOUT.some((g) => g.channels.some((c) => c.key === r.key)), `${r.key} is replaced but in the layout`);
-    assert.ok(keys.includes(r.by), `${r.key} is replaced by ${r.by}, which is not in the layout`);
+    assert.ok(LAYOUT.some((g) => g.channels.some((c) => c.key === r.by)), `${r.key} is replaced by ${r.by}, which is not in the layout`);
   }
-  assert.deepEqual(REPLACED.map((r) => r.name), ['work-board', 'dev-log']);
+  assert.deepEqual(REPLACED.map((r) => r.name), ['work-board', 'dev-log', 'off-topic']);
   assert.ok(!LAYOUT.some((g) => g.archive), 'no archive category: the old channels were deleted');
   const live = LAYOUT.flatMap((g) => g.channels.map((c) => c.key));
   for (const k of ['projects', 'resources', 'feedback', 'communityprojects', 'help', 'hire', 'beats', 'collabs', 'trackposts']) assert.ok(!live.includes(k), `${k} is back in the layout`);

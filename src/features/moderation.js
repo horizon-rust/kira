@@ -252,7 +252,7 @@ async function moderate(msg) {
 }
 
 // ── The AI check, in every language ─────────────────────────────────────────
-// What the filters let through in the 🌍 languages channels, in AI.modChannels (#off-topic), and non-English messages
+// What the filters let through in the 🌍 languages channels, in AI.modChannels (#horizon-chat, #general), and non-English messages
 // anywhere is read by Haiku (src/features/ai.js moderateBatch: same client and daily budget as Kira's answers), in
 // batches per channel. "remove" (only clear cases: slurs, hate, threats, sexual content, doxxing, scams, targeted
 // harassment) deletes the message, posts the usual short note in the member's language and logs it; from the second
@@ -296,7 +296,7 @@ export function looksNonEnglish(text) {
   return other >= 2 && other > words.filter((w) => ENGLISH_WORDS.has(w)).length;
 }
 
-// Why the AI check reads this message: a LAYOUT key (a language channel, #off-topic), 'non-english', or null. Staff,
+// Why the AI check reads this message: a LAYOUT key (a language channel, #general), 'non-english', or null. Staff,
 // bots and messages without letters are never read.
 export function aiScope(msg, st = state) {
   if (!msg.member || isStaff(msg.member) || msg.author?.bot || msg.guildId !== GUILD_ID) return null;

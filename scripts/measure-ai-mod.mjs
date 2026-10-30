@@ -1,5 +1,5 @@
 // Measures what the AI moderation check costs (src/features/moderation.js) on real messages: reads the latest messages
-// of the 🌍 languages channels and #off-topic (read-only, Discord REST), groups them as the bot would (per channel,
+// of the 🌍 languages channels and #general (read-only, Discord REST), groups them as the bot would (per channel,
 // AI.modBatchMs apart, AI.modBatchMax at most), runs each batch through the real model call, and prints the cost per
 // message and the verdicts. Nothing is posted, deleted or saved.
 //
@@ -15,7 +15,7 @@ const discord = async (path) => {
   return res.json();
 };
 
-const names = new Set([...LAYOUT.find((g) => g.key === 'languages').channels.map((c) => c.name), 'off-topic']);
+const names = new Set([...LAYOUT.find((g) => g.key === 'languages').channels.map((c) => c.name), 'general']);
 const channels = (await discord(`/guilds/${GUILD_ID}/channels`)).filter((c) => c.type === 0 && names.has(c.name));
 let messages = [];
 for (const c of channels) {

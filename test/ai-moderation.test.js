@@ -18,7 +18,7 @@ const mod = await import('../src/features/moderation.js');
 const ai = await import('../src/ai.js');
 const kit = await import('../src/ai-kit.js');
 
-Object.assign(core.state.channels, { french: 'fr', offtopic: 'ot', horizonchat: 'hc', showcase: 'sc', modlog: 'ml', rules: 'rl' });
+Object.assign(core.state.channels, { french: 'fr', general: 'ot', horizonchat: 'hc', showcase: 'sc', modlog: 'ml', rules: 'rl' });
 const logs = [];
 core.client.channels.cache.set('ml', { send: async (m) => { logs.push(m.embeds[0].toJSON()); return m; } });
 core.client.channels.cache.set('fr', { messages: { delete: async (id) => { deleted.push(id); } } }); // the flood filter deletes by id
@@ -34,7 +34,7 @@ f._test.set({
 });
 const ok = { verdict: 'ok', category: 'other', rule: 0, reason: '', english: '', language: 'en' };
 
-const CHANNELS = { fr: 'français', ot: 'off-topic', hc: 'horizon-chat' };
+const CHANNELS = { fr: 'français', ot: 'general', hc: 'horizon-chat' };
 let n = 0;
 const sent = [];
 const timeouts = [];
@@ -132,10 +132,10 @@ test('the call: Haiku, the rules as the cached first block, member text as data,
 
 // ── The scope ────────────────────────────────────────────────────────────────
 
-test('the scope: the language channels, #off-topic and its threads, non-English anywhere; never staff, bots or messages without letters', () => {
+test('the scope: the language channels, #general and its threads, non-English anywhere; never staff, bots or messages without letters', () => {
   assert.equal(mod.aiScope(message('bonjour à tous')), 'french');
-  assert.equal(mod.aiScope(message('hello everyone', { channel: 'ot' })), 'offtopic');
-  assert.equal(mod.aiScope(message('hello everyone', { channel: 'thread1', parent: 'ot' })), 'offtopic');
+  assert.equal(mod.aiScope(message('hello everyone', { channel: 'ot' })), 'general');
+  assert.equal(mod.aiScope(message('hello everyone', { channel: 'thread1', parent: 'ot' })), 'general');
   assert.equal(mod.aiScope(message('привет, как дела у всех?', { channel: 'sc' })), 'non-english');
   assert.equal(mod.aiScope(message('je ne comprends pas pourquoi ça crash', { channel: 'sc' })), 'non-english');
   assert.equal(mod.aiScope(message('how do I change the render distance?', { channel: 'sc' })), null);

@@ -159,7 +159,7 @@ export const LAYOUT = [
         key: 'showcase', was: 'videofeedback', name: 'showcase', type: 'forum', gallery: true, reaction: '🔥', react: ['🔥'],
         topic: 'Your Horizon creations: YouTube videos, clips, screenshots, builds, worlds, redstone, benchmarks. One post each, with the template.',
         tags: [['🎬', 'video'], ['📸', 'screenshot'], ['🏰', 'build'], ['🎞️', 'clip'], ['🔴', 'redstone'], ['🌍', 'world'], ['⚡', 'benchmark'], ['🧩', 'mod'], ['⭐', 'featured', true]],
-        guide: 'Show what you made **in Horizon**: a video, a clip, screenshots, a build, a benchmark. One post per creation (updates go in your own post), one new post every hour at most. Your own YouTube videos about Horizon are welcome here: this is the place for them. A screenshot, a video or a link is required. Content that isn\'t about Horizon goes in #off-topic.',
+        guide: 'Show what you made **in Horizon**: a video, a clip, screenshots, a build, a benchmark. One post per creation (updates go in your own post), one new post every hour at most. Your own YouTube videos about Horizon are welcome here: this is the place for them. A screenshot, a video or a link is required. Content that isn\'t about Horizon goes in #general.',
         template: '**What it is:**\n**Horizon version:** release or commit (optional)\n+ a screenshot, a video or a link',
         check: { media: true, needs: [['What it is', /what it is|\bwhat\b|\bthis\b/i]] },
       },
@@ -181,11 +181,10 @@ export const LAYOUT = [
   {
     key: 'general', category: '💬 general',
     channels: [
-      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything. English please, so everyone can follow; other languages have their own channels in 🌍 languages, and #off-topic takes any language. Horizon talk is welcome here too.' + CLEARED },
+      // Ludovic, 2026-10-30: #off-topic merged into #general (REPLACED): one chat for anything.
+      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything: other games, music, AI coding, life. Horizon talk is welcome too, though #horizon-chat is its home. English please, so everyone can follow; other languages have their own channels in 🌍 languages.' + CLEARED },
       { key: 'introductions', name: 'introductions', type: 'text', pin: 'intro', topic: 'Say hi once, with the template in the pinned message. One introduction per person.' },
       { key: 'halloffame', name: 'hall-of-fame', type: 'text', readonly: true, topic: 'Messages that got 5 ⭐. React ⭐ to a message you love to send it here.' },
-      // Ludovic kept these two in 💬 general (2026-10-28: he deleted the 🗄️ archive category setup had just made for them).
-      { key: 'offtopic', name: 'off-topic', type: 'text', topic: "Everything that isn't Horizon: other games, music, AI coding, Ludovic's other projects, life. Any language." },
       { key: 'memes', name: 'memes', type: 'text', topic: 'Memes and funny stuff (Minecraft ones welcome). SFW only. No XP here.' },
       { key: 'botcommands', name: 'bot-commands', type: 'text', topic: 'Use Kira here: /rank, /leaderboard, /working, /remind, /userinfo… Level-ups are announced here. No XP here.' },
     ],
@@ -236,11 +235,12 @@ export const LAYOUT = [
 export const HOWTO = { name: '📌 How to post here: read me first', tag: ['📌', 'read me', true], mention: 'the 📌 **How to post here** post' };
 
 // What everyone sees in the channel list from the start; the Onboarding answers add the rest.
-export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'officialserver', 'horizonchat', 'contributors', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'offtopic', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'polish', 'turkish', 'chinese', 'japanese'];
+export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'officialserver', 'horizonchat', 'contributors', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'polish', 'turkish', 'chinese', 'japanese'];
 
-// Replaced by another channel (2026-10-25: #updates replaces #work-board and #dev-log). Setup exports every message of
-// each one to scratch/ (not committed), then deletes it; if the export fails, the channel stays.
-export const REPLACED = [{ key: 'workboard', name: 'work-board', by: 'updates' }, { key: 'devlog', name: 'dev-log', by: 'updates' }];
+// Replaced by another channel (2026-10-25: #updates replaces #work-board and #dev-log; 2026-10-30: #general replaces
+// #off-topic). Setup exports every message of each one, with its attachments, to scratch/ (not committed), then deletes
+// it; if the export fails, the channel stays.
+export const REPLACED = [{ key: 'workboard', name: 'work-board', by: 'updates' }, { key: 'devlog', name: 'dev-log', by: 'updates' }, { key: 'offtopic', name: 'off-topic', by: 'general' }];
 
 // Deleted by setup when no member ever wrote in them (empty channels of the old scope).
 export const RETIRED = ['tracks', 'chill', 'aicoding', 'rewrites', 'coding', 'creatorschat', 'editing', 'musicchat', 'studio'];
@@ -325,7 +325,7 @@ export const ONE_OFFS = [
       description: [
         'From today this Discord is the home of **Horizon**, Minecraft Java Edition rewritten in Rust: playing it, bugs, ideas, releases, and who is building what.',
         '',
-        'The channels about my other projects, music and AI coding are gone: those topics are welcome in #off-topic.',
+        'The channels about my other projects, music and AI coding are gone: those topics are welcome in #general.',
         '',
         `**Get Horizon:** ${LINKS.horizonSite} · [the launcher](${LINKS.horizonLauncher}) · [GitHub](${LINKS.horizon})`,
         '**Found a bug?** #horizon-bugs · **An idea?** #horizon-ideas · **Made something in it?** #showcase',
@@ -501,7 +501,7 @@ export const WELCOME = {
     '👋 **start here**: #horizon-info (what it is, **the download**), #faq, #rules, #announcements',
     '🌅 **horizon**: #horizon-bugs, #horizon-ideas, #horizon-chat, #showcase (your videos, screenshots, builds), #releases, #updates (what changed)',
     '🛠️ **contributing**: #contributors (read by all, written by people with a merged PR)',
-    '💬 **general**: chat, introductions, memes, the #hall-of-fame. Anything that isn\'t Horizon (other games, music, AI coding, Ludovic\'s other projects) goes in #off-topic.',
+    '💬 **general**: #general for anything (other games, music, AI coding, life), introductions, memes, the #hall-of-fame.',
     '🌍 **languages**: #русский, #español, #português, #français, #deutsch, #polski, #türkçe, #中文, #日本語',
     '🔊 **voice**: join **➕ create your room** for your own voice channel',
     '',
@@ -521,13 +521,13 @@ export const WELCOME = {
 
 export const RULES = [
   ['Be respectful', 'No harassment, hate speech, slurs, threats or personal attacks. Critique the work, never the person.'],
-  ['No spam, no ads', 'No floods, no copy-pasted messages, no mass mentions, no unsolicited DMs. No ads for other servers, projects or products. Your own Horizon videos, screenshots and builds are welcome in #showcase; anything that isn\'t about Horizon goes in #off-topic.'],
+  ['No spam, no ads', 'No floods, no copy-pasted messages, no mass mentions, no unsolicited DMs. No ads for other servers, projects or products. Your own Horizon videos, screenshots and builds are welcome in #showcase; anything that isn\'t about Horizon goes in #general.'],
   ['No piracy, no leaks', "Don't share or ask for game files, cracked launchers, accounts, leaked code or keys. Horizon needs your own legal copy of Minecraft: Java Edition, and it ships none of Mojang's files."],
   ['No scams or malware', 'No phishing, fake "free Nitro", or executables. Accounts younger than 3 days can\'t post links. Download Horizon only from playhorizon.dev or its GitHub releases.'],
   ['Keep it SFW', 'No NSFW, gore or shock content, anywhere: names, avatars and statuses included.'],
   ['Right channel, right format', 'Every channel says what it\'s for in its description. Bugs and ideas have a template in their 📌 How to post here post, pinned at the top: posts without it are closed after an hour.'],
   ['Contributing', 'Working on an issue? `/claim` it first, so two people don\'t do the same work. Pull requests go to github.com/horizon-rust/horizon.'],
-  ['English in the main channels', 'So everyone can follow. Any language is fine in #off-topic, and these have their own channels in 🌍 languages: #русский, #español, #português, #français, #deutsch, #polski, #türkçe, #中文, #日本語.'],
+  ['English in the main channels', 'So everyone can follow. These languages have their own channels in 🌍 languages: #русский, #español, #português, #français, #deutsch, #polski, #türkçe, #中文, #日本語.'],
   ['No drama with the mods in public', 'Disagree with a decision? DM Kira: it reaches the mods privately.'],
   ["Discord's rules apply", 'Follow the Discord Terms of Service and Community Guidelines (13+).'],
 ];
@@ -537,7 +537,7 @@ export const FAQ = [
   ['What is Horizon?', 'Minecraft: Java Edition rewritten from scratch in Rust, with AI agents, and checked against the real game with differential tests so it behaves exactly like vanilla. It uses the textures and sounds of your own copy of the game. More in #horizon-info.'],
   ['Where do I download it?', `Get the launcher from ${LINKS.horizonSite} (or the [launcher releases](${LINKS.horizonLauncher})). It installs Horizon and keeps it up to date. You need your own copy of Minecraft: Java Edition.`],
   ['Is it official?', 'No. Horizon is an unofficial fan project, not affiliated with, endorsed by or connected to Mojang Studios or Microsoft. It contains none of their code or files.'],
-  ['Where do I post…?', '• a bug → `/report` or #horizon-bugs · an idea → `/suggest` or #horizon-ideas (search first)\n• a video, clip, screenshot or build made in Horizon → #showcase\n• a question or just talking → #horizon-chat\n• anything that isn\'t Horizon (other games, music, AI coding, Ludovic\'s other projects) → #off-topic\n• your language → its channel in 🌍 languages\n• new versions → #releases · what changed → #updates'],
+  ['Where do I post…?', '• a bug → `/report` or #horizon-bugs · an idea → `/suggest` or #horizon-ideas (search first)\n• a video, clip, screenshot or build made in Horizon → #showcase\n• a question or just talking → #horizon-chat\n• anything that isn\'t Horizon (other games, music, AI coding, life) → #general\n• your language → its channel in 🌍 languages\n• new versions → #releases · what changed → #updates'],
   ['What is being worked on?', `The hub, ${LINKS.hub}: what is being done now, what comes next, the kanban and the journal, in simple or technical words. \`/roadmap\` (or \`@Kira roadmap\`) sums it up here.`],
   ['What happens to my bug report?', 'Kira sends it to GitHub as an issue and pings you in your post when a maintainer answers, and when it is fixed (with the release it ships in). `/status` lists your reports.'],
   ['What happens to my idea?', 'It goes to the suggestion queue the maintainers read. Good ones become items on the roadmap; nothing is published by itself. Ideas are not GitHub issues.'],
@@ -614,7 +614,7 @@ export const AI = {
   // 2026-10-28: "use Kira for it" rather than AutoMod regexes per language); KIRA_AI_MOD=0 turns it off for good,
   // `/kira-ai mod off` for now. Same daily budget as the answers.
   mod: !['0', 'off', 'false', 'no'].includes((process.env.KIRA_AI_MOD ?? '').trim().toLowerCase()),
-  modChannels: ['offtopic', 'horizonchat', 'general'], // every message there, any language (the busy English chats too:
+  modChannels: ['horizonchat', 'general'], // every message there, any language (the busy English chats:
   // #horizon-team, 2026-10-29: "horizon-chat is absolutely off the walls … political and racist")
   modBatchMs: 4_000, // messages of one channel arriving within this are read in one call
   modBatchMax: 10,

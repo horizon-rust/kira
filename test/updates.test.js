@@ -94,6 +94,22 @@ test('the export before a channel is deleted: every page, oldest first, JSON and
   assert.match(md, /pinned\n\nline 5\n\n\*\*To do\*\*\ncards/);
 });
 
+test('the export keeps the attachments as files (Discord\'s links expire); one that never downloads fails the export', async () => {
+  const att = new Map([['a1', { name: 'my shot.png', url: 'https://cdn.discordapp.com/x/my shot.png?ex=1' }]]);
+  const msgs = [{ id: '2000', createdTimestamp: Date.UTC(2026, 9, 30), author: { id: '8', username: 'sam', bot: false }, content: 'look', embeds: [], attachments: att, pinned: false }];
+  const channel = { id: '56', messages: { fetch: async () => new Map(msgs.map((m) => [m.id, m])) } };
+  const dir = mkdtempSync(join(tmpdir(), 'kira-export-'));
+  let tries = 0;
+  const get = async () => { if (tries++ === 0) throw new Error('timeout'); return Buffer.from('PNG'); }; // one retry
+  assert.equal(await archive.exportChannel(channel, 'off-topic', dir, get), 1);
+  const saved = JSON.parse(readFileSync(join(dir, 'off-topic.json'), 'utf8'));
+  assert.equal(saved.messages[0].attachments[0].file, join('off-topic-files', '2000-0-my_shot.png'));
+  assert.equal(readFileSync(join(dir, saved.messages[0].attachments[0].file), 'utf8'), 'PNG');
+  assert.match(readFileSync(join(dir, 'off-topic.md'), 'utf8'), /\[my shot\.png\]\(off-topic-files\/2000-0-my_shot\.png\)/);
+  const broken = mkdtempSync(join(tmpdir(), 'kira-export-'));
+  await assert.rejects(archive.exportChannel(channel, 'off-topic', broken, async () => { throw new Error('HTTP 404'); }), /attachment my shot\.png of message 2000: HTTP 404/);
+});
+
 test('the board summary at the top of #updates: posted and pinned once, then edited in place', async () => {
   const wb = await import('../src/features/workboard.js');
   core.client.user = { id: 'kira' };
