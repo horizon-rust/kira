@@ -57,7 +57,7 @@ test('bugs by area and by source; releases per week and their pace', () => {
 test('Discord activity and moderation from the daily counters; no Team data in the moderation stats', () => {
   const data = {
     counters: { '2026-10-29': { messages: 100, authors: 20, joins: 3, reports: 1, warns: 2 }, '2026-10-30': { messages: 50, authors: 10, leaves: 1, timeouts: 1 }, _warnsAfter: 5 },
-    applications: { a: { role: 'mod', status: 'open' }, b: { role: 'support', status: 'declined', decidedAt: NOW - 1000 }, c: { role: 'team', status: 'open' } },
+    applications: { a: { role: 'mod', status: 'open' }, v: { role: 'mod', status: 'veto-window' }, s: { role: 'support', status: 'stalled' }, b: { role: 'support', status: 'declined', decidedAt: NOW - 1000 }, c: { role: 'team', status: 'open' } },
     decisions: [{ title: 'secret plan' }],
   };
   const t = teamStats({ data, now: NOW });
@@ -66,7 +66,7 @@ test('Discord activity and moderation from the daily counters; no Team data in t
   assert.equal(m.weeks.at(-1).reports, 1);
   assert.equal(m.last7.warns, 2);
   assert.equal(m.last30.timeouts, 1);
-  assert.deepEqual(m.applications, { open: { mod: 1, support: 0 }, accepted30: 0, declined30: 1 });
+  assert.deepEqual(m.applications, { open: { mod: 2, support: 1 }, accepted30: 0, declined30: 1 });
   assert.equal(m.countingSince, '2026-10-29');
   assert.ok(!JSON.stringify(m).includes('secret plan'));
 });
