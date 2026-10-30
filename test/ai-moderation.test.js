@@ -11,7 +11,7 @@ process.env.KIRA_STATE = join(mkdtempSync(join(tmpdir(), 'kira-ai-mod-')), 'stat
 process.env.KIRA_AI = 'mentions';
 process.env.ANTHROPIC_API_KEY = 'test-key-not-used';
 const { Collection } = await import('discord.js');
-const { AI, GUILD_ID, RULES } = await import('../src/config.js');
+const { AI, GUILD_ID, LAYOUT, RULES } = await import('../src/config.js');
 const core = await import('../src/core.js');
 const f = await import('../src/features/ai.js');
 const mod = await import('../src/features/moderation.js');
@@ -146,7 +146,7 @@ test('the scope: the language channels, #general and its threads, non-English an
   assert.equal(mod.aiScope(message('🔥🔥 123 :)')), null);
   assert.equal(mod.aiScope(message('')), null);
 
-  for (const t of ['Привет всем!', '你好，这个游戏能在 Mac 上运行吗', 'こんにちは、よろしくお願いします', 'hola, gracias por todo el trabajo', 'das ist nicht so gut aber danke', 'você está jogando com uma versão nova']) assert.ok(mod.looksNonEnglish(t), t);
+  for (const t of ['Привет всем!', '你好，这个游戏能在 Mac 上运行吗', 'こんにちは、よろしくお願いします', 'hola, gracias por todo el trabajo', 'das ist nicht so gut aber danke', 'você está jogando com uma versão nova', 'ciao, il gioco funziona anche su Mac?']) assert.ok(mod.looksNonEnglish(t), t);
   for (const t of ['The game crashes when I open the inventory', 'is this the same as vanilla?', 'ok', 'gg', 'déjà vu', 'I said merci to the dev and it is fine', '<@123456789012345678> <:pog:123456789012345678> https://example.com/привет-мир']) assert.ok(!mod.looksNonEnglish(t), t);
 });
 
@@ -232,6 +232,16 @@ test('a removal: deleted, the short note in the member\'s language, #mod-log get
   await mod.moderate(message('free nitro here', { user: 'j', channel: 'ot' }));
   await mod._test.flushAll();
   assert.deepEqual(sent.slice(-2).map((s) => s.content), ['<@i> ton message a été supprimé (règle 4, voir <#rl>).', '<@j> your message was removed (rule 4, see <#rl>).']);
+});
+
+test('every language channel has its removal note in its language; #italiano is read and its note is Italian', () => {
+  const langs = LAYOUT.find((g) => g.key === 'languages').channels;
+  for (const c of langs) assert.ok(mod.AI_NOTES[mod._test.LANG_OF[c.key]], c.key);
+  assert.equal(mod.AI_NOTES.it(2), 'il tuo messaggio è stato rimosso (regola 2, vedi #rules).');
+  core.state.channels.italian = 'itc';
+  try {
+    assert.equal(mod.aiScope(message('ciao a tutti', { channel: 'itc' })), 'italian');
+  } finally { delete core.state.channels.italian; }
 });
 
 test('a flag: not deleted, nothing posted in the channel, #mod-log gets the translation and a jump link for a mod', async () => {

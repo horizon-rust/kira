@@ -218,6 +218,7 @@ export const LAYOUT = [
       { key: 'spanish', name: 'español', type: 'text', topic: 'Charla en español: Horizon y todo lo demás. Los bugs van en #horizon-bugs, los problemas (no arranca, va lento, inicio de sesión) en #horizon-support y las ideas en #horizon-ideas.' },
       { key: 'french', name: 'français', type: 'text', topic: 'On parle français : Horizon et tout le reste. Les bugs vont dans #horizon-bugs, les problèmes (ne démarre pas, lent, connexion) dans #horizon-support et les idées dans #horizon-ideas (en anglais).' },
       { key: 'german', name: 'deutsch', type: 'text', topic: 'Auf Deutsch: Horizon und alles andere. Bugs gehören in #horizon-bugs, Probleme (startet nicht, langsam, Anmeldung) in #horizon-support, Ideen in #horizon-ideas (auf Englisch).' },
+      { key: 'italian', name: 'italiano', type: 'text', topic: 'Si parla italiano: Horizon e tutto il resto. I bug vanno in #horizon-bugs, i problemi (non si avvia, è lento, accesso) in #horizon-support e le idee in #horizon-ideas (in inglese).' },
       { key: 'polish', name: 'polski', type: 'text', topic: 'Rozmowy po polsku: Horizon i wszystko inne. Błędy zgłaszaj w #horizon-bugs, problemy (nie uruchamia się, działa wolno, logowanie) w #horizon-support, pomysły w #horizon-ideas (po angielsku).' },
       { key: 'turkish', name: 'türkçe', type: 'text', topic: 'Türkçe sohbet: Horizon ve diğer her şey. Hatalar #horizon-bugs kanalına, sorunlar (açılmıyor, yavaş, giriş) #horizon-support kanalına, fikirler #horizon-ideas kanalına (İngilizce).' },
       { key: 'chinese', name: '中文', type: 'text', topic: '用中文聊天：Horizon 和其他一切。Bug 请发到 #horizon-bugs，问题（无法启动、卡顿、登录）请发到 #horizon-support，想法请发到 #horizon-ideas（用英文）。' },
@@ -253,7 +254,7 @@ export const LAYOUT = [
 export const HOWTO = { name: '📌 How to post here: read me first', tag: ['📌', 'read me', true], mention: 'the 📌 **How to post here** post' };
 
 // What everyone sees in the channel list from the start; the Onboarding answers add the rest.
-export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'officialserver', 'horizonchat', 'contributors', 'horizonbugs', 'horizonsupport', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'polish', 'turkish', 'chinese', 'japanese'];
+export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'officialserver', 'horizonchat', 'contributors', 'horizonbugs', 'horizonsupport', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'italian', 'polish', 'turkish', 'chinese', 'japanese'];
 
 // Replaced by another channel (2026-10-25: #updates replaces #work-board and #dev-log; 2026-10-30: #general replaces
 // #off-topic). Setup exports every message of each one, with its attachments, to scratch/ (not committed), then deletes
@@ -538,7 +539,7 @@ export const WELCOME = {
     '🌅 **horizon**: #horizon-support (help), #horizon-bugs, #horizon-ideas, #horizon-chat, #showcase (your videos, screenshots, builds), #releases, #updates (what changed)',
     '🛠️ **contributing**: #contributors (read by all, written by people with a merged PR)',
     '💬 **general**: #general for anything (other games, music, AI coding, life), introductions, memes, the #hall-of-fame.',
-    '🌍 **languages**: #русский, #español, #português, #français, #deutsch, #polski, #türkçe, #中文, #日本語',
+    '🌍 **languages**: #русский, #español, #português, #français, #deutsch, #italiano, #polski, #türkçe, #中文, #日本語',
     '🔊 **voice**: join **➕ create your room** for your own voice channel',
     '',
     '**How it works**',
@@ -565,7 +566,7 @@ export const RULES = [
   ['Keep it SFW', 'No NSFW, gore or shock content, anywhere: names, avatars and statuses included.'],
   ['Right channel, right format', 'Every channel says what it\'s for in its description. Help requests go in #horizon-support, not in the chats. Bugs, help and ideas have a template in their 📌 How to post here post, pinned at the top: posts without it are closed after an hour.'],
   ['Contributing', 'Working on an issue? `/claim` it first, so two people don\'t do the same work. Pull requests go to github.com/horizon-rust/horizon.'],
-  ['English in the main channels', 'So everyone can follow. These languages have their own channels in 🌍 languages: #русский, #español, #português, #français, #deutsch, #polski, #türkçe, #中文, #日本語.'],
+  ['English in the main channels', 'So everyone can follow. These languages have their own channels in 🌍 languages: #русский, #español, #português, #français, #deutsch, #italiano, #polski, #türkçe, #中文, #日本語.'],
   ['No drama with the mods in public', 'Disagree with a decision? DM Kira: it reaches the mods privately.'],
   ["Discord's rules apply", 'Follow the Discord Terms of Service and Community Guidelines (13+).'],
 ];
