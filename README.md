@@ -496,3 +496,12 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
 - **Variables**: `STAFF_PROXY_KEY` (the same secret as the site's, `op://Agents/Horizon staff proxy key/credential`;
   unset: no `/staff/api` routes at all), `STAFF_SITE_URL` (default `https://playhorizon.dev`: the Origin writes must
   come from, and the links' host), `KIRA_STAFF` (the file).
+- **Applications** ([`src/applications.js`](src/applications.js), routes in
+  [`src/features/staff-apply.js`](src/features/staff-apply.js)): the form at playhorizon.dev/apply opens with the
+  link `/apply` DMs (24 hours, once, for one role); Kira records the answers and what GitHub says about the member
+  (their linked login, whether `/verify-github` proved it, their merged pull requests in Horizon: verified
+  contributors are listed first). Mod and Support applications are decided on /staff/mod, Team ones on /staff/team;
+  nobody decides their own. A decision is recorded, then the Discord side grants the role and DMs
+  (`docs/staff-api.md`); what it reports (role granted, DM sent, error) shows on the card. A Team accept grants only
+  the Discord role: GitHub organisation or team access stays Ludovic's, by hand. Answers are deleted 90 days after the
+  decision; a decline keeps only its member, role and date, for the 14-day cooldown.
