@@ -60,6 +60,8 @@ export const commands = [
 
 export const handlers = {
   async apply(i) {
+    // Until the website's form is deployed, a link would lead nowhere: APPLY_FORM_LIVE=1 opens /apply.
+    if (process.env.APPLY_FORM_LIVE !== '1') return i.reply(ephemeral(kit.refusal('soon')));
     const role = i.options.getString('role');
     const can = await canApply(i.user.id, role);
     if (!can.ok) return i.reply(ephemeral(kit.refusal(can.why, role, can.retryAt)));
