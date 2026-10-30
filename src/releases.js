@@ -4,8 +4,9 @@
 // Horizon has one release channel since 2026-10-23 (Ludovic: no more Alpha and Stable), and since 2026-10-28 it is the
 // Nightly (Ludovic: Horizon ships only the Nightly): each Nightly, the `nightly` pre-release, is the game's release,
 // published a few times a day (its earlier builds are renamed `nightly-<date>`, keeping their id, so never reposted). One post per release; @Releases is pinged at most once a day, by the
-// first game release published after 20:00 UTC, and that post lists what came out since the last ping. Every
-// other post is @silent. This file is pure (no Discord, no network) so it can be tested; bot.js sends.
+// first game release published after 20:00 UTC, and that post lists what came out since the last ping. The
+// others mention nobody but are normal posts, not @silent (rdbt, 2026-10-30: @silent hid them from notifications).
+// This file is pure (no Discord, no network) so it can be tested; bot.js sends.
 import { COLOR, LINKS, GITHUB } from './config.js';
 
 const RELEASE_BLUE = 0x5aa9ff; // the 📦 Releases role's colour, for the other repos
@@ -17,7 +18,6 @@ export const SINCE = '2026-10-23T00:00:00Z';
 // each new post pushed the oldest id out while that release was still listed, so it was posted again,
 // which pushed the next one out (2026-10-23: about 130 old releases reposted in #releases).
 export const KEEP = 400;
-export const SUPPRESS_NOTIFICATIONS = 1 << 12; // Discord's @silent message flag (4096): no push for anyone
 
 // The releases of `list` to post now, oldest first. `announced`: the ids already posted. `earlier`: ids posted
 // before the single channel as Alpha posts (state.nightlies), never posted again either, whatever happens to
@@ -98,7 +98,7 @@ const launcherVersion = (tag) => tag.replace(/^launcher(?:@|-v)/, '');
 
 // The daily ping. Horizon releases as often as changes land, so @Releases is pinged once per day window, which
 // starts at PING_HOUR UTC (20:00, the evening in Europe): the first Horizon game release published in a window
-// pings, with a short list of the game releases posted since the last ping. Every other post is silent.
+// pings, with a short list of the game releases posted since the last ping. Every other post mentions nobody.
 export const PING_HOUR = 20;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_SINCE = 40;
@@ -131,10 +131,9 @@ export function pingDecision(repo, release, pings = {}, at = Date.parse(release.
 }
 
 // The message announcing one release: { content, embeds, allowedMentions, flags? }. `role`: the 📦 Releases role id
-// when this post pings (pingDecision), else nothing and the post is @silent. `since`: the ping's list.
+// when this post pings (pingDecision), else nothing and the post mentions nobody. `since`: the ping's list.
 export function releaseMessage(repo, release, role, since = []) {
   const ping = role ? `<@&${role}> ` : '';
-  const quiet = role ? {} : { flags: SUPPRESS_NOTIFICATIONS };
   const allowedMentions = { parse: [], roles: role ? [role] : [] };
   const tag = release.tag_name;
   const name = (release.name || tag).trim();
@@ -159,7 +158,7 @@ export function releaseMessage(repo, release, role, since = []) {
           description: `${summary}Update from the Horizon launcher: it installs new versions by itself.`,
           fields, footer,
         }],
-        allowedMentions, ...quiet,
+        allowedMentions,
       };
     }
     case 'launcher': {
@@ -173,7 +172,7 @@ export function releaseMessage(repo, release, role, since = []) {
           description: [what, `Your launcher updates itself; new here? [Download it](${LINKS.horizonLauncher}).`].filter(Boolean).join('\n\n'),
           footer,
         }],
-        allowedMentions, ...quiet,
+        allowedMentions,
       };
     }
     default: {
@@ -186,7 +185,7 @@ export function releaseMessage(repo, release, role, since = []) {
           color: RELEASE_BLUE, title: clipTo(title, 256), url: release.html_url,
           description: notes || undefined, footer,
         }],
-        allowedMentions, ...quiet,
+        allowedMentions,
       };
     }
   }

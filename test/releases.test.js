@@ -177,7 +177,7 @@ const NOTES = '### New\n- **Zoom:** hold C to zoom in, like OptiFine does.\n### 
 const game = (id, tag, at, extra = {}) => ({ id, tag_name: tag, name: `Horizon ${tag.slice(1)}: Zoom`, prerelease: false, draft: false,
   published_at: at, html_url: `https://github.com/horizon-rust/horizon/releases/tag/${tag}`, body: NOTES, ...extra });
 
-test('a post pings only when given the role; every other post is @silent, with no mention at all', () => {
+test('a post pings only when given the role; every other post mentions nobody and is not @silent', () => {
   const pinged = rel.releaseMessage('horizon', game(1, 'v0.2.20', '2026-10-24T20:05:00Z'), ROLE);
   assert.match(pinged.content, new RegExp(`^<@&${ROLE}> \\*\\*Horizon 0\\.2\\.20: Zoom\\*\\* is out`));
   assert.deepEqual(pinged.allowedMentions, { parse: [], roles: [ROLE] });
@@ -187,9 +187,8 @@ test('a post pings only when given the role; every other post is @silent, with n
     rel.releaseMessage('kimchi', fixture('kimchi-releases')[0], null)]) {
     assert.doesNotMatch(silent.content, /<@/);
     assert.deepEqual(silent.allowedMentions, { parse: [], roles: [] });
-    assert.equal(silent.flags, rel.SUPPRESS_NOTIFICATIONS);
+    assert.equal(silent.flags, undefined);
   }
-  assert.equal(rel.SUPPRESS_NOTIFICATIONS, 4096);
 });
 
 test('no channel words and no dates in any post', () => {
