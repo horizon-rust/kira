@@ -21,9 +21,10 @@ const full = (repo) => `${OWNER}/${repo}`;
 
 // threadId → { repo, number, url, kind, owner, author, state, lastCommentId, votes, followups, answers }.
 // In a dry run it lives in memory only, so nothing reaches data/state.json.
-const blank = () => ({ issues: {}, created: [], polled: {}, labels: {}, pending: {} });
+const blank = () => ({ issues: {}, created: [], polled: {}, labels: {}, pending: {}, help: {} });
 const store = !enabled ? blank() : DRY ? blank() : (state.github ??= blank());
 store.pending ??= {}; // threadId → a report that may be the same bug as an open issue, waiting for the reporter's answer
+store.help ??= {}; // threadId → { owner, at, bug }: a post pointed to #horizon-support; `bug`: the poster said it is one
 const busy = new Set(); // threads being opened right now: one issue per post, even with two events at once
 
 const forumKey = (thread) => Object.keys(GITHUB.forums).find((k) => state.channels[k] === thread.parentId);
@@ -55,6 +56,14 @@ async function openIssue(thread, starter, { manual = false, target = null } = {}
   if (!manual && GITHUB.forums[forumKey(thread)]?.queue) return null;
   target ??= kit.targetFor(GITHUB.forums[forumKey(thread)], tagNames(thread));
   if (!target) return null;
+  // A request for help posted as a bug: pointed to #horizon-support, not filed, unless the poster says it is a bug.
+  if (!manual && target.kind === 'bug' && !store.help[thread.id]?.bug && kit.looksLikeHelp(thread.name, starter.content, tagNames(thread))) {
+    if (store.help[thread.id]) return null;
+    store.help[thread.id] = { owner: starter.author.id, at: Date.now(), bug: false };
+    if (!DRY) save();
+    await say(thread, kit.helpPointer(state.channels.horizonsupport, starter.author.id)).catch(console.error);
+    return null;
+  }
   return fileIssue(thread, {
     authorId: starter.author.id,
     author: starter.member?.displayName ?? starter.author.globalName ?? starter.author.username,
@@ -167,6 +176,15 @@ export const reportsOf = (userId) => Object.entries(store.issues).filter(([, e])
 
 // A reply from the reporter in their post: queued, and sent as a comment if it adds something.
 export async function onMessage(msg) {
+  const h = enabled && store.help[msg.channelId];
+  if (h && !h.bug && msg.author.id === h.owner && /^\W*bug\W*$/i.test(String(msg.content ?? '').trim())) {
+    h.bug = true;
+    if (!DRY) save();
+    const starter = await followsTemplate(msg.channel).catch(() => false);
+    if (starter) await openIssue(msg.channel, starter).catch((e) => console.error('github help → bug', e.message));
+    else await say(msg.channel, "Noted: it's a bug. Fill in the template in your first message and I'll send it to GitHub.").catch(() => {});
+    return;
+  }
   const p = enabled && store.pending[msg.channelId];
   if (p && msg.author.id === p.src.authorId) {
     const answer = yesNo(msg.content);
@@ -291,6 +309,7 @@ let lastPoll = 0;
 let lastVotes = 0;
 async function tick(now = Date.now()) {
   for (const [threadId, p] of Object.entries(store.pending)) if (now - p.at >= AI.pendingMs) await settle(threadId, null).catch((e) => console.error('github settle', e.message));
+  for (const [threadId, h] of Object.entries(store.help)) if (now - h.at > 30 * 24 * 60 * kit.MINUTE) delete store.help[threadId];
   await sendFollowups(now);
   for (const [threadId, entry] of Object.entries(store.issues)) {
     const items = kit.takeAnswers(entry, now);
@@ -311,6 +330,7 @@ async function mentionInBugPost(msg) {
   const entry = store.issues[thread.id];
   if (entry) { await reply(`This post is on GitHub as ${ref(entry)}${entry.state === 'closed' ? ' (closed)' : ''}.`); return true; }
   if (store.pending[thread.id]) { await reply(`I'm waiting for the reporter's yes or no above: is it the same bug as the issue I found? Then it's filed.`); return true; }
+  if (store.help[thread.id] && !store.help[thread.id].bug) { await reply(kit.helpPointer(state.channels.horizonsupport, store.help[thread.id].owner)); return true; }
   if (busy.has(thread.id)) { await reply("I'm sending this post to GitHub right now."); return true; }
   const starter = await followsTemplate(thread).catch(() => false);
   if (!starter) {

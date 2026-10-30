@@ -36,14 +36,16 @@ const linksEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horiz
 // /help: what Kira does, by topic (only the asker sees it).
 const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Kira, Horizon's front desk").setDescription([
   `**The hub**: ${LINKS.hub} has the roadmap, the kanban, the journal and how to help. I do the same things here, as commands or as \`@Kira <verb>\`:`,
+  '• Need help (it won\'t start, it\'s slow, sign-in, multiplayer)? A post in <#' + state.channels.horizonsupport + '>: I give a first answer, 🤝 Support helps',
   '• `/report`: a bug, as a form; it becomes a post in <#' + state.channels.horizonbugs + '> and a GitHub issue, and you are pinged there when it is answered or fixed',
-  '• `/suggest`: an idea, for the suggestion queue the maintainers read (posts in <#' + state.channels.horizonideas + '> go there too)',
+  '• an idea: a post in <#' + state.channels.horizonideas + '>, with its template; it goes to the suggestion queue the maintainers read',
   '• `/roadmap` (`area:` for one area in full): the whole roadmap, what is being built, what is next',
   '• `/claim <issue>` before you start, `/unclaim` · `/status`: your claims and reports, an issue, a roadmap item, or set what you are on',
   `**What changed**: <#${state.channels.updates}> (merged work, the week, the board at a glance) · releases in <#${state.channels.releases}>`,
   '**Contributing**: `/goodfirst` · `/working` · `/board` · `/mytasks` · `/link-github` (`credit:True` lists you on the hub) · `/verify-github` proves the account is yours, and with a merged PR it gives you 🛠️ Contributor · `/notify` DMs when CI fails · `/agent connect` gives your AI coding agent the board (setup in #horizon-info). Maintainers: `/move`.',
   '**Horizon**: `/horizon` what it is and where to get it · `/links` · `/sponsor github:<you>`: you sponsor Horizon on GitHub? Get 💚 Sponsor',
   '**You**: `/rank`, `/leaderboard`, `/remind`, `/userinfo`, `/avatar`, `/room` (your own voice channel: join ➕ create your room).',
+  '**Help run the server**: `/apply` for 🤝 Support, 🛡️ Mod or 🌌 Horizon Team.',
   '**The mods**: DM me to reach them privately, `/report-member` or right-click a message → Apps → Report to mods. `/modmail`.',
 ].join('\n\n'));
 

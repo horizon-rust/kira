@@ -1,6 +1,6 @@
 // Texts shared by setup and the bot.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
-import { COLOR, LAYOUT, ROLES, HOWTO } from './config.js';
+import { COLOR, LAYOUT, ROLES, HOWTO, FAQ, FAQ_MORE } from './config.js';
 
 const byName = new Map(LAYOUT.flatMap((g) => g.channels).filter((c) => c.type !== 'voice').map((c) => [c.name, c.key]));
 
@@ -11,6 +11,12 @@ export function linkify(text, state) {
     return id ? `<#${id}>` : m;
   });
 }
+
+// The FAQ in #faq: one message per list (FAQ, FAQ_MORE), one embed each, under Discord's 4096 characters a description
+// and 6000 a message.
+export const faqMessages = (state) => [[FAQ, '❓ FAQ'], [FAQ_MORE, '❓ More questions']].map(([list, title]) => ({
+  embeds: [new EmbedBuilder().setColor(COLOR).setTitle(title).setDescription(linkify(list.map(([q, a]) => `**${q}**\n${a}`).join('\n\n'), state))],
+}));
 
 const ROWS = [['horizon', 'releases', 'newvideos'], ['modder']];
 
@@ -87,7 +93,7 @@ export const WELCOME_CHANNEL = 'newmembers';
 // The welcome for the people who just joined: up to 5 are named, beyond that a single "welcome everyone".
 export function welcomeMessage(people, memberCount, state) {
   const c = state.channels;
-  const guide = `Start with <#${c.welcome}> (roles), <#${c.rules}> and <#${c.faq}>. Get Horizon in <#${c.horizoninfo}>, then say hi in <#${c.introductions}>. Found a bug? <#${c.horizonbugs}>. What changed lately? <#${c.updates}>.`;
+  const guide = `Start with <#${c.welcome}> (roles), <#${c.rules}> and <#${c.faq}>. Get Horizon in <#${c.horizoninfo}>, then say hi in <#${c.introductions}>. Need help? <#${c.horizonsupport}>. Found a bug? <#${c.horizonbugs}>. What changed lately? <#${c.updates}>.`;
   const few = people.length <= 5;
   const count = memberCount ?? '?';
   return {

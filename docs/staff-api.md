@@ -40,16 +40,23 @@ The Discord side registers itself once at start:
 import { setDiscordSide } from './staff-hooks.js';
 
 setDiscordSide({
-  // A moderator or Team member decided an application on the website. Grant the role (accept), DM the applicant,
-  // tell the owner when a Team application is accepted. Never throws: report what happened.
+  // A decision is final (after the vote and the owner's veto window). Grant the role (accept), DM the applicant.
+  // Never throws: report what happened.
   async decide({ applicationId, userId, role, outcome, decidedBy, cooldownUntil, url }) {
     return { granted, dmSent, error }; // granted: false on a decline; error: a short text, or null
+  },
+  // Send a DM the staff side wrote (the owner's veto-window DM). No pings, at most 2000 characters. Never throws.
+  async dm({ userId, content }) {
+    return { sent, error };
   },
 });
 ```
 
+The staff side calls them through `staff-hooks.js`: `decide(event)` and `dm({ userId, content })`, which answer
+`{ ..., error: 'discord side not loaded' }` when Kira's Discord side isn't running.
+
 - `outcome` is `accept` or `decline`; `decidedBy` the deciding member's Discord id; `cooldownUntil` (declines) ms
-  since epoch; `url` the application's card on its dashboard (for the owner's notice).
+  since epoch; `url` the application's card on its dashboard (the card, for reference).
 - The staff side has already recorded the decision when it calls `decide`; it stores the result (`granted`,
   `dmSent`, `error`) on the application and shows it on the card, so a failed grant or DM is visible and can be done
   by hand.
@@ -58,8 +65,10 @@ setDiscordSide({
   - accept of a **Team** application: also says the Discord role is all that was granted, and that GitHub
     organisation or team access is set up by Ludovic by hand;
   - decline: short and polite, no reason required, and when they may apply again (`cooldownUntil`);
-  - the owner (`OWNER_ID`) gets a DM when a Team application is accepted: who, by whom, a link to the card, and
-    that GitHub access is his to give.
+  - the owner (`OWNER_ID`) gets **one** DM per application, when the vote passes and his 12-hour veto window opens:
+    `DECISION_TEXTS.vetoWindow({ userId, role, yes, no, url, until })` (who, for which role, the vote, when it goes
+    through, the card; for the Team, that GitHub access is his to give). The staff side sends it with `dm()`;
+    `decide()` never DMs him (2026-10-30: no second DM after the window).
 - Without a registered Discord side, `decide` is not called: the decision is recorded with
   `error: 'discord side not loaded'`, shown on the card.
 

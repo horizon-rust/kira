@@ -12,7 +12,7 @@ import { applyAutomod } from './automod.js';
 import { overwrites as permissionOverwrites } from './permissions.js';
 import { load, save, claim } from './store.js';
 import { unique, isCopy, ensureThread } from './adopt.js';
-import { linkify, rolesMessage, howToPost } from './texts.js';
+import { linkify, rolesMessage, howToPost, faqMessages } from './texts.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { exportChannel } from './archive.js';
@@ -274,9 +274,10 @@ async function posts(guild) {
       .setFooter({ text: RULES_FOOTER })],
     components: linkRows([['Discord Community Guidelines', 'https://discord.com/guidelines']]),
   });
-  await upsert(guild, 'faq', 'faq', {
-    embeds: [FAQ, FAQ_MORE].map((list, i) => new EmbedBuilder().setColor(COLOR).setTitle(i ? '❓ More questions' : '❓ FAQ').setDescription(L(list.map(([q, a]) => `**${q}**\n${a}`).join('\n\n')).slice(0, 4096))),
-  });
+  // Two messages: Discord refuses a message whose embeds add up to more than 6000 characters (2026-10-30).
+  const [faq, faqMore] = faqMessages(state);
+  await upsert(guild, 'faq', 'faq', faq);
+  await upsert(guild, 'faqmore', 'faq', faqMore);
   for (const group of LAYOUT) for (const spec of group.channels) {
     if (spec.pin) {
       const msg = await upsert(guild, 'pin:' + spec.key, spec.key, { content: L(PINS[spec.pin]) });
@@ -290,7 +291,7 @@ async function posts(guild) {
       new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horizon').setURL(LINKS.horizon).setDescription(HORIZON.description)
         .addFields(
           { name: 'Get it', value: HORIZON.get },
-          { name: 'Talk about it', value: L('#horizon-chat · bugs: `/report` or #horizon-bugs · ideas: `/suggest` or #horizon-ideas') },
+          { name: 'Talk about it', value: L('#horizon-chat · help: #horizon-support · bugs: `/report` or #horizon-bugs · ideas: #horizon-ideas') },
           { name: "What's happening", value: L(`${LINKS.hub}: the roadmap, the kanban, the journal and how to help · what changed: #updates · \`/roadmap\``) },
         ),
       new EmbedBuilder().setColor(0x555555).setTitle('⚠️ Disclaimer').setDescription(HORIZON.disclaimer),
@@ -329,7 +330,7 @@ async function onboarding(guild) {
         {
           id: id(), type: 0, title: 'What brings you to Horizon?', single_select: false, required: false, in_onboarding: true,
           options: [
-            option('🎮', 'Playing it', 'Download, help, chat, share your creations', [], [c.horizoninfo, c.horizonchat, c.showcase]),
+            option('🎮', 'Playing it', 'Download, help, chat, share your creations', [], [c.horizoninfo, c.horizonsupport, c.horizonchat, c.showcase]),
             option('🐛', 'Testing and bug reports', 'Find bugs and report them', [], [c.horizonbugs, c.releases]),
             option('💡', 'Ideas', 'Suggest and vote on what comes next', [], [c.horizonideas]),
             // No role: 🛠️ Contributor is earned with a merged PR and /verify-github (src/features/contributors.js).
@@ -361,7 +362,7 @@ async function serverGuide(guild) {
     enabled: true,
     welcome_message: {
       author_ids: [OWNER_ID],
-      message: "Welcome to Horizon! I'm Ludovic: Horizon is Minecraft Java Edition rewritten in Rust, built with AI agents and contributors. Get it at playhorizon.dev, /report what breaks, /suggest ideas, and follow the work at playhorizon.dev/hub. Not affiliated with Mojang or Microsoft.",
+      message: "Welcome to Horizon! I'm Ludovic: Horizon is Minecraft Java Edition rewritten in Rust, built with AI agents and contributors. Get it at playhorizon.dev, /report what breaks, post ideas in #horizon-ideas, and follow the work at playhorizon.dev/hub. Not affiliated with Mojang or Microsoft.",
     },
     new_member_actions: [
       action('rules', 0, 'Read the rules', 'Kira enforces them, day and night', '📜'),

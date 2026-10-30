@@ -11,6 +11,8 @@ state.formatChecks ??= {}; // threadId → { forum, owner, at, notice }
 const forums = LAYOUT.flatMap((g) => g.channels).filter((c) => c.type === 'forum');
 const forumOf = (parentId) => forums.find((f) => state.channels[f.key] === parentId);
 const LINK = /https?:\/\/\S+/i;
+// A member of one of the forum's `helpers` roles (🤝 Support in #horizon-support): closes posts there like a mod.
+export const isHelper = (spec, member) => !!spec?.helpers?.some((k) => state.roles[k] && member?.roles?.cache?.has(state.roles[k]));
 
 // Called with (thread, starter) when a post passes its template: right away, or once edited to pass.
 const okHooks = [];
@@ -93,7 +95,7 @@ export const handlers = {
     if (!spec) return i.reply({ content: 'Use `/done` inside your own forum post.', flags: MessageFlags.Ephemeral });
     if (isOwnPost(thread, client.user.id)) return i.reply({ content: 'That is the guide of this forum, not a post to close.', flags: MessageFlags.Ephemeral });
     if (!spec.done) return i.reply({ content: `Posts in #${spec.name} don't get closed: they stay for everyone.`, flags: MessageFlags.Ephemeral });
-    if (thread.ownerId !== i.user.id && !isStaff(i.member)) return i.reply({ content: 'Only the person who posted it (or a mod) can close it.', flags: MessageFlags.Ephemeral });
+    if (thread.ownerId !== i.user.id && !isStaff(i.member) && !isHelper(spec, i.member)) return i.reply({ content: `Only the person who posted it (or ${spec.helpers ? '🤝 Support or ' : ''}a mod) can close it.`, flags: MessageFlags.Ephemeral });
     const tagName = spec.done.split(' ').slice(1).join(' ');
     const tag = thread.parent.availableTags.find((t) => t.name === tagName);
     const tags = [...new Set([...(tag ? [tag.id] : []), ...thread.appliedTags])].slice(0, 5);
