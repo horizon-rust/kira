@@ -6,8 +6,10 @@
 // - GETs are conditional (If-None-Match with the last ETag): GitHub doesn't count a 304 answer, so a board refresh
 //   that finds nothing new is almost free.
 // - Below KEEP calls left in the hour, GETs stop until the hour resets (writes still go: they are a person's
-//   command). The board just waits for the next refresh.
+//   command). The board just waits for the next refresh. A GET made for a person's command (`person: true`:
+//   /link-github, a claim, an agent's task_get) is one call: it only stops below FLOOR.
 export const KEEP = Number(process.env.KIRA_GITHUB_KEEP ?? 1500);
+export const FLOOR = 100;
 // The reserve of makePublicGitHub's App client: its few reads an hour (Kira's AI sources) go on long after the board
 // has stopped for the hour, and a held-back one is read without a token instead.
 export const PUBLIC_KEEP = Number(process.env.KIRA_GITHUB_PUBLIC_KEEP ?? 100);
@@ -27,9 +29,9 @@ export function makeGitHub({ token, keep: reserve = KEEP, dryRun = false, fetchI
   const cache = new Map(); // GET path → { etag, body }
   const budget = typeof token === 'function' ? appBudget : token ? userBudget : anonBudget;
   const floor = token ? reserve : 1;
-  async function call(method, path, body, { cache: keep = true } = {}) {
+  async function call(method, path, body, { cache: keep = true, person = false } = {}) {
     const get = method === 'GET';
-    if (get && budget.remaining < floor && Date.now() < budget.reset) {
+    if (get && budget.remaining < (person ? Math.min(floor, FLOOR) : floor) && Date.now() < budget.reset) {
       throw new Error(`GitHub GET ${path}: holding back, ${budget.remaining} calls left until ${new Date(budget.reset).toISOString()}`);
     }
     const auth = typeof token === 'function' ? await token() : token;
@@ -69,7 +71,8 @@ export function makeGitHub({ token, keep: reserve = KEEP, dryRun = false, fetchI
   }
   return {
     dryRun,
-    // `cache: false`: big one-off answers (a long search) are not kept for conditional requests.
+    // `cache: false`: big one-off answers (a long search) are not kept for conditional requests. `person: true`: a
+    // person waits on this answer, so it goes even inside the board's reserve.
     get: (path, opts) => call('GET', path, undefined, opts),
     // A GraphQL read (never a dry run: it changes nothing). The answer as GitHub sends it: { data, errors }.
     graphql: (query, variables) => call('POST', '/graphql', { query, variables }, { cache: false }),

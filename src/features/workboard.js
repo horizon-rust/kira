@@ -63,7 +63,7 @@ async function ensureLabel() {
 
 // Claims issue `n` for a Discord user. Returns the text of the answer.
 export async function claim(user, member, n) {
-  const issue = await gh.get(`${REPO}/issues/${n}`);
+  const issue = await gh.get(`${REPO}/issues/${n}`, { person: true });
   if (!issue) return `There's no issue #${n} in ${WORK.repo}.`;
   if (issue.pull_request) return `#${n} is a pull request. Claim the issue it fixes instead.`;
   if (issue.state !== 'open') return `#${n} is closed: nothing to claim.`;
@@ -238,7 +238,8 @@ export const openPullsNow = () => (raw?.pulls ?? []).filter((p) => p.state === '
   .map((p) => ({ number: p.number, title: p.title, url: p.html_url, author: p.user?.login, draft: !!p.draft, status: p.status ?? null, updatedAt: p.updated_at }));
 export const branchesNow = () => raw?.branches ?? [];
 // A read of Horizon's repo on GitHub (issues, pulls, comments of horizon-rust/horizon only).
-export const repoGet = (path) => gh.get(`${REPO}${path}`);
+// An agent waits on it: it goes even inside the board's reserve.
+export const repoGet = (path) => gh.get(`${REPO}${path}`, { person: true });
 export const workState = () => work;
 // After a change made outside the commands (agents): save, rebuild the board, repaint it.
 export async function changed() {
@@ -426,7 +427,7 @@ export const handlers = {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const wanted = i.options.getString('username').trim().replace(/^@/, '');
     if (!/^[a-z\d](?:[a-z\d-]{0,38})$/i.test(wanted)) return i.editReply(ephemeral(`\`${wanted}\` isn't a GitHub username.`));
-    const ghUser = await gh.get(`/users/${encodeURIComponent(wanted)}`);
+    const ghUser = await gh.get(`/users/${encodeURIComponent(wanted)}`, { person: true });
     if (!ghUser) return i.editReply(ephemeral(`There's no GitHub user \`${wanted}\`.`));
     const taken = userOf(ghUser.login);
     if (taken && taken !== target.id && !isStaff(i.member)) return i.editReply(ephemeral(`\`${ghUser.login}\` is already linked to someone else. Ask a mod if that's wrong.`));
