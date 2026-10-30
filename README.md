@@ -343,7 +343,7 @@ Kira runs on Railway (project **kira**, service **kira**, volume `kira-data` at 
 `board.json`, `agents.json`, `seal-key.pem`, `ai-sources.json`), built from this repo's `Dockerfile` on every push to `main`.
 Variables: `KIRA_STATE=/data/state.json`, `DISCORD_TOKEN_SEALED`, `GITHUB_TOKEN_SEALED`, `GITHUB_APP_ID` +
 `GITHUB_APP_PRIVATE_KEY_SEALED` (the GitHub App kira-horizon: Kira's own hour of calls; `/sponsor` keeps
-`GITHUB_TOKEN`; key in 1Password `GitHub App Kira`, a document: `op document get`), `HUB_TOKEN_SEALED`,
+`GITHUB_TOKEN`; key in 1Password `GitHub App Kira`, a document: `op document get`),
 `ROADMAP_SUGGESTIONS_CHANNEL_ID`,
 `KIRA_AGENT_ISSUANCE` (`on` opens `/agent connect`), and for tests `KIRA_DISCORD=off` (no Discord: board and
 MCP server only) and `KIRA_GITHUB_DRY_RUN=1`. Health: `GET /health`.
@@ -388,17 +388,8 @@ roadmap's link; ideas sent to GitHub before keep their issue, votes line and ans
 minutes; a failed fetch keeps the last good one, and with none Kira answers with the hub's link. Item links are
 `<hub>#<id>`.
 
-**The hub's own suggestions.** While the site still has its form (horizon-site `src/hub.html#suggest`), what people send with it is kept by the telemetry server
-(`HUB_INTAKE_URL`, default `https://telemetry.playhorizon.dev`). Every 5 minutes Kira reads the new ones
-(`GET /hub/suggestions?after=<id>`, `Authorization: Bearer $HUB_TOKEN`, the server's `HORIZON_TELEMETRY_HUB_TOKEN`,
-`op://Agents/Horizon hub token/credential`, sealed on Railway as `HUB_TOKEN_SEALED`) and posts each one in the queue
-with "the hub" as its source and the roadmap item it is about. The last id relayed is in `state.hubRelay.after`, saved
-after each post: a post that fails is tried again the next round. While the endpoint answers 404 or fails, Kira logs
-one line per change of error and tries again.
-
 **Variables**: `ROADMAP_SUGGESTIONS_CHANNEL_ID` (the queue: the ID of the staff-only `#roadmap-suggestions` setup makes; unset: `#horizon-ideas` posts stay in the
-forum and nothing is relayed), `HUB_TOKEN` (unset: the site's suggestions are not
-relayed), `HUB_URL`, `HUB_ROADMAP_URL`, `HUB_JOURNAL_URL`, `HUB_INTAKE_URL`.
+forum), `HUB_URL`, `HUB_ROADMAP_URL`, `HUB_JOURNAL_URL`.
 
 **Open idea issues** (the one-off move to the roadmap): `node scripts/idea-issues.mjs [--json]` lists them (number,
 👍 on Discord, age, from Discord or GitHub, title, link). It only reads; each one is moved to the roadmap or closed
