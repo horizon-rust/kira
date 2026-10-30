@@ -12,6 +12,7 @@ import { staffRoutes } from '../staff-http.js';
 import { counters as makeCounters } from '../staff-counters.js';
 import { applicationRoutes } from './staff-apply.js';
 import { teamRoutes } from './staff-team.js';
+import { statsRoutes } from './staff-stats.js';
 
 // The roles' ids by key; setup's ids win, these are the server's as of 2026-10-30.
 const ROLE_IDS = { team: '1564768999655481485', mod: '1559242168864997537' };
@@ -60,7 +61,7 @@ function revoke(userId, why) {
 
 export function routes(extra = []) {
   if (!store) return {};
-  return staffRoutes({ store, key: process.env.STAFF_PROXY_KEY, origin: SITE, access, log, extra: [...applicationRoutes({ store, site: SITE, log }), ...teamRoutes({ store, log }), ...extra] });
+  return staffRoutes({ store, key: process.env.STAFF_PROXY_KEY, origin: SITE, access, log, extra: [...applicationRoutes({ store, site: SITE, log }), ...teamRoutes({ store, log }), ...statsRoutes({ store }), ...extra] });
 }
 
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
