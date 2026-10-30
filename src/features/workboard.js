@@ -150,22 +150,42 @@ async function pages(path, max = 3) {
 }
 
 // Open pull requests, each with a short status (draft, CI, review).
+// With ~270 open pull requests, three reads each every refresh spent the GitHub App's whole hour (2026-10-30): a
+// head whose CI has finished is read again only after CI_RECHECK_MS (a rerun is rare), and the reviews only when
+// the pull request changed (a review bumps its updated_at).
+const CI_RECHECK_MS = 60 * 60 * 1000;
+const ciOf = new Map(); // head sha → { ci, at }
+const reviewsOf = new Map(); // pull number → { updated, reviews }
 async function openPulls() {
   const pulls = await pages(`${REPO}/pulls?state=open`);
-  return Promise.all(pulls.map(async (p) => {
+  const now = Date.now();
+  const out = await Promise.all(pulls.map(async (p) => {
+    const known = ciOf.get(p.head.sha);
+    const fresh = known && (known.ci === 'passing' || known.ci === 'failing') && now - known.at < CI_RECHECK_MS;
+    const seen = reviewsOf.get(p.number);
     const [runs, status, reviews] = await Promise.all([
-      gh.get(`${REPO}/commits/${p.head.sha}/check-runs?per_page=100`).catch(() => null),
-      gh.get(`${REPO}/commits/${p.head.sha}/status`).catch(() => null),
-      p.draft ? [] : gh.get(`${REPO}/pulls/${p.number}/reviews?per_page=100`).catch(() => []),
+      fresh ? null : gh.get(`${REPO}/commits/${p.head.sha}/check-runs?per_page=100`).catch(() => null),
+      fresh ? null : gh.get(`${REPO}/commits/${p.head.sha}/status`).catch(() => null),
+      p.draft ? [] : seen?.updated === p.updated_at ? seen.reviews
+        : gh.get(`${REPO}/pulls/${p.number}/reviews?per_page=100`).catch(() => null),
     ]);
-    const ci = wk.ciState(runs?.check_runs, status?.statuses);
+    const ci = fresh ? known.ci : wk.ciState(runs?.check_runs, status?.statuses);
+    if (!fresh) ciOf.set(p.head.sha, { ci, at: now });
+    if (!p.draft && reviews) reviewsOf.set(p.number, { updated: p.updated_at, reviews });
     return { ...p, ci, reviews: (reviews ?? []).length, status: wk.prStatus({ draft: p.draft, ci, review: wk.reviewState(reviews ?? []) }) };
   }));
+  // Closed pull requests and old heads drop out of the memos.
+  const open = new Set(pulls.map((p) => p.head.sha));
+  for (const sha of ciOf.keys()) if (!open.has(sha)) ciOf.delete(sha);
+  const numbers = new Set(pulls.map((p) => p.number));
+  for (const n of reviewsOf.keys()) if (!numbers.has(n)) reviewsOf.delete(n);
+  return out;
 }
 
 // Everything the board needs, in one go.
 async function fetchAll() {
-  const since = new Date(Date.now() - WORK.mergedDays * wk.DAY).toISOString();
+  // Rounded to the day: a since that changes on every refresh would never get a free 304.
+  const since = new Date(Math.floor((Date.now() - WORK.mergedDays * wk.DAY) / wk.DAY) * wk.DAY).toISOString();
   const [open, closed, pulls, closedPulls, branches] = await Promise.all([
     pages(`${REPO}/issues?state=open`),
     pages(`${REPO}/issues?state=closed&since=${since}`),
@@ -458,7 +478,7 @@ export function creditedPairs() {
 }
 
 // For end-to-end checks (scratch scripts): the GitHub client can be swapped.
-export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render, notices, setRaw: (r) => { raw = r; } };
+export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render, notices, setRaw: (r) => { raw = r; }, openPulls };
 
 export function setup() {
   if (!enabled) return console.log('work board: off (GITHUB_TOKEN is not set)');
