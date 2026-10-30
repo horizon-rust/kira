@@ -1,10 +1,11 @@
 // Who sees and writes in each kind of channel of LAYOUT (config.js), with no Discord connection so it can be tested.
 // `ids`: { everyone, mod, kira, owner, roles } (the IDs of @everyone, 🛡️ Mod, Kira, Ludovic, and state.roles by key).
+// `mods`: the channel's own moderators (CHANNEL_MODS in config.js), member IDs.
 import { PermissionFlagsBits as P, OverwriteType } from 'discord.js';
 
 const role = (id, extra) => ({ id, type: OverwriteType.Role, ...extra });
 
-export function overwrites(ids, spec, staffCategory) {
+export function overwrites(ids, spec, staffCategory, mods = []) {
   const { everyone, mod, kira, owner, roles = {} } = ids;
   const ow = [{ id: kira, type: OverwriteType.Member, allow: [P.ViewChannel, P.SendMessages, P.ManageMessages, P.ManageThreads, P.EmbedLinks, P.AddReactions, P.Connect, P.MoveMembers, P.ManageChannels] }];
   if (spec.staff || staffCategory) {
@@ -40,5 +41,7 @@ export function overwrites(ids, spec, staffCategory) {
   } else if (spec.lobby) {
     ow.push(role(everyone, { deny: [P.Speak, P.SendMessages] }));
   }
+  // Moderators of this channel only: they delete messages, manage threads and pin.
+  ow.push(...mods.map((id) => ({ id, type: OverwriteType.Member, allow: [P.ManageMessages, P.ManageThreads, P.PinMessages] })));
   return ow;
 }

@@ -146,7 +146,7 @@ test('the scope: the language channels, #general and its threads, non-English an
   assert.equal(mod.aiScope(message('🔥🔥 123 :)')), null);
   assert.equal(mod.aiScope(message('')), null);
 
-  for (const t of ['Привет всем!', '你好，这个游戏能在 Mac 上运行吗', 'こんにちは、よろしくお願いします', 'hola, gracias por todo el trabajo', 'das ist nicht so gut aber danke', 'você está jogando com uma versão nova', 'ciao, il gioco funziona anche su Mac?']) assert.ok(mod.looksNonEnglish(t), t);
+  for (const t of ['Привет всем!', '你好，这个游戏能在 Mac 上运行吗', 'こんにちは、よろしくお願いします', 'hola, gracias por todo el trabajo', 'das ist nicht so gut aber danke', 'você está jogando com uma versão nova', 'ciao, il gioco funziona anche su Mac?', 'het spel werkt niet goed op mijn Mac']) assert.ok(mod.looksNonEnglish(t), t);
   for (const t of ['The game crashes when I open the inventory', 'is this the same as vanilla?', 'ok', 'gg', 'déjà vu', 'I said merci to the dev and it is fine', '<@123456789012345678> <:pog:123456789012345678> https://example.com/привет-мир']) assert.ok(!mod.looksNonEnglish(t), t);
 });
 
@@ -242,6 +242,14 @@ test('every language channel has its removal note in its language; #italiano is 
   try {
     assert.equal(mod.aiScope(message('ciao a tutti', { channel: 'itc' })), 'italian');
   } finally { delete core.state.channels.italian; }
+});
+
+test('#nederlands is read and its removal note is Dutch', () => {
+  assert.equal(mod.AI_NOTES.nl(2), 'je bericht is verwijderd (regel 2, zie #rules).');
+  core.state.channels.dutch = 'nlc';
+  try {
+    assert.equal(mod.aiScope(message('hallo allemaal', { channel: 'nlc' })), 'dutch');
+  } finally { delete core.state.channels.dutch; }
 });
 
 test('a flag: not deleted, nothing posted in the channel, #mod-log gets the translation and a jump link for a mod', async () => {

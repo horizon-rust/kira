@@ -6,7 +6,7 @@ import {
   GuildVerificationLevel, GuildExplicitContentFilter, GuildDefaultMessageNotifications,
   ForumLayoutType, SortOrderType, ChannelFlags,
 } from 'discord.js';
-import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, FAQ_MORE, HORIZON, OFFICIAL_SERVER, HOWTO, DEFAULT_CHANNELS } from './config.js';
+import { GUILD_ID, OWNER_ID, SERVER, LINKS, COLOR, ROLES, RETIRED_ROLES, LAYOUT, RETIRED, REPLACED, PINS, WELCOME, RULES, RULES_FOOTER, FAQ, FAQ_MORE, HORIZON, OFFICIAL_SERVER, HOWTO, DEFAULT_CHANNELS, CHANNEL_MODS } from './config.js';
 import { screeningBody, screeningUpToDate } from './screening.js';
 import { applyAutomod } from './automod.js';
 import { overwrites as permissionOverwrites } from './permissions.js';
@@ -69,7 +69,8 @@ async function ensureRoles(guild) {
 }
 
 const overwrites = (guild, spec, staffCategory) => permissionOverwrites(
-  { everyone: guild.roles.everyone.id, mod: state.roles.mod, kira: guild.members.me.id, owner: OWNER_ID, roles: state.roles }, spec, staffCategory);
+  { everyone: guild.roles.everyone.id, mod: state.roles.mod, kira: guild.members.me.id, owner: OWNER_ID, roles: state.roles }, spec, staffCategory,
+  CHANNEL_MODS[spec.key]);
 
 // Channels another one replaced (REPLACED): every message exported to scratch/replaced-channels-<date>/ (not
 // committed), then the channel deleted. A failed export keeps the channel (setup stops, nothing is lost).
