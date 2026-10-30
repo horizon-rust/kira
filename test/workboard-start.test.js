@@ -31,3 +31,31 @@ test('a refresh that fails is tried again a minute later', async () => {
   assert.deepEqual(wb.current(), saved); // still the saved board, not nothing
   mock.timers.reset();
 });
+
+test('a finished head and unchanged reviews are not read again on the next refresh', async () => {
+  const paths = [];
+  const pull = (n, sha, updated) => ({ number: n, head: { sha }, draft: false, updated_at: updated, title: 't', user: { login: 'u' } });
+  let pulls = [pull(1, 'aaa', 'u1'), pull(2, 'bbb', 'u1')];
+  wb._test.setGitHub({
+    get: async (path) => {
+      paths.push(path);
+      if (path.includes('/pulls?state=open')) return path.includes('page=1') ? pulls : [];
+      if (path.includes('/check-runs')) return { check_runs: [{ status: path.includes('bbb') ? 'in_progress' : 'completed', conclusion: 'success' }] };
+      if (path.includes('/status')) return { statuses: [] };
+      if (path.includes('/reviews')) return [];
+      return null;
+    },
+    write: async () => ({}),
+  });
+  const first = await wb._test.openPulls();
+  assert.deepEqual(first.map((p) => p.ci), ['passing', 'running']);
+  paths.length = 0;
+  pulls = [pull(1, 'aaa', 'u1'), pull(2, 'bbb', 'u2')];
+  await wb._test.openPulls();
+  // #1: passing head, same updated_at: nothing read. #2: still running and updated: CI and reviews read again.
+  assert.deepEqual(paths.filter((p) => !p.includes('state=open')).sort(), [
+    '/repos/horizon-rust/horizon/commits/bbb/check-runs?per_page=100',
+    '/repos/horizon-rust/horizon/commits/bbb/status',
+    '/repos/horizon-rust/horizon/pulls/2/reviews?per_page=100',
+  ]);
+});
