@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PermissionFlagsBits as P } from 'discord.js';
-import { LAYOUT, ROLES, DEFAULT_CHANNELS } from '../src/config.js';
+import { LAYOUT, ROLES, DEFAULT_CHANNELS, CHANNEL_MODS } from '../src/config.js';
 import { overwrites } from '../src/permissions.js';
 import { rolesMessage } from '../src/texts.js';
 
@@ -118,4 +118,19 @@ test('#official-server: everyone reads, only the mods, the Horizon Team and Kira
   for (const roles of [['MOD'], ['TEAM']]) assert.equal(can(roles, P.SendMessages, ow), true, String(roles));
   assert.equal(can(['CONTRIB'], P.SendMessages, ow), false, 'a contributor reads only');
   assert.ok(ow.find((o) => o.id === 'KIRA').allow.includes(P.SendMessages));
+});
+
+test('a channel moderator (CHANNEL_MODS): deletes messages, manages threads and pins in that channel only', () => {
+  assert.deepEqual(CHANNEL_MODS.dutch, ['1308764088444260455'], 'yn4p moderates #nederlands');
+  for (const key of Object.keys(CHANNEL_MODS)) assert.ok(specs.some((c) => c.key === key), key);
+  const dutch = specs.find((c) => c.key === 'dutch');
+  const ow = overwrites(ids, dutch, false, CHANNEL_MODS.dutch);
+  assert.equal(ow.length, 2, 'Kira and the moderator');
+  const yn4p = ow.find((o) => o.id === '1308764088444260455');
+  assert.equal(yn4p.type, 1, 'a member overwrite');
+  assert.equal(yn4p.allow.reduce((a, b) => a | b, 0n), P.ManageMessages | P.ManageThreads | P.PinMessages);
+  assert.equal(String(yn4p.allow.reduce((a, b) => a | b, 0n)), '2251816993562624', 'the bits the channel has on Discord');
+  assert.equal(yn4p.deny, undefined);
+  assert.equal(overwrites(ids, specs.find((c) => c.key === 'italian'), false).length, 1, 'no moderator elsewhere');
+  assert.deepEqual(overwrites(ids, spec, false, ['X']).at(-1).id, 'X', 'added after the channel kind\'s own overwrites');
 });
