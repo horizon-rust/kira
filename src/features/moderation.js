@@ -259,7 +259,7 @@ async function moderate(msg) {
 // removal in a day the spam timeout ladder applies. "flag" only logs it for a mod. Nothing else is ever done on the
 // model's say. Off, budget spent or API down: nothing is read, the filters above still run.
 
-const LANG_OF = { russian: 'ru', portuguese: 'pt', spanish: 'es', french: 'fr', german: 'de', polish: 'pl', turkish: 'tr', chinese: 'zh', japanese: 'ja' };
+const LANG_OF = { russian: 'ru', portuguese: 'pt', spanish: 'es', french: 'fr', german: 'de', italian: 'it', polish: 'pl', turkish: 'tr', chinese: 'zh', japanese: 'ja' };
 const LANG_KEYS = LAYOUT.find((g) => g.key === 'languages')?.channels.map((c) => c.key) ?? [];
 // The note under a removed message, in the member's language.
 export const AI_NOTES = {
@@ -269,6 +269,7 @@ export const AI_NOTES = {
   pt: (n) => `sua mensagem foi removida (regra ${n}, veja #rules).`,
   fr: (n) => `ton message a été supprimé (règle ${n}, voir #rules).`,
   de: (n) => `deine Nachricht wurde entfernt (Regel ${n}, siehe #rules).`,
+  it: (n) => `il tuo messaggio è stato rimosso (regola ${n}, vedi #rules).`,
   pl: (n) => `twoja wiadomość została usunięta (zasada ${n}, zobacz #rules).`,
   tr: (n) => `mesajın kaldırıldı (kural ${n}, bkz. #rules).`,
   zh: (n) => `你的消息已被删除（规则 ${n}，见 #rules）。`,
@@ -284,7 +285,7 @@ const OTHER_WORDS = new Set(('je tu il nous vous est sont pas mais avec pour dan
   + 'não você obrigado olá com uma isso muito '
   + 'jest nie się tak dzięki cześć jak czy '
   + 'bu bir ve için değil merhaba teşekkürler evet ama '
-  + 'het een niet ik maar ciao grazie sono che della perché').split(' '));
+  + 'het een niet ik maar ciao grazie sono che della perché anche questo gioco funziona molto buongiorno però').split(' '));
 const ENGLISH_WORDS = new Set('the and you is are it this that what how why to of in for not but with have do does can my your we they be was on just so'.split(' '));
 export function looksNonEnglish(text) {
   const s = String(text ?? '').replace(/<a?:\w+:\d+>|<[@#][!&]?\d+>|https?:\/\/\S+|`[^`]*`/g, ' ');
@@ -462,4 +463,4 @@ export function setup() {
 }
 
 export { moderate };
-export const _test = { pending, flushAll: () => Promise.all([...pending.keys()].map((id) => flushAi(id))) };
+export const _test = { pending, LANG_OF, flushAll: () => Promise.all([...pending.keys()].map((id) => flushAi(id))) };
