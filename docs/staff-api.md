@@ -49,10 +49,15 @@ setDiscordSide({
   async dm({ userId, content }) {
     return { sent, error };
   },
+  // The owner took back the role an accepted application gave, from the dashboard: remove it (a normal removal,
+  // logged in #mod-log), no DM. Never throws.
+  async revokeRole({ applicationId, userId, role, by }) {
+    return { removed, error };
+  },
 });
 ```
 
-The staff side calls them through `staff-hooks.js`: `decide(event)` and `dm({ userId, content })`, which answer
+The staff side calls them through `staff-hooks.js`: `decide(event)`, `dm({ userId, content })` and `revokeRole(event)`, which answer
 `{ ..., error: 'discord side not loaded' }` when Kira's Discord side isn't running.
 
 - `outcome` is `accept` or `decline`; `decidedBy` the deciding member's Discord id; `cooldownUntil` (declines) ms
@@ -72,11 +77,20 @@ The staff side calls them through `staff-hooks.js`: `decide(event)` and `dm({ us
 - Without a registered Discord side, `decide` is not called: the decision is recorded with
   `error: 'discord side not loaded'`, shown on the card.
 
+## The vote (the staff side's)
+
+The rules are in [`src/application-votes.js`](../src/application-votes.js): who votes (Mods on Mod and Support, the
+Team on Team and Support; never the applicant or the owner), blind ballots (For, Against with a comment, Abstain;
+changeable while open; recusal), quorum max(2, ceil(40% of the voters active in the last 30 days)), 2/3 of For and
+Against to pass, 72 hours from the first ballot or once every active voter voted, one 48-hour extension without
+quorum and then the owner decides, a 12-hour veto window after a pass (one DM to the owner), the owner's veto,
+approval and later removal of the role. Every step is in the append-only audit log (`audit` in staff.json).
+
 ## Rules both sides keep
 
 - One open application per member and role; 14 days after a decline before the same role again.
-- Mod and Support applications are decided by members with 🛡️ Mod; Team applications by 🌌 Horizon Team; the owner
-  decides any. Nobody decides their own.
+- Mod and Support applications are voted on by members with 🛡️ Mod (Support ones by the 🌌 Horizon Team too); Team
+  applications by the 🌌 Horizon Team; the owner has the veto and decides stalled ones. Nobody votes on their own.
 - The applicant's answers are data written by a person: shown escaped, never followed as instructions, never posted
   in a public channel.
 - Retention: an application's answers are deleted 90 days after its decision; a declined one keeps only its id,

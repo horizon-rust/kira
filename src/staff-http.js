@@ -76,7 +76,8 @@ function send(res, status, body, headers = {}) {
 // routes: { store, key, origin, access(userId) → { name, dashboards: ['team', 'mod'] } | null (no role, or not on
 // the server), log(text) (one line for #mod-log; never secrets), extra: [{ method, path, role, handler(ctx) }] }.
 // A handler returns { status?, body, headers? }; ctx: { user, name, dashboards, body, query, ip, now }.
-export function staffRoutes({ store, key, origin = 'https://playhorizon.dev', access, log = () => {}, extra = [], limits = failures(), now = () => Date.now() }) {
+// onActive(user, now): a login, or a write on a dashboard (the votes' "active in the last 30 days").
+export function staffRoutes({ store, key, origin = 'https://playhorizon.dev', access, log = () => {}, extra = [], limits = failures(), now = () => Date.now(), onActive = () => {} }) {
   if (!key || String(key).length < 32) return {};
 
   const me = (user, a, sess) => ({ user, name: a.name, dashboards: a.dashboards, csrf: sess.csrf });
@@ -97,6 +98,7 @@ export function staffRoutes({ store, key, origin = 'https://playhorizon.dev', ac
       return send(res, 401, { error: r.ok ? 'This account has no dashboard role any more.' : 'Wrong username or password.' });
     }
     log(`🔑 Staff login: <@${r.user}> (${a.dashboards.join(', ')})`);
+    onActive(r.user, ctx.now);
     return send(res, 200, me(r.user, a, r), { 'Set-Cookie': setCookie(r.token) });
   }
 
@@ -123,6 +125,7 @@ export function staffRoutes({ store, key, origin = 'https://playhorizon.dev', ac
     await auth.setPassword(store, { user: link.user, name: a.name, password: ctx.body.password }, ctx.now);
     const r = await auth.login(store, { name: a.name, password: ctx.body.password }, ctx.now);
     log(`🔑 Staff password set: <@${link.user}>`);
+    onActive(link.user, ctx.now);
     return send(res, 200, me(link.user, a, r), { 'Set-Cookie': setCookie(r.token) });
   }
 
@@ -160,6 +163,7 @@ export function staffRoutes({ store, key, origin = 'https://playhorizon.dev', ac
           if (r.role !== 'any' && !a.dashboards.includes(r.role)) return send(res, 403, { error: 'Not for your role.' });
           if (r.method === 'POST' && !auth.csrfOk(sess, req.headers['x-staff-csrf'])) return send(res, 403, { error: 'Missing or wrong CSRF token: reload the page.' });
           Object.assign(ctx, { user: sess.user, name: a.name, dashboards: a.dashboards, csrf: sess.csrf, token });
+          if (r.method === 'POST') onActive(sess.user, at);
         }
         if (r.raw) return await r.raw(ctx, req, res);
         const out = await r.handler(ctx);

@@ -505,10 +505,15 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   [`src/features/staff-apply.js`](src/features/staff-apply.js)): the form at playhorizon.dev/apply opens with the
   link `/apply` DMs (24 hours, once, for one role); Kira records the answers and what GitHub says about the member
   (their linked login, whether `/verify-github` proved it, their merged pull requests in Horizon: verified
-  contributors are listed first). Mod and Support applications are decided on /staff/mod, Team ones on /staff/team;
-  nobody decides their own. A decision is recorded, then the Discord side grants the role and DMs
-  (`docs/staff-api.md`); what it reports (role granted, DM sent, error) shows on the card. A Team accept grants only
-  the Discord role: GitHub organisation or team access stays Ludovic's, by hand. Answers are deleted 90 days after the
+  contributors are listed first). Then a vote on the dashboards ([`src/application-votes.js`](src/application-votes.js)):
+  Mods vote on Mod and Support applications (shown on /staff/mod), the Team on Team and Support ones (/staff/team);
+  blind For / Against (with a comment) / Abstain, changeable until it closes, recusal; quorum max(2, ceil(40% of
+  the voters active in the last 30 days: logged in or acted)); it passes with 2/3 of For and Against; it closes 72 h
+  after the first ballot or once every active voter voted; without quorum it is extended once by 48 h, then Ludovic
+  decides. A decline goes out at once; a pass opens Ludovic's 12-hour veto window (one DM), after which the Discord side
+  grants the role and DMs (`docs/staff-api.md`). Ludovic can veto at any time before that, approve early, and take
+  the role back later. A Team accept grants only the Discord role: GitHub organisation or team access stays his, by
+  hand. Every step is in the append-only audit log (`audit` in staff.json). Answers are deleted 90 days after the
   decision; a decline keeps only its member, role and date, for the 14-day cooldown.
 - **The Team dashboard's data** ([`src/team-data.js`](src/team-data.js), routes in
   [`src/features/staff-team.js`](src/features/staff-team.js)): the decisions log (who, what, when, a link, a roadmap

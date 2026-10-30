@@ -61,7 +61,9 @@ function revoke(userId, why) {
 
 export function routes(extra = []) {
   if (!store) return {};
-  return staffRoutes({ store, key: process.env.STAFF_PROXY_KEY, origin: SITE, access, log, extra: [...applicationRoutes({ store, site: SITE, log }), ...teamRoutes({ store, log }), ...statsRoutes({ store }), ...extra] });
+  // Last login or write per member (at most one write an hour each): who counts as an active voter.
+  const onActive = (user, now) => { if ((store.data.activity?.[user] ?? 0) < now - auth.HOUR) store.update((d) => { (d.activity ??= {})[user] = now; }); };
+  return staffRoutes({ store, key: process.env.STAFF_PROXY_KEY, origin: SITE, access, log, onActive, extra: [...applicationRoutes({ store, site: SITE, log }), ...teamRoutes({ store, log }), ...statsRoutes({ store }), ...extra] });
 }
 
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
