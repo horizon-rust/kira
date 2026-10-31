@@ -8,7 +8,7 @@ projects) is talked about in #general (#off-topic was merged into it on 2026-10-
 
 `npm run setup` makes the server match [`src/config.js`](src/config.js):
 
-- **Categories** (since 2026-10-28): 👋 start here (welcome, #new-members, #horizon-info with the download, #official-server (Horizon Official, the survival server bunchy7s runs), FAQ, rules,
+- **Categories** (since 2026-10-28): 👋 start here (welcome, #new-members, #horizon-info with the download, #official-server (Horizon Official, the SMP hosted by Sculk), FAQ, rules,
   announcements, #ludovic-videos, #support-horizon) · 🌅 horizon (#horizon-bugs: reproducible bugs only, #horizon-support:
   help, #horizon-ideas, #horizon-chat, #showcase for
   videos/clips/screenshots/builds made in Horizon, #releases, #updates) · 🛠️ contributing (#contributors: everyone reads, only
