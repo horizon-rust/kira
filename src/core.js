@@ -36,10 +36,10 @@ export const ago = (date) => {
   return d < 1 ? 'less than a day' : d === 1 ? '1 day' : `${d} days`;
 };
 
-export async function modlog(title, description, color = 0x888888, fields = [], key = 'modlog') {
+export async function modlog(title, description, color = 0x888888, fields = [], key = 'modlog', components = []) {
   const ch = channel(key);
   if (!ch) return null;
-  return ch.send({ embeds: [new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).addFields(fields).setTimestamp()], allowedMentions: { parse: [] } }).catch((e) => { console.error(e); return null; });
+  return ch.send({ embeds: [new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).addFields(fields).setTimestamp()], components, allowedMentions: { parse: [] } }).catch((e) => { console.error(e); return null; });
 }
 
 // "10m", "2h", "3d", "1h30m" → milliseconds (null if it can't be read).
