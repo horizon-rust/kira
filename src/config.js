@@ -99,7 +99,7 @@ export const ROLES = [
 export const RETIRED_ROLES = ['videos', 'beatmaker', 'rapper', 'singer', 'youtuber', 'editor', 'designer'];
 
 // Channel types: text, voice, forum, announcement. slowmode: seconds between two messages of a member (setup sets it).
-// readonly: everyone reads, only staff and Kira post. writers: everyone reads, only staff, Kira and these roles post. staff: only mods see it. posts: 'staff' → only staff open forum posts.
+// readonly: everyone reads, only Kira and Ludovic post (staffPost: the staff too). writers: everyone reads, only staff, Kira and these roles post. staff: only mods see it. posts: 'staff' → only staff open forum posts.
 // locked: a voice channel nobody joins by themselves (Ludovic or a mod moves people in). lobby: join it to get your own room.
 // Forums: `guide` is the post guidelines Discord shows above the forum (with the template) and the text of the
 // locked, pinned HOWTO post (one per forum that has a template);
@@ -131,7 +131,7 @@ export const LAYOUT = [
       { key: 'newmembers', name: 'new-members', type: 'text', readonly: true, topic: 'Everyone who joins, welcomed here.' },
       { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the disclaimer.' },
       // Ludovic, 2026-10-29: Horizon's official survival server, run by bunchy7s; the game and the launcher list it.
-      { key: 'officialserver', name: 'official-server', type: 'text', readonly: true, topic: 'Horizon Official, the survival server run by bunchy7s: horizon.bunchy7s.dev' },
+      { key: 'officialserver', name: 'official-server', type: 'text', readonly: true, staffPost: true, topic: 'Horizon Official, the survival server run by bunchy7s: horizon.bunchy7s.dev' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
       { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'Big Horizon news. Pick the 📣 Big news role to get pinged.' },
@@ -621,9 +621,9 @@ export const HORIZON = {
 export const OFFICIAL_SERVER = {
   name: 'Horizon Official',
   address: 'horizon.bunchy7s.dev',
-  description: 'Horizon\'s official **survival** server, run by **bunchy7s** on Pumpkin and updated from Pumpkin\'s nightly builds.',
+  description: 'Horizon\'s official **survival** server, hosted by **bunchy7s**. It runs horizon-server, Horizon\'s own server, updated from Horizon\'s builds.',
   join: 'You need Horizon to join (other clients are turned away). In Horizon: Multiplayer → Add Server, then the address.',
-  problems: 'A bug there can come from Pumpkin (the server) or from Horizon. Try the same thing in single player first: if it happens there too, post it in #horizon-bugs; if it only happens on the server, tell bunchy7s.',
+  problems: 'Try the same thing in single player first: if it happens there too, post it in #horizon-bugs; if it only happens on the server, say so in your #horizon-bugs post.',
 };
 
 // Contributors' AI agents (src/agents.js, src/mcp.js, src/features/agents.js): the MCP endpoint and its tokens.

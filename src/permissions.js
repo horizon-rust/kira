@@ -12,11 +12,13 @@ export function overwrites(ids, spec, staffCategory, mods = []) {
     // The staff channels: the mods and the Horizon Team (who moderate too).
     ow.push(role(everyone, { deny: [P.ViewChannel] }), ...[mod, roles.team].filter(Boolean).map((id) => role(id, { allow: [P.ViewChannel, P.SendMessages] })));
   } else if (spec.readonly) {
-    // The mods and the Horizon Team (who have the mods' permissions, Ludovic 2026-10-28) post; everyone else reads.
+    // Only Kira and Ludovic post; everyone else reads (Ludovic 2026-10-31: the mods no longer write in the big
+    // channels). `staffPost`: the mods and the Horizon Team (who have the mods' permissions) post there too.
     ow.push(
       role(everyone, { deny: [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads] }),
-      ...[mod, roles.team].filter(Boolean).map((id) => role(id, { allow: [P.SendMessages] })),
+      ...(spec.staffPost ? [mod, roles.team] : []).filter(Boolean).map((id) => role(id, { allow: [P.SendMessages] })),
     );
+    if (owner) ow.push({ id: owner, type: OverwriteType.Member, allow: [P.SendMessages] });
   } else if (spec.members) {
     // Private to these roles: nobody else sees it.
     ow.push(

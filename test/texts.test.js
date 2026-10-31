@@ -68,9 +68,9 @@ test('every text fits where Discord puts it', () => {
   assert.ok(cfg.WELCOME.links.length <= 5);
 });
 
-test('#official-server says what the server runs: Pumpkin and its nightly builds', () => {
-  assert.match(cfg.OFFICIAL_SERVER.description, /Pumpkin's nightly builds/);
-  assert.doesNotMatch(cfg.OFFICIAL_SERVER.description, /Horizon's Nightly/);
+test('#official-server says what the server runs: horizon-server, not Pumpkin', () => {
+  assert.match(cfg.OFFICIAL_SERVER.description, /horizon-server/);
+  assert.doesNotMatch(`${cfg.OFFICIAL_SERVER.description} ${cfg.OFFICIAL_SERVER.problems}`, /Pumpkin/);
 });
 
 test('#faq: two messages, each under Discord\'s limits with real channel ids, nothing cut', () => {
