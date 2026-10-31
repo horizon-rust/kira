@@ -132,6 +132,8 @@ export const LAYOUT = [
       { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the disclaimer.' },
       // Ludovic, 2026-10-29: Horizon's official survival server; the game and the launcher list it. Hosted by Sculk since 2026-10-31.
       { key: 'officialserver', name: 'official-server', type: 'text', readonly: true, staffPost: true, topic: 'Official Horizon SMP, hosted by Sculk: play.playhorizon.dev' },
+      // Anthony S. via Ludovic, 2026-10-31: the official server's chat, posted by its horizon-server through a webhook ([discord] in server.toml).
+      { key: 'serverchat', name: 'server-chat', type: 'text', readonly: true, staffPost: true, topic: 'Live chat of the official server (play.playhorizon.dev), drawn as in game. Read-only: talk in game.' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
       { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'Big Horizon news. Pick the 📣 Big news role to get pinged.' },
