@@ -130,8 +130,8 @@ export const LAYOUT = [
       { key: 'welcome', name: 'welcome', type: 'text', readonly: true, topic: 'Start here: what Horizon is, where everything is, and your roles (buttons below).' },
       { key: 'newmembers', name: 'new-members', type: 'text', readonly: true, topic: 'Everyone who joins, welcomed here.' },
       { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the disclaimer.' },
-      // Ludovic, 2026-10-29: Horizon's official survival server, run by bunchy7s; the game and the launcher list it.
-      { key: 'officialserver', name: 'official-server', type: 'text', readonly: true, staffPost: true, topic: 'Horizon Official, the survival server run by bunchy7s: horizon.bunchy7s.dev' },
+      // Ludovic, 2026-10-29: Horizon's official survival server; the game and the launcher list it. Hosted by Sculk since 2026-10-31.
+      { key: 'officialserver', name: 'official-server', type: 'text', readonly: true, staffPost: true, topic: 'Official Horizon SMP, hosted by Sculk: play.playhorizon.dev' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
       { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'Big Horizon news. Pick the 📣 Big news role to get pinged.' },
@@ -620,8 +620,8 @@ export const HORIZON = {
 // Horizon's official survival server: #official-server, and the game's and the launcher's Multiplayer lists.
 export const OFFICIAL_SERVER = {
   name: 'Horizon Official',
-  address: 'horizon.bunchy7s.dev',
-  description: 'Horizon\'s official **survival** server, hosted by **bunchy7s**. It runs horizon-server, Horizon\'s own server, updated from Horizon\'s builds.',
+  address: 'play.playhorizon.dev',
+  description: 'The **Official Horizon SMP**, hosted by **Sculk**: survival with an economy (/balance, /sell, /baltop), land claims and homes, and an anticheat. It runs horizon-server, Horizon\'s own server, updated from Horizon\'s builds. Ops: luzW and bunchy7s.',
   join: 'You need Horizon to join (other clients are turned away). In Horizon: Multiplayer → Add Server, then the address.',
   problems: 'Try the same thing in single player first: if it happens there too, post it in #horizon-bugs; if it only happens on the server, say so in your #horizon-bugs post.',
 };
