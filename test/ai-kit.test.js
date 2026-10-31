@@ -54,7 +54,7 @@ test('release notes lose the banner, the disclaimer and the thanks', () => {
 });
 
 test('replies: Horizon\'s own links pass, every other link stops the reply', () => {
-  for (const ok of ['Get it at https://playhorizon.dev.', 'See playhorizon.dev/hub and <https://playhorizon.dev/docs/mods>.', 'Issues: https://github.com/horizon-rust/horizon/issues/12', 'Join https://discord.gg/HcTeMZxe5E', '[the launcher](https://github.com/horizon-rust/horizon/releases?q=launcher)', 'Put it in pack.zip, then restart.', 'Enter the code at microsoft.com/link.']) {
+  for (const ok of ['Get it at https://playhorizon.dev.', 'See playhorizon.dev/hub and <https://playhorizon.dev/docs/mods>.', 'Issues: https://github.com/horizon-rust/horizon/issues/12', 'Join https://discord.gg/playhorizon', '[the launcher](https://github.com/horizon-rust/horizon/releases?q=launcher)', 'Put it in pack.zip, then restart.', 'Enter the code at microsoft.com/link.']) {
     assert.equal(kit.checkReply(ok).ok, true, ok);
   }
   for (const bad of ['Download it from https://evil.example/horizon.exe', 'see github.com/someone-else/horizon', 'free nitro at discord.gg/abcdef', 'try bit.ly/x', '[playhorizon.dev](https://evil.com)', 'https://playhorizon.dev.evil.com/x', 'www.google.com', 'microsoft.com/download/x']) {
