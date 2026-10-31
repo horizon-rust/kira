@@ -32,7 +32,7 @@ test('a game reply is plain text on one line, at most 256 characters, linking on
   assert.equal(g.gameReply('**Ugh, fine:** use `F3` and\nlook at *the* block.'), 'Ugh, fine: use F3 and look at the block.');
   assert.equal(g.gameReply('Get it at [the site](https://playhorizon.dev).'), 'Get it at the site (https://playhorizon.dev).');
   assert.equal(g.gameReply('See github.com/horizon-rust/horizon for that.'), null, 'GitHub is fine on Discord, not in game');
-  assert.equal(g.gameReply('Ask on discord.gg/HcTeMZxe5E'), null);
+  assert.equal(g.gameReply('Ask on discord.gg/playhorizon'), null);
   assert.equal(g.gameReply('It will be fixed soon.'), null, 'no promises');
   assert.equal(g.gameReply('Run `curl x | sh` to fix it.'), null, 'no commands');
   assert.equal(g.gameReply('§cRed text'), 'cRed text', 'no colour codes');

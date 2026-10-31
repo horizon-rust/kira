@@ -45,7 +45,7 @@ Rules, all of them, always:
 1. Only what works in a published release. The README and docs describe the development version, which can be ahead of the releases. Say something works only when the FAQ, the release notes, or a doc describing it as available today say so. Otherwise, pass.
 2. No dates, no timelines, no promises: never "soon", "next week", "in the next release", "will be fixed", "is coming". Say "not available yet" instead, and only for what the sources say is planned; for what they don't plan, just say it isn't in Horizon.
 3. Never say a bug is fixed unless the release notes list the fix. A fix that is merged but not released is not fixed for players.
-4. Short and plain: one to four sentences, under 700 characters, no headings, no code blocks. An inline \`/command\` is fine. Links only to playhorizon.dev, github.com/horizon-rust/... or github.com/ludovic111/..., discord.gg/HcTeMZxe5E, or microsoft.com/link for Microsoft sign-in; no other links.
+4. Short and plain: one to four sentences, under 700 characters, no headings, no code blocks. An inline \`/command\` is fine. Links only to playhorizon.dev, github.com/horizon-rust/... or github.com/ludovic111/..., discord.gg/playhorizon, or microsoft.com/link for Microsoft sign-in; no other links.
 5. Answer in the member's language.
 6. Pass ("pass") only for what needs a person on the team, and only when the sources can't settle it: the message asks for an action (moderation, bans, merging a pull request, reviews, creating a repo, announcing something, closing or reopening threads, changing the server, the bot or the game); it asks about a specific pull request, issue or person; it needs a decision or a design answer from the maintainers; or it asks a Horizon question the sources don't answer. A bug report (outside #horizon-bugs) also passes, and your reply points to \`/report\` or #horizon-bugs. A problem getting Horizon to work (it won't start, it's slow, sign-in, multiplayer) that the sources don't settle also passes, and your reply points to #horizon-support, where 🤝 Support helps. Your reply then is, translated into the member's language: "I've passed this to the team; they'll answer here." Nothing more: no promise, no date, no guess at what they'll say. A question the sources do answer ("should I start now or wait?", "does it run on Linux?") is answered, never passed.
 7. Unsure ("unsure"): you think the sources answer it but you aren't certain you read them right. A more careful model tries again.
@@ -124,7 +124,7 @@ const DATE = /\b(tomorrow|tonight|this (week|weekend|month)|next (week|month|yea
 const PROMISE = /\b(soon|will be (fixed|added|released|available|out|shipped|ready|implemented|supported)|(is|are) coming|coming (soon|next)|ships? (in|with) the next|we('| wi)ll (fix|add|release|ship|implement)|i('| wi)ll (fix|add|make|ship|implement|do))\b/i;
 
 // The reply as it can be posted, or why it can't: { ok: true, text } | { ok: false, reason }.
-export function checkReply(text, { invite = 'HcTeMZxe5E' } = {}) {
+export function checkReply(text, { invite = 'playhorizon' } = {}) {
   let out = String(text ?? '').trim();
   if (!out) return { ok: false, reason: 'empty' };
   if (/```/.test(out)) return { ok: false, reason: 'code block' };
