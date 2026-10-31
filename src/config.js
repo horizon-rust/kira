@@ -99,7 +99,7 @@ export const ROLES = [
 export const RETIRED_ROLES = ['videos', 'beatmaker', 'rapper', 'singer', 'youtuber', 'editor', 'designer'];
 
 // Channel types: text, voice, forum, announcement. slowmode: seconds between two messages of a member (setup sets it).
-// readonly: everyone reads, only Kira and Ludovic post (staffPost: the staff too). writers: everyone reads, only staff, Kira and these roles post. staff: only mods see it. posts: 'staff' → only staff open forum posts.
+// readonly: everyone reads, only Kira, Ludovic and the Horizon Team post (staffPost: the mods too). writers: everyone reads, only staff, Kira and these roles post. staff: only mods see it. posts: 'staff' → only staff open forum posts.
 // locked: a voice channel nobody joins by themselves (Ludovic or a mod moves people in). lobby: join it to get your own room.
 // Forums: `guide` is the post guidelines Discord shows above the forum (with the template) and the text of the
 // locked, pinned HOWTO post (one per forum that has a template);
