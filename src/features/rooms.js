@@ -1,5 +1,6 @@
 // Voice rooms: join "➕ create your room" and Kira makes you your own voice channel, which you control
 // with /room and which disappears when it's empty. And /pull, to bring someone into your voice channel.
+// The owner gets no MuteMembers: with it, a member the staff server-muted could make a room and unmute themselves.
 import { SlashCommandBuilder, ChannelType, PermissionFlagsBits as P, MessageFlags, OverwriteType } from 'discord.js';
 import { GUILD_ID } from '../config.js';
 import { client, state, save, modlog } from '../core.js';
@@ -14,7 +15,7 @@ async function createRoom(member) {
     parent: lobby.parentId,
     bitrate: member.guild.maximumBitrate,
     permissionOverwrites: [
-      { id: member.id, type: OverwriteType.Member, allow: [P.Connect, P.Speak, P.MoveMembers, P.MuteMembers, P.ManageChannels] },
+      { id: member.id, type: OverwriteType.Member, allow: [P.Connect, P.Speak, P.MoveMembers, P.ManageChannels] },
       { id: client.user.id, type: OverwriteType.Member, allow: [P.ViewChannel, P.Connect, P.ManageChannels, P.MoveMembers] },
     ],
     reason: `room for ${member.user.tag}`,
@@ -59,7 +60,7 @@ export const handlers = {
     if (sub === 'claim') {
       if (room.members.has(owner)) return i.reply(ephemeral('Its owner is still here.'));
       state.rooms[room.id] = i.user.id; save();
-      await room.permissionOverwrites.edit(i.user.id, { Connect: true, Speak: true, MoveMembers: true, MuteMembers: true, ManageChannels: true });
+      await room.permissionOverwrites.edit(i.user.id, { Connect: true, Speak: true, MoveMembers: true, ManageChannels: true });
       return i.reply(ephemeral('The room is yours now.'));
     }
     if (owner !== i.user.id) return i.reply(ephemeral(`Only <@${owner}> controls this room (or \`/room claim\` once they leave).`));
@@ -83,7 +84,7 @@ export const handlers = {
       case 'transfer': {
         if (!room.members.has(who.id) || who.bot) return i.reply(ephemeral('They need to be in the room.'));
         state.rooms[room.id] = who.id; save();
-        await room.permissionOverwrites.edit(who.id, { Connect: true, Speak: true, MoveMembers: true, MuteMembers: true, ManageChannels: true });
+        await room.permissionOverwrites.edit(who.id, { Connect: true, Speak: true, MoveMembers: true, ManageChannels: true });
         await room.permissionOverwrites.delete(i.user.id).catch(() => {});
         return i.reply(ephemeral(`The room is <@${who.id}>'s now.`));
       }
