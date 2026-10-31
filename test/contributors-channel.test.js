@@ -54,7 +54,7 @@ test('the other kinds of channel keep their overwrites', () => {
   const chat = specs.find((c) => c.key === 'horizonchat');
   assert.equal(overwrites(ids, chat, false).length, 1, 'a normal channel: only Kira');
   const rules = specs.find((c) => c.key === 'rules');
-  assert.deepEqual(overwrites(ids, rules, false).slice(1).map((o) => o.id), ['EVERYONE', 'OWNER']);
+  assert.deepEqual(overwrites(ids, rules, false).slice(1).map((o) => o.id), ['EVERYONE', 'TEAM', 'OWNER']);
   const staff = specs.find((c) => c.key === 'modlog');
   assert.deepEqual(overwrites(ids, staff, true).slice(1).map((o) => o.id), ['EVERYONE', 'MOD', 'TEAM']);
   assert.deepEqual(overwrites(ids, specs.find((c) => c.key === 'ludovic'), false).slice(1).map((o) => o.id), ['EVERYONE', 'OWNER']);
@@ -97,7 +97,7 @@ test('the Horizon Team moderates: the mods\' permissions plus kick and ban, the 
   assert.equal(can([], P.ViewChannel, ow), false);
 });
 
-test('read-only channels: everyone reads, only Kira and Ludovic post; the mods and the Team only where staffPost is set', () => {
+test('read-only channels: everyone reads, only Kira, Ludovic and the Team post; the mods only where staffPost is set', () => {
   const readonly = specs.filter((c) => c.readonly);
   assert.ok(readonly.some((c) => c.key === 'rules') && readonly.some((c) => c.key === 'announcements'));
   for (const spec of readonly) {
@@ -105,7 +105,7 @@ test('read-only channels: everyone reads, only Kira and Ludovic post; the mods a
     assert.equal(can([], P.SendMessages, ow), false, spec.key);
     assert.equal(can([], P.ViewChannel, ow), true, spec.key);
     assert.equal(can(['MOD'], P.SendMessages, ow), !!spec.staffPost, spec.key);
-    assert.equal(can(['TEAM'], P.SendMessages, ow), !!spec.staffPost, spec.key);
+    assert.equal(can(['TEAM'], P.SendMessages, ow), true, spec.key);
     assert.ok(ow.some((o) => o.id === ids.owner && o.allow?.includes(P.SendMessages)), spec.key);
   }
   assert.equal(readonly.find((c) => c.key === 'announcements').staffPost, undefined);
