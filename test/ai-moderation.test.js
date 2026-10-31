@@ -266,3 +266,50 @@ test('a flag: not deleted, nothing posted in the channel, #mod-log gets the tran
   assert.equal(logs[0].fields.find((x) => x.name === 'English').value, 'you are useless lol');
   assert.deepEqual(timeouts, []);
 });
+
+test('undo: every automatic action in #mod-log has an Undo button; a mod lifts the timeout, takes the strike back and restores the messages', async () => {
+  // The log channel keeps the button rows too.
+  const rows = [];
+  core.client.channels.cache.set('ml', { send: async (m) => { logs.push(m.embeds[0].toJSON()); rows.push(m.components ?? []); return m; } });
+  const restored = [];
+  core.client.channels.cache.set('fr', { messages: { delete: async (id) => { deleted.push(id); } }, send: async (p) => { restored.push(p); return p; } });
+  try {
+    verdicts = (batch) => batch.map(() => ({ verdict: 'remove', category: 'hate', rule: 1, reason: 'Hate.', english: 'x', language: 'fr' }));
+    await mod.moderate(message('premier message méchant', { user: 'z' }));
+    await mod._test.flushAll();
+    await mod.moderate(message('deuxième message méchant', { user: 'z' }));
+    await mod._test.flushAll();
+    assert.deepEqual(timeouts, [10 * 60_000]);
+    const button = rows.at(-1)[0].toJSON().components[0];
+    assert.equal(button.label, 'Undo');
+    assert.equal(core.state.aiRemovals.z.length, 2);
+
+    const lifted = [];
+    const replies = [];
+    let updated = null;
+    const click = (staff) => ({
+      customId: button.custom_id, user: { id: 'mod1', tag: 'mod#1', username: 'mod1' },
+      member: { permissions: { has: () => staff } },
+      guild: { members: { fetch: async () => ({ timeout: async (ms) => { lifted.push(ms); } }) } },
+      reply: async (p) => { replies.push(p); }, update: async (p) => { updated = p; },
+    });
+    await mod._test.undo(click(false));
+    assert.match(replies.at(-1).content, /Only the mods/);
+    assert.deepEqual(lifted, []);
+
+    await mod._test.undo(click(true));
+    assert.deepEqual(lifted, [null], 'the timeout is lifted');
+    assert.equal(core.state.aiRemovals.z.length, 1, 'the strike is taken back');
+    assert.equal(restored.length, 1);
+    assert.match(restored[0].content, /Restored by a mod: <@z> wrote:\ndeuxième message méchant/);
+    assert.deepEqual(restored[0].allowedMentions, { parse: [] });
+    assert.equal(updated.components[0].toJSON().components[0].disabled, true);
+    assert.match(logs.at(-1).title, /Automod undone/);
+
+    await mod._test.undo(click(true));
+    assert.match(replies.at(-1).content, /Already undone/);
+  } finally {
+    core.client.channels.cache.set('ml', { send: async (m) => { logs.push(m.embeds[0].toJSON()); return m; } });
+    core.client.channels.cache.set('fr', { messages: { delete: async (id) => { deleted.push(id); } } });
+  }
+});

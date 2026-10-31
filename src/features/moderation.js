@@ -2,7 +2,7 @@
 // tracking, member reports, and the mods' commands.
 import {
   SlashCommandBuilder, ContextMenuCommandBuilder, ApplicationCommandType, PermissionFlagsBits as P,
-  MessageFlags, GuildVerificationLevel, EmbedBuilder,
+  MessageFlags, GuildVerificationLevel, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } from 'discord.js';
 import { GUILD_ID, MOD, LAYOUT, AI, RULES } from '../config.js';
 import { client, state, save, channel, isStaff, clip, ago, modlog, parseDuration, human, quietDeletes } from '../core.js';
@@ -17,6 +17,7 @@ const traffic = new Map(); // channelId → messages in the current minute
 const joinQueue = [];      // join / leave lines waiting to be logged together
 state.spamStrikes ??= {};  // userId → timestamps of automatic spam timeouts
 state.aiRemovals ??= {};   // userId → timestamps of messages the AI check removed
+state.automodUndo ??= {};  // undo id → what an automatic action did, so a mod can undo it from #mod-log
 const invites = new Map(); // code → uses
 
 // ── Commands ────────────────────────────────────────────────────────────────
@@ -192,13 +193,60 @@ async function spamTimeout(m, why) {
   return { ms, strike: strikes.length };
 }
 
-async function remove(msg, note, log) {
+// ── Undo: every automatic action in #mod-log carries an "Undo" button ──────────
+// Ludovic 2026-10-31: keep the automod, but let a human undo what it did in one click. Undo lifts the timeout, takes
+// the strike back, and reposts the deleted messages in their channel ("restored by a mod"). Kept for UNDO_DAYS.
+const UNDO_DAYS = 7;
+const UNDO_PREFIX = 'automod-undo:';
+
+// Records an action and returns the button row for its #mod-log entry.
+export function undoable({ user, tag, messages = [], timeout = false, strike = null }) {
+  const cutoff = Date.now() - UNDO_DAYS * 864e5;
+  for (const [k, v] of Object.entries(state.automodUndo)) if (v.at < cutoff) delete state.automodUndo[k];
+  const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  state.automodUndo[id] = {
+    at: Date.now(), user, tag, timeout, strike,
+    messages: messages.filter((x) => x.content?.trim()).map((x) => ({ channelId: x.channelId, content: x.content.slice(0, 1800) })),
+  };
+  save();
+  return [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(UNDO_PREFIX + id).setStyle(ButtonStyle.Secondary).setEmoji('↩️').setLabel('Undo'))];
+}
+
+export async function undo(i) {
+  if (!isStaff(i.member)) return i.reply(ephemeral('Only the mods can undo an automatic action.'));
+  const id = i.customId.slice(UNDO_PREFIX.length);
+  const a = state.automodUndo[id];
+  if (!a) return i.reply(ephemeral(`Already undone, or older than ${UNDO_DAYS} days.`));
+  delete state.automodUndo[id];
+  const done = [];
+  if (a.timeout) {
+    const m = await i.guild.members.fetch(a.user).catch(() => null);
+    if (m) { await m.timeout(null, `automod undone by ${i.user.tag}`).catch(console.error); done.push('timeout lifted'); }
+  }
+  if (a.strike && state[a.strike]?.[a.user]?.length) { state[a.strike][a.user].pop(); done.push('strike taken back'); }
+  save();
+  let restored = 0;
+  for (const x of a.messages) {
+    const ch = client.channels.cache.get(x.channelId);
+    const ok = await ch?.send({ content: `↩️ Restored by a mod: <@${a.user}> wrote:\n${x.content}`, allowedMentions: { parse: [] } }).catch(() => null);
+    if (ok) restored++;
+  }
+  if (restored) done.push(`${restored} message${restored > 1 ? 's' : ''} restored`);
+  const what = done.join(', ') || 'nothing left to undo';
+  await i.update({ components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(UNDO_PREFIX + 'done').setStyle(ButtonStyle.Secondary).setEmoji('↩️').setLabel(`Undone by ${i.user.username}`).setDisabled(true))] }).catch(console.error);
+  await modlog('↩️ Automod undone', `<@${a.user}> (${a.tag ?? a.user}) by <@${i.user.id}>: ${what}.`, 0x2ecc71);
+  return null;
+}
+
+async function remove(msg, note, log, { strike = null } = {}) {
   await msg.delete().catch(() => {});
   if (note) {
     const n = await msg.channel.send({ content: `<@${msg.author.id}> ${note}`, allowedMentions: { users: [msg.author.id] } }).catch(() => null);
     if (n) setTimeout(() => n.delete().catch(() => {}), 12_000).unref?.();
   }
-  if (log) await modlog(log, `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>:\n${clip(msg.content)}${msg.attachments.size ? `\n📎 ${msg.attachments.map((a) => a.name).join(', ')}` : ''}`, 0xffb020);
+  // Dangerous files are never restored; every other removal can be undone from #mod-log.
+  const row = log && !msg.attachments.size ? undoable({ user: msg.author.id, tag: msg.author.tag, messages: [msg], strike }) : [];
+  if (log) await modlog(log, `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>:\n${clip(msg.content)}${msg.attachments.size ? `\n📎 ${msg.attachments.map((a) => a.name).join(', ')}` : ''}`, 0xffb020, [], 'modlog', row);
   return true;
 }
 
@@ -224,11 +272,11 @@ async function moderate(msg) {
   // Shouting: a long message almost all in capitals.
   const letters = msg.content.replace(/[^a-zA-Z]/g, '');
   if (letters.length >= MOD.capsMin && letters.replace(/[^A-Z]/g, '').length / letters.length >= MOD.capsRatio) {
-    return remove(msg, 'no need to shout 🙂 (all-caps messages are removed).');
+    return remove(msg, 'no need to shout 🙂 (all-caps messages are removed).', '📢 All-caps message removed');
   }
   // A wall of emojis.
   const emojis = (msg.content.match(/<a?:\w+:\d+>|\p{Extended_Pictographic}/gu) ?? []).length;
-  if (emojis > MOD.emojiMax) return remove(msg, `too many emojis in one message (${MOD.emojiMax} at most).`);
+  if (emojis > MOD.emojiMax) return remove(msg, `too many emojis in one message (${MOD.emojiMax} at most).`, '😵 Emoji wall removed');
 
   // Floods, copy-pasted messages and link floods.
   const now = Date.now();
@@ -247,7 +295,8 @@ async function moderate(msg) {
   for (const x of offending) await client.channels.cache.get(x.channelId)?.messages.delete(x.id).catch(() => {});
   const { ms, strike } = await spamTimeout(m, `spam (${why})`);
   await msg.channel.send({ content: `<@${msg.author.id}> timed out for ${human(ms)}: spam (${why}).`, allowedMentions: { parse: [] } });
-  await modlog('🔇 Spam timeout', `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>: ${why}, ${offending.length} messages deleted, ${human(ms)} (strike ${strike} today).\n> ${clip(msg.content, 300)}`, 0xff4d4d);
+  const row = undoable({ user: msg.author.id, tag: msg.author.tag, messages: offending, timeout: true, strike: 'spamStrikes' });
+  await modlog('🔇 Spam timeout', `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>: ${why}, ${offending.length} messages deleted, ${human(ms)} (strike ${strike} today).\n> ${clip(msg.content, 300)}`, 0xff4d4d, [], 'modlog', row);
   return true;
 }
 
@@ -363,12 +412,14 @@ async function aiAct({ msg, scope }, v, call) {
   const day = Date.now() - 864e5;
   const removals = [...(state.aiRemovals[msg.author.id] ?? []).filter((t) => t > day), Date.now()];
   state.aiRemovals[msg.author.id] = removals; save();
-  let extra = '';
+  let extra = '', timedOut = false;
   if (removals.length >= 2 && msg.member) {
     const { ms, strike } = await spamTimeout(msg.member, `rule ${v.rule} (${v.category}), ${removals.length} removals today`);
     extra = `\n${removals.length} removals today → timeout ${human(ms)} (strike ${strike}).`;
+    timedOut = true;
   }
-  return modlog('🤖 Removed by Kira\'s AI', `${who}${extra}`, 0xff4d4d, fields);
+  const row = undoable({ user: msg.author.id, tag: msg.author.tag ?? msg.author.username, messages: [msg], timeout: timedOut, strike: 'aiRemovals' });
+  return modlog('🤖 Removed by Kira\'s AI', `${who}${extra}`, 0xff4d4d, fields, 'modlog', row);
 }
 
 // ── Events ──────────────────────────────────────────────────────────────────
@@ -410,6 +461,7 @@ async function everyMinute() {
 }
 
 export function setup() {
+  client.on('interactionCreate', (i) => { if (i.isButton?.() && i.guildId === GUILD_ID && i.customId.startsWith(UNDO_PREFIX)) undo(i).catch(console.error); });
   client.once('clientReady', async () => cacheInvites(await client.guilds.fetch(GUILD_ID)));
   setInterval(() => everyMinute().catch(console.error), MOD.joinBatchMs);
   client.on('inviteCreate', (inv) => invites.set(inv.code, inv.uses ?? 0));
@@ -464,4 +516,4 @@ export function setup() {
 }
 
 export { moderate };
-export const _test = { pending, LANG_OF, flushAll: () => Promise.all([...pending.keys()].map((id) => flushAi(id))) };
+export const _test = { pending, LANG_OF, undo, undoable, flushAll: () => Promise.all([...pending.keys()].map((id) => flushAi(id))) };
