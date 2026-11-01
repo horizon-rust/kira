@@ -84,8 +84,9 @@ test('the Horizon Team moderates: the mods\' permissions plus kick and ban, the 
   const team = ROLES.find((r) => r.key === 'team');
   const mod = ROLES.find((r) => r.key === 'mod');
   // Only the Team kicks and bans (dezer-x, 2026-10-29): mods time out and delete.
-  assert.deepEqual(team.permissions.filter((p) => p !== 'KickMembers' && p !== 'BanMembers'), mod.permissions);
-  for (const p of ['KickMembers', 'BanMembers']) { assert.ok(team.permissions.includes(p)); assert.ok(!mod.permissions.includes(p)); }
+  // The live server also gives the Team @everyone mentions (2026-11-01: LAYOUT follows the live server).
+  assert.deepEqual(team.permissions.filter((p) => !['KickMembers', 'BanMembers', 'MentionEveryone'].includes(p)), mod.permissions);
+  for (const p of ['KickMembers', 'BanMembers', 'MentionEveryone']) { assert.ok(team.permissions.includes(p)); assert.ok(!mod.permissions.includes(p)); }
   // /slowmode is the mods' tool: both bypass it, and both start voice Activities (Ludovic, 2026-10-28). Every name is a real flag (setup maps P[name]).
   for (const r of [mod, team]) for (const p of ['BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps']) assert.ok(r.permissions.includes(p), `${r.key} ${p}`);
   for (const r of ROLES) for (const p of r.permissions ?? []) assert.equal(typeof P[p], 'bigint', `${r.key}: ${p}`);
@@ -106,7 +107,8 @@ test('read-only channels: everyone reads, only Kira, Ludovic and the Team post; 
     assert.equal(can([], P.ViewChannel, ow), true, spec.key);
     assert.equal(can(['MOD'], P.SendMessages, ow), !!spec.staffPost, spec.key);
     assert.equal(can(['TEAM'], P.SendMessages, ow), true, spec.key);
-    assert.ok(ow.some((o) => o.id === ids.owner && o.allow?.includes(P.SendMessages)), spec.key);
+    // Ludovic has his own overwrite, except where the mods post too (#join-server, #server-chat: the live server has none).
+    assert.equal(ow.some((o) => o.id === ids.owner && o.allow?.includes(P.SendMessages)), !spec.staffPost, spec.key);
   }
   assert.equal(readonly.find((c) => c.key === 'announcements').staffPost, undefined);
 });

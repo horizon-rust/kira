@@ -2,7 +2,18 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { COLOR, LAYOUT, ROLES, HOWTO, FAQ, FAQ_MORE, LINKS, WELCOME, RULES, RULES_FOOTER, OFFICIAL_SERVER } from './config.js';
 
-const byName = new Map(LAYOUT.flatMap((g) => g.channels).filter((c) => c.type !== 'voice').map((c) => [c.name, c.key]));
+// The names a channel is written with in texts: its name, the name without its decoration ("💬│horizon-chat" is
+// #horizon-chat) and the old names it went by (`aka`). Only text and forum channels are mentioned.
+export const plain = (name) => name.split('│').pop();
+export const handles = (spec) => [...new Set([spec.name, plain(spec.name), ...(spec.aka ?? [])])];
+const byName = new Map(LAYOUT.flatMap((g) => g.channels).filter((c) => c.type !== 'voice').flatMap((c) => handles(c).map((h) => [h, c.key])));
+
+// The topic setup writes on a channel (its #mentions turned into links); null: none. Forums add the post guide and template.
+export function channelTopic(spec, state) {
+  if (spec.type === 'voice') return null;
+  if (spec.type === 'forum') return linkify(`${spec.topic}\n\n${spec.guide ?? ''}${spec.template ? `\n\n**Template:**\n${spec.template}` : ''}`, state).slice(0, 4096);
+  return spec.topic ? linkify(spec.topic, state) : null;
+}
 
 // "#horizon-bugs" (or "#русский", "#中文": scripts without case are \p{Lo}) in a text becomes a clickable channel mention.
 export function linkify(text, state) {

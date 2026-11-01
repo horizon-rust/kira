@@ -18,7 +18,8 @@ export function overwrites(ids, spec, staffCategory, mods = []) {
       role(everyone, { deny: [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads] }),
       ...(spec.staffPost ? [mod, roles.team] : [roles.team]).filter(Boolean).map((id) => role(id, { allow: [P.SendMessages] })),
     );
-    if (owner) ow.push({ id: owner, type: OverwriteType.Member, allow: [P.SendMessages] });
+    // Not where `staffPost` is set (#join-server, #server-chat): Ludovic is a mod there, and the live server has no overwrite for him.
+    if (owner && !spec.staffPost) ow.push({ id: owner, type: OverwriteType.Member, allow: [P.SendMessages] });
   } else if (spec.members) {
     // Private to these roles: nobody else sees it.
     ow.push(

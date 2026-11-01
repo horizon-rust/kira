@@ -58,13 +58,14 @@ export function automodRules(ids) {
   ];
 }
 
-export async function applyAutomod(guild, ids, log = console.log) {
+// `update: false` makes the missing rules only and leaves existing ones as they are (setup without --apply-layout).
+export async function applyAutomod(guild, ids, log = console.log, { update = true } = {}) {
   const existing = await guild.autoModerationRules.fetch();
   for (const r of automodRules(ids)) {
     const data = { ...r, eventType: r.triggerType === T.MemberProfile ? AutoModerationRuleEventType.MemberUpdate : AutoModerationRuleEventType.MessageSend, enabled: true };
     const found = existing.find((e) => e.name === r.name);
     try {
-      if (found) await found.edit(data);
+      if (found) { if (update) await found.edit(data); }
       else { await guild.autoModerationRules.create(data); log('automod rule', r.name); }
     } catch (e) { log('automod', r.name, e.message); }
   }

@@ -13,7 +13,7 @@ const core = await import('../src/core.js');
 const community = await import('../src/features/community.js');
 
 const specs = cfg.LAYOUT.flatMap((g) => g.channels);
-const names = new Set(specs.map((c) => c.name));
+const names = new Set(specs.flatMap((c) => texts.handles(c)));
 Object.assign(core.state.channels, Object.fromEntries(specs.map((c, i) => [c.key, String(100000000000000000n + BigInt(i))])));
 
 let help;

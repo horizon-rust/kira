@@ -6,13 +6,13 @@ projects) is talked about in #general (#off-topic was merged into it on 2026-10-
 
 ## The server
 
-`npm run setup` makes the server match [`src/config.js`](src/config.js):
+`npm run setup` makes sure the server has everything [`src/config.js`](src/config.js) lists (it is **additive**, see [Setup is additive](#setup-is-additive)). `LAYOUT` follows the live server, whose names and types are the truth (2026-11-01):
 
-- **Categories** (since 2026-10-28): 👋 start here (welcome, #new-members, #horizon-info with the download, #official-server (Horizon Official, the SMP hosted by Sculk), #server-chat (its chat, posted by the server), FAQ, rules, #⚠️│do-not-post (the honeypot),
-  announcements, #ludovic-videos, #support-horizon) · 🌅 horizon (#horizon-bugs: reproducible bugs only, #horizon-support:
-  help, #horizon-ideas, #horizon-chat, #showcase for
-  videos/clips/screenshots/builds made in Horizon, #releases, #updates) · 🛠️ contributing (#contributors: everyone reads, only
-  🛠️ Contributor, the Team and mods write; #horizon-team) · 💬 general (#general,
+- **Categories**: PLAYHORIZON.DEV (#ping-roles (key `welcome`), #new-members, #horizon-info with the download, #🗝️│join-server (key `officialserver`: Horizon Official, the SMP hosted by Sculk), FAQ, rules, #🚫│no-text (the honeypot, named so scam bots that skip channels called "do-not-post" still post there),
+  #📢│announcements, #ludovic-videos, #sponsors) · HORIZON-GENERAL (#horizon-bugs: reproducible bugs only, #horizon-support:
+  help, #horizon-ideas, #💬│horizon-chat, #showcase for
+  videos/clips/screenshots/builds made in Horizon, #📰│releases, #📰│updates) · HORIZONSMP (#🌐│server-chat, the SMP's chat, posted by the server; pinned in `LAYOUT` by its ID) · 🛠️ CONTRIBUTORS (#contributors: everyone reads, only
+  🛠️ Contributor, the Team and mods write; #horizon-team) · GENERAL (#general-chat,
   #introductions, #hall-of-fame, #memes, #bot-commands) · 🌍 languages (eleven channels everyone sees: default channels; re-measured 2026-11-11, fewer than ~5 people writing → proposed for removal) · 🔊 voice · 🛡️ staff. The old channels (#projects, #resources, #help, #beats, …) were deleted
   on 2026-10-14 after their messages were exported (`scratch/deleted-channels-2026-10-14/`, not committed).
   #work-board and #dev-log are replaced by #updates, and #off-topic by #general (`REPLACED` in `config.js`): setup
@@ -40,17 +40,37 @@ projects) is talked about in #general (#off-topic was merged into it on 2026-10-
 Only the AutoMod rules (or a channel's `slowmode`) changed? `node scripts/apply-moderation.js [--dry-run]` (with `DISCORD_TOKEN`)
 applies just those, finding channels and roles by name.
 
-Run it again after changing `config.js`: it updates what it made (IDs in `data/state.json`), moves
-channels, and deletes the empty categories it made earlier. If the IDs are ever lost it finds its
-channels, roles, messages, guides and posts again by name instead of making new ones, and it stops if it finds
-two copies of the same thing. The bot and setup each keep to their own keys in `state.json`, so running
-setup while Kira is up is safe; restart Kira afterwards so it knows the new channels.
+### Setup is additive
+
+Run `npm run setup` after adding a channel, category or role to `config.js`. It **creates what is missing and
+touches nothing that exists**: it never renames, retypes, re-topics, reorders or deletes a channel or category, never
+changes bitrates, permission overwrites, roles, the Onboarding questions, the AutoMod rules, rules screening or the
+Community settings. (On 2026-11-01 a plain run applied a stale `LAYOUT` to the live server: ~13 renames, two
+announcement channels turned into text channels, bitrates, the Onboarding prompts, an extra overwrite and a second
+#server-chat. The live server is the truth; `LAYOUT` follows it.)
+
+What it does do: finds each channel by the ID in `data/state.json`, else by the `id` pinned in `LAYOUT`, else by its
+name (the name, the name without its decoration, or an old name in `aka`), and makes it, in its category, only if none
+is there; it stops if it finds two copies. It posts the messages that are missing and keeps Kira's own messages
+(welcome, roles, rules, FAQ, pins, the how-to posts) up to date. The bot and setup each keep to their own keys in
+`state.json`, so running setup while Kira is up is safe; restart Kira afterwards so it knows the new channels.
+
+To make the server follow `config.js` anyway (a topic, a guide, a permission, an order you changed on purpose):
+
+    npm run setup -- --apply-layout          # prints the diff and stops: nothing changes
+    npm run setup -- --apply-layout --yes    # applies it
+
+The diff lists every channel and category rename, retype, move, topic, bitrate, slowmode, permission-overwrite and
+order change, and every role change; `--yes` also re-applies the Onboarding, AutoMod rules, rules screening,
+Community settings, role order and the retired and replaced channels (`RETIRED`, `REPLACED`). Read the diff first.
+`--yes` alone is refused. In `config.js`, `aka` lists the names a channel or category went by, `id` pins a channel that
+already exists, and a voice channel's `bitrate` is its own (not "the most the boosts allow").
 
 ## What kira does
 
 | | |
 | --- | --- |
-| Moderation | Floods / copy-paste / link floods (5 messages with links in 30 s) → messages deleted, timeout of 10 min, then 1 h, then 1 day the same day. All-caps, emoji walls, more than 5 links in a message and executables removed. Accounts under 3 days can't post links. Discord AutoMod (`src/automod.js`, applied by setup): spam, slurs, mention spam, invites and scams, bad names, piracy (rule 3: TLauncher, SKlauncher, cracked Minecraft, offline mode + bypass, warez… `MOD.piracy` in `config.js`), and Telegram links (t.me, telegram.me/.dog/.org, tg://, "t . me/": blocked and a 1-hour timeout; `TELEGRAM_PATTERNS`). Every rule alerts #mod-log (the piracy alert too, since 2026-10-30: #mod-chat is for the mods talking); mods and the Horizon Team are exempt. In every language, Kira's AI reads the 🌍 languages channels, #horizon-chat, #general and non-English messages anywhere: clear cases removed, borderline ones flagged for a mod (see [AI answers](#ai-answers)). **Honeypot** (Kacper, 2026-11-01): `#⚠️│do-not-post` (👋 start here; everyone sees and can post in it, its topic and a pinned Kira message say posting there removes you instantly) catches scam bots: whoever posts there is soft-banned, i.e. banned with the last day of their messages deleted, then unbanned at once so a real person can rejoin; one soft-ban per user however many messages, a line in #mod-log (user, account age, the message, "honeypot soft-ban"; a failed ban or unban is logged too, with `/unban` for the second). Bots, mods, the Horizon Team and Ludovic are exempt (their message there is just deleted). On by default: `MOD.honeypot` in `config.js`, or `KIRA_HONEYPOT=off`; [`src/honeypot-kit.js`](src/honeypot-kit.js), handler in `src/features/moderation.js`. Raids (15 accounts younger than 7 days in 2 minutes) → raid mode for an hour: verified phone, DMs between members paused. No slowmode (Ludovic, 2026-10-28): none set (`slowmode` in `LAYOUT`) and none automatic (`MOD.autoSlowmode`); mods and the Horizon Team have Bypass slowmode for when they set one with `/slowmode`. Verification level high (10 minutes on the server before talking); @everyone can't ping everyone, open threads or use outside apps. `/warn` (3 in 30 days → 1 h timeout), `/warnings`, `/clearwarnings`, `/timeout`, `/untimeout`, `/kick`, `/ban`, `/unban` (kick and ban: the Horizon Team only; mods time out), `/purge`, `/clear-chat`, `/slowmode`, `/lock`, `/unlock`, `/raidmode` |
+| Moderation | Floods / copy-paste / link floods (5 messages with links in 30 s) → messages deleted, timeout of 10 min, then 1 h, then 1 day the same day. All-caps, emoji walls, more than 5 links in a message and executables removed. Accounts under 3 days can't post links. Discord AutoMod (`src/automod.js`, applied by setup): spam, slurs, mention spam, invites and scams, bad names, piracy (rule 3: TLauncher, SKlauncher, cracked Minecraft, offline mode + bypass, warez… `MOD.piracy` in `config.js`), and Telegram links (t.me, telegram.me/.dog/.org, tg://, "t . me/": blocked and a 1-hour timeout; `TELEGRAM_PATTERNS`). Every rule alerts #mod-log (the piracy alert too, since 2026-10-30: #mod-chat is for the mods talking); mods and the Horizon Team are exempt. In every language, Kira's AI reads the 🌍 languages channels, #horizon-chat, #general and non-English messages anywhere: clear cases removed, borderline ones flagged for a mod (see [AI answers](#ai-answers)). **Honeypot** (Kacper, 2026-11-01): `#🚫│no-text` (PLAYHORIZON.DEV; everyone sees and can post in it, its topic and a pinned Kira message say posting there removes you instantly) catches scam bots: whoever posts there is soft-banned, i.e. banned with the last day of their messages deleted, then unbanned at once so a real person can rejoin; one soft-ban per user however many messages, a line in #mod-log (user, account age, the message, "honeypot soft-ban"; a failed ban or unban is logged too, with `/unban` for the second). Bots, mods, the Horizon Team and Ludovic are exempt (their message there is just deleted). On by default: `MOD.honeypot` in `config.js`, or `KIRA_HONEYPOT=off`; [`src/honeypot-kit.js`](src/honeypot-kit.js), handler in `src/features/moderation.js`. Raids (15 accounts younger than 7 days in 2 minutes) → raid mode for an hour: verified phone, DMs between members paused. No slowmode (Ludovic, 2026-10-28): none set (`slowmode` in `LAYOUT`) and none automatic (`MOD.autoSlowmode`); mods and the Horizon Team have Bypass slowmode for when they set one with `/slowmode`. Verification level high (10 minutes on the server before talking); @everyone can't ping everyone, open threads or use outside apps. `/warn` (3 in 30 days → 1 h timeout), `/warnings`, `/clearwarnings`, `/timeout`, `/untimeout`, `/kick`, `/ban`, `/unban` (kick and ban: the Horizon Team only; mods time out), `/purge`, `/clear-chat`, `/slowmode`, `/lock`, `/unlock`, `/raidmode` |
 | Chat clears | Every 6 hours the messages older than 24 h in #horizon-chat and #general are deleted (bulk deletes under 14 days, one by one beyond, paced); pins and messages that started a thread stay, nothing else is touched. One line in `#mod-log` per run. `/clear-chat [older_than:<hours>]` (Manage Messages) does it now in the current chat channel. `CLEAR` in `config.js`; [`src/features/chatclear.js`](src/features/chatclear.js) |
 | Logs (`#mod-log`) | Joins (account age, **which invite**) and leaves grouped every minute, deleted and edited messages, nicknames, bans, timeouts, AutoMod |
 | Reports | `/report-member` and "Report to mods" (right-click a message → Apps) → `#reports` (`/report` is the bug form: below) |
@@ -83,7 +103,7 @@ Discord app **kira** (application ID `1559239271271891004`, private bot; Server 
 Content intents), owned by Ludovic's account. Token: `op://Agents/Discord bot Kira/credential`.
 
     npm ci
-    ~/fleet/op run --env-file .env.op -- npm run setup     # layout, once and after config changes
+    ~/fleet/op run --env-file .env.op -- npm run setup     # creates what config.js lists and the server lacks; changes nothing else
     systemctl --user restart kira                           # the bot (deploy/kira.service)
     journalctl --user -u kira -f
 
@@ -398,7 +418,8 @@ MCP server only) and `KIRA_GITHUB_DRY_RUN=1`. Health: `GET /health`.
   admin token (`op://Agents/Kira admin token/credential`; Railway only has its SHA-256 in
   `KIRA_ADMIN_TOKEN_SHA256`). A restore replaces the files and restarts the service on them. Empty the variable again afterwards.
 - **Setup** (`npm run setup`): back up, run setup on the ThinkPad against the backup's state
-  (`KIRA_STATE=… npm run setup`), restore it. Setup only touches Discord and its own keys of the state.
+  (`KIRA_STATE=… npm run setup`), restore it. Setup only touches Discord and its own keys of the state,
+  and only adds what is missing unless `--apply-layout --yes` is given.
 - **Rollback to the ThinkPad**: back up from Railway, set `KIRA_DISCORD=off` on Railway (or remove the
   service), put the backup's `state` and `agents` in `~/code/kira/data/state.json` and `data/agents.json`,
   `systemctl --user enable --now kira`. The unit stays installed there, disabled.
