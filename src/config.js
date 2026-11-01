@@ -136,6 +136,10 @@ export const LAYOUT = [
       { key: 'serverchat', name: 'server-chat', type: 'text', readonly: true, staffPost: true, topic: 'Live chat of the official server (play.playhorizon.dev), drawn as in game. Read-only: talk in game.' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
+      // Kacper (kacpherek, Horizon Team) in #horizon-team, 2026-11-01: scam bots post in every channel, so one channel catches
+      // them. Everyone sees it and can post in it (no flags: that is the trap). Whoever posts there is soft-banned (banned
+      // with the last day of their messages deleted, then unbanned at once), src/features/moderation.js, MOD.honeypot.
+      { key: 'honeypot', name: '⚠️│do-not-post', type: 'text', pin: 'honeypot', topic: '⚠️ DO NOT POST HERE. Anyone who posts in this channel is removed from the server instantly (banned, their last day of messages deleted, then unbanned). It exists to catch scam bots. You can rejoin, but please do not post.' },
       { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'Big Horizon news. Pick the 📣 Big news role to get pinged.' },
       { key: 'ludovicvideos', name: 'ludovic-videos', type: 'text', readonly: true, topic: 'Ludovic\'s new YouTube videos, posted by Kira as they come out.' },
       // In 👋 start here (Team, 2026-10-28). Ludovic, 2026-10-28: one channel for every way to support him: the Sculk affiliate link, his GitHub Sponsors (also the
@@ -257,7 +261,7 @@ export const LAYOUT = [
 export const HOWTO = { name: '📌 How to post here: read me first', tag: ['📌', 'read me', true], mention: 'the 📌 **How to post here** post' };
 
 // What everyone sees in the channel list from the start; the Onboarding answers add the rest.
-export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'officialserver', 'horizonchat', 'contributors', 'horizonbugs', 'horizonsupport', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'italian', 'dutch', 'polish', 'turkish', 'chinese', 'japanese'];
+export const DEFAULT_CHANNELS = ['welcome', 'newmembers', 'rules', 'honeypot', 'faq', 'announcements', 'ludovicvideos', 'horizoninfo', 'officialserver', 'horizonchat', 'contributors', 'horizonbugs', 'horizonsupport', 'horizonideas', 'showcase', 'releases', 'updates', 'general', 'introductions', 'halloffame', 'memes', 'botcommands', 'russian', 'spanish', 'portuguese', 'french', 'german', 'italian', 'dutch', 'polish', 'turkish', 'chinese', 'japanese'];
 
 // A channel's own moderators, by Discord user id: setup gives each one Manage Messages, Manage Threads and Pin
 // Messages in that channel only (src/permissions.js). yn4p moderates #nederlands (Ludovic, 2026-10-30).
@@ -273,6 +277,7 @@ export const RETIRED = ['tracks', 'chill', 'aicoding', 'rewrites', 'coding', 'cr
 
 // Pinned messages in text channels.
 export const PINS = {
+  honeypot: '⚠️ **Do not post in this channel.** Anyone who posts here is removed from the server instantly: banned, their messages from the last day deleted, and unbanned right away so a real person can rejoin.\n\nThis channel is a trap for scam bots (fake giveaways, "free Nitro", crypto and MrBeast scams), which post in every channel they can write in. Nothing is ever discussed here. The mods and the Horizon Team are not affected. Chat in #general or #horizon-chat; need help? #horizon-support.',
   intro: '👋 **Introduce yourself** (once), like this:\n\n**Name:** what we call you\n**How I play:** survival, creative, redstone, servers, speedruns…\n**My setup:** OS and GPU (optional, it helps with bugs)\n**Here to:** play, test, report bugs, contribute code, mod…\n**GitHub:** (optional, if you contribute: then run `/link-github`)\n\nOne message, one introduction. To chat, go to #general or #horizon-chat.',
 };
 
@@ -522,6 +527,11 @@ export const MOD = {
     ],
     message: 'Piracy is not allowed here (rule 3): Horizon needs your own copy of Minecraft: Java Edition.',
   },
+  // Honeypot channel (LAYOUT key `honeypot`): whoever posts in it is soft-banned (banned with `honeypotDeleteSeconds` of
+  // their messages deleted, then unbanned at once). Bots, mods, the Horizon Team and Ludovic are exempt (their messages
+  // there are only deleted). On unless KIRA_HONEYPOT=off; one soft-ban per user per `honeypotWindowMs`, however many messages.
+  honeypot: !['0', 'off', 'false', 'no'].includes((process.env.KIRA_HONEYPOT ?? '').trim().toLowerCase()),
+  honeypotDeleteSeconds: 24 * 60 * 60, honeypotWindowMs: 10 * 60_000,
   // Greetings and join logs are grouped when many people arrive at once.
   joinBatchMs: 60_000,
   // Forum posts that don't follow the template are closed after this long.
