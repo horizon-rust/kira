@@ -20,6 +20,7 @@ import * as workboard from './features/workboard.js';
 import * as contributors from './features/contributors.js';
 import * as notify from './features/notify.js';
 import * as site from './features/site.js';
+import * as smp from './features/smp.js';
 import * as webhook from './webhook.js';
 import * as triage from './features/triage.js';
 import * as agents from './features/agents.js';
@@ -41,7 +42,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [modcases, moderation, levels, rooms, community, forums, github, workboard, contributors, notify, site, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply];
+const FEATURES = [modcases, moderation, levels, rooms, community, forums, github, workboard, contributors, notify, site, smp, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
@@ -137,6 +138,7 @@ if (port) {
       res.end(JSON.stringify({ contributors: workboard.creditedPairs() }));
     },
     ...kiraAi.usageRoutes({ limiter }),
+    ...smp.routes({ limiter }), // GET /smp/market.json, /smp/economy.json: the official server's market for the hub, with KIRA_SCULK_FILES_KEY
     ...site.routes({ limiter }), // GET /github/proxy/…: the website's GitHub reads, with KIRA_SITE_REVALIDATE_SECRET
     ...webhook.routes({ limiter, owner: GITHUB.owner }), // POST /github/webhook, when KIRA_GITHUB_WEBHOOK_SECRET is set (src/webhook.js)
     ...(DISCORD ? staff.routes(modcases.routes()) : {}), // the staff dashboards' API, only through the website's proxy (STAFF_PROXY_KEY)

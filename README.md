@@ -393,6 +393,15 @@ At most one call every 30 s per tag; horizon-mods' tag once more 3 minutes later
 Pages build). Then Kira loads the pages that show the data once (`SITE.warm`) so the next visitor gets them fresh, and
 #updates reads the journal again. `KIRA_SITE_DRY_RUN=1` logs the calls instead.
 
+**The official server's market** ([`src/features/smp.js`](src/features/smp.js), [`src/smp-kit.js`](src/smp-kit.js),
+`SMP` in `config.js`): the SMP mod writes `world/horizon-smp/web/market.json` and `economy.json` once a minute. Kira
+serves them as `GET /smp/market.json` and `GET /smp/economy.json`, public, read-only and cached for a minute, for the
+hub's market page. It reads them through Sculk's panel (`files/contents`, only those two names, at most once a minute
+each; a failed read serves the last good copy with `X-Kira-Stale: 1`). Every 10 minutes it posts the market's daily
+summary (`daily_summary`: biggest movers and news) in #server-chat, once per day. Off without
+`KIRA_SCULK_FILES_KEY`: the API key of a panel **subuser who may only read files**, never the owner's key, which
+controls the server.
+
 The site has no GitHub token of its own (60 requests an hour for its host's address), and revalidating on every change
 would spend them in minutes. So it reads GitHub's REST API **through Kira**: `GET /github/proxy/repos/horizon-rust/
 {horizon,horizon-mods}/{issues,releases,releases/latest,contributors,commits/main}` with the same bearer secret, a few
