@@ -408,6 +408,12 @@ export const ONE_OFFS = [
   { key: 'agents-info', channel: 'horizoninfo', when: 'agents', editable: true, pin: true, content: '', embed: AGENT_GUIDE },
 ];
 
+// The official server's market and economy (src/features/smp.js): the pages the SMP mod POSTs once a minute with
+// KIRA_SMP_INGEST_TOKEN, served to the hub, and the market's day posted once.
+export const SMP = {
+  summaryChannel: 'serverchat',
+};
+
 // The hub (playhorizon.dev/hub): the one public place for the roadmap, the kanban, the journal and how to help.
 // Kira is its front desk on Discord, with the same verbs (src/hub.js, src/features/hub.js). The website publishes
 // the roadmap and the journal as JSON (the horizon repo's roadmap/README.md). Suggestions come only from #horizon-ideas
