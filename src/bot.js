@@ -33,6 +33,7 @@ import * as sponsors from './features/sponsors.js';
 import * as staff from './features/staff.js';
 import * as support from './features/support.js';
 import * as apply from './features/apply.js';
+import * as modcases from './features/modcases.js';
 import { startServer } from './mcp.js';
 import { adminRoutes } from './admin.js';
 import { rateLimiter } from './agents.js';
@@ -40,7 +41,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, notify, site, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply];
+const FEATURES = [modcases, moderation, levels, rooms, community, forums, github, workboard, contributors, notify, site, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
@@ -138,7 +139,7 @@ if (port) {
     ...kiraAi.usageRoutes({ limiter }),
     ...site.routes({ limiter }), // GET /github/proxy/…: the website's GitHub reads, with KIRA_SITE_REVALIDATE_SECRET
     ...webhook.routes({ limiter, owner: GITHUB.owner }), // POST /github/webhook, when KIRA_GITHUB_WEBHOOK_SECRET is set (src/webhook.js)
-    ...(DISCORD ? staff.routes() : {}), // the staff dashboards' API, only through the website's proxy (STAFF_PROXY_KEY)
+    ...(DISCORD ? staff.routes(modcases.routes()) : {}), // the staff dashboards' API, only through the website's proxy (STAFF_PROXY_KEY)
     ...gameRoutes({ store: gameServers, ask: kiraAi.askInGame, limiter }),
     ...adminRoutes({ hash: process.env.KIRA_ADMIN_TOKEN_SHA256, limiter, save, freeze, gameTokens: gameTokens({ store: gameServers, dm: async (id, text) => (await client.users.fetch(id)).send({ content: text, allowedMentions: { parse: [] } }), endpoint: `${AGENTS.url.replace(/\/mcp$/, '')}/game/ask` }), cleanup: DISCORD && contributors.enabled ? contributors.cleanup : null, files: { state: dataFile('state.json'), agents: process.env.KIRA_AGENTS || dataFile('agents.json') } }),
   };

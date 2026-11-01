@@ -6,6 +6,7 @@ import { client, state, save, channel, clip, modlog, parseDuration, human } from
 import { levelOf } from './levels.js';
 import { WELCOME_CHANNEL, welcomeMessage, HELP_TITLE, helpText } from '../texts.js';
 import { isOwnPost } from '../adopt.js';
+import { mailStatus, mailRow, closeMail, isAppealThread } from './modcases.js';
 
 const specs = LAYOUT.flatMap((g) => g.channels);
 const reactFor = (channelId) => specs.find((c) => state.channels[c.key] === channelId)?.react;
@@ -106,27 +107,24 @@ async function fromMember(msg) {
     thread = await box.threads.create({ name: `${msg.author.username}`.slice(0, 90), autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek, reason: 'mod-mail' });
     state.modmail[msg.author.id] = thread.id;
     save();
-    await thread.send({ content: `<@&${state.roles.mod}> new mod-mail from <@${msg.author.id}> (${msg.author.tag}). Write here to answer; start with \`//\` for a note they don't see; \`//close\` to close.`, allowedMentions: { roles: [state.roles.mod] } });
+    await thread.send({ content: `<@&${state.roles.mod}> new mod-mail from <@${msg.author.id}> (${msg.author.tag}). Write here to answer; start with \`//\` for a note they don't see; \`//close\` or \`/close\` to close. The status leads the thread's name: 🟢 Open (they wrote last), 🟡 Waiting (a mod answered), ⚪ Closed.`, components: [mailRow()], allowedMentions: { roles: [state.roles.mod] } });
   }
   if (thread.archived) await thread.setArchived(false).catch(() => {});
   const files = msg.attachments.map((a) => a.url);
   await thread.send({ embeds: [new EmbedBuilder().setColor(0x5aa9ff).setAuthor({ name: msg.author.tag, iconURL: msg.author.displayAvatarURL() }).setDescription(clip(msg.content, 3900)).setTimestamp()], files: files.slice(0, 10) });
   await msg.react('📨').catch(() => {});
+  mailStatus(thread, 'open', msg.author.id);
   if (first) await msg.reply('📨 Sent to the mods of the Horizon server. They answer here, through me.').catch(() => {});
 }
 
 async function fromMods(msg) {
   const userId = Object.keys(state.modmail).find((k) => state.modmail[k] === msg.channelId);
-  if (!userId || msg.content.startsWith('//') && msg.content.trim() !== '//close') return;
+  if (!userId || isAppealThread(msg.channel) || msg.content.startsWith('//') && msg.content.trim() !== '//close') return;
+  if (msg.content.trim() === '//close') return closeMail(msg.channel, msg.author.id);
   const user = await client.users.fetch(userId);
-  if (msg.content.trim() === '//close') {
-    await user.send('✅ The mods closed this conversation. DM me again anytime.').catch(() => {});
-    delete state.modmail[userId]; save();
-    await msg.channel.send('Closed.');
-    return msg.channel.setArchived(true).catch(() => {});
-  }
   const ok = await user.send({ content: `**🛡️ Horizon mods:** ${msg.content}`.slice(0, 2000), files: msg.attachments.map((a) => a.url).slice(0, 10) }).then(() => true).catch(() => false);
   await msg.react(ok ? '✅' : '❌').catch(() => {});
+  if (ok) mailStatus(msg.channel, 'waiting', userId);
 }
 
 // ── Hall of fame ─────────────────────────────────────────────────────────────

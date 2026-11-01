@@ -57,6 +57,9 @@ export const agentSnippets = (url, token) => [
 // `was`: the key it had before, so setup renames the role instead of making a new one. `about`: what it is and how
 // you get it, for Kira's AI answers (the server guide, src/texts.js); level roles share one line there.
 export const ROLES = [
+  // Mods' /quarantine (2026-11-01, instead of most bans): it hides every channel but #appeal, where the member fills in
+  // the appeal form. Kira adds the one deny overwrite it needs to each channel (src/features/modcases.js).
+  { key: 'quarantined', name: '🔒 Quarantined', color: 0x4f545c, about: 'given by the mods instead of a ban: only #appeal is visible until the appeal is decided.' },
   { key: 'releases', name: '📦 Releases', color: 0x5aa9ff, self: true, label: 'Every release', about: 'pinged for every new Horizon version and launcher in #releases. A button in #welcome.' },
   { key: 'horizon', name: '📣 Big news', color: COLOR, self: true, label: 'Big news', about: 'pinged for big Horizon news in #announcements. A button in #welcome.' },
   // Not key 'videos': that is the old role of the all-projects server (🔔 Videos), in RETIRED_ROLES, which setup
@@ -138,6 +141,8 @@ export const LAYOUT = [
       { key: 'officialserver', name: '🗝️│join-server', aka: ['official-server'], type: 'text', readonly: true, staffPost: true, topic: 'Official Horizon SMP, hosted by https://sculkhosting.com : play.playhorizon.dev' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
+      // Only 🔒 Quarantined members (and the staff) see it: Kira's pinned "Open appeal" form (src/features/modcases.js).
+      { key: 'appeal', name: 'appeal', type: 'text', quarantine: true, topic: 'Quarantined? Press "Open appeal" below: a short form the mods read and decide on.' },
       // Kacper (kacpherek, Horizon Team) in #horizon-team, 2026-11-01: scam bots post in every channel, so one channel catches
       // them. Everyone sees it and can post in it (no flags: that is the trap). Whoever posts there is soft-banned (banned
       // with the last day of their messages deleted, then unbanned at once), src/features/moderation.js, MOD.honeypot.
@@ -257,6 +262,10 @@ export const LAYOUT = [
     channels: [
       { key: 'modchat', name: 'mod-chat', type: 'text', staff: true },
       { key: 'modlog', name: 'mod-log', type: 'text', staff: true, topic: 'Kira logs here: joins (and the invite they used), leaves, deleted and edited messages, warnings, timeouts, bans, raids, AutoMod.' },
+      // mod-log split (pointofpressure, 2026-11-01): the numbered cases, joins and leaves, and Kira's AI lines each get their own.
+      { key: 'modactions', name: 'mod-actions', type: 'text', staff: true, topic: 'The numbered cases: every timeout, quarantine, ban, unban and kick, by a mod or by Kira, and the appeals\' outcomes. The one channel to watch.' },
+      { key: 'joinleave', name: 'join-leave', type: 'text', staff: true, topic: 'Joins (account age, the invite they used) and leaves, grouped every minute.' },
+      { key: 'kirahandoffs', name: 'kira-handoffs', type: 'text', staff: true, topic: "Kira's AI: the questions she passes to the team, her answers and their cost." },
       { key: 'reports', name: 'reports', type: 'text', staff: true, topic: 'Reports from members: /report-member and "Report to mods" on a message.' },
       { key: 'modmail', name: 'mod-mail', type: 'text', staff: true, topic: "Members DM Kira; each conversation is a thread here. Write in the thread to answer (start with // for a note they don't see, //close to close)." },
       { key: 'discordupdates', name: 'discord-updates', type: 'text', staff: true, topic: 'Messages from Discord to community servers.' },

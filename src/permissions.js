@@ -8,7 +8,14 @@ const role = (id, extra) => ({ id, type: OverwriteType.Role, ...extra });
 export function overwrites(ids, spec, staffCategory, mods = []) {
   const { everyone, mod, kira, owner, roles = {} } = ids;
   const ow = [{ id: kira, type: OverwriteType.Member, allow: [P.ViewChannel, P.SendMessages, P.ManageMessages, P.ManageThreads, P.EmbedLinks, P.AddReactions, P.Connect, P.MoveMembers, P.ManageChannels] }];
-  if (spec.staff || staffCategory) {
+  if (spec.quarantine) {
+    // #appeal: only the 🔒 Quarantined role and the staff see it; nobody writes (the form is a button).
+    ow.push(
+      role(everyone, { deny: [P.ViewChannel, P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads, P.AddReactions] }),
+      ...[roles.quarantined].filter(Boolean).map((id) => role(id, { allow: [P.ViewChannel, P.ReadMessageHistory] })),
+      ...[mod, roles.team].filter(Boolean).map((id) => role(id, { allow: [P.ViewChannel] })),
+    );
+  } else if (spec.staff || staffCategory) {
     // The staff channels: the mods and the Horizon Team (who moderate too).
     ow.push(role(everyone, { deny: [P.ViewChannel] }), ...[mod, roles.team].filter(Boolean).map((id) => role(id, { allow: [P.ViewChannel, P.SendMessages] })));
   } else if (spec.readonly) {
