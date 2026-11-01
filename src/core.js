@@ -28,7 +28,8 @@ export const client = new Client({
 // Message ids Kira deletes on purpose in bulk (src/features/chatclear.js): no "Message deleted" line each in #mod-log.
 export const quietDeletes = new Set();
 
-export const channel = (key) => client.channels.cache.get(state.channels[key]);
+// Setup's channels (state.channels), else the ones Kira made herself because setup hadn't yet (state.ownChannels).
+export const channel = (key) => client.channels.cache.get(state.channels[key] ?? state.ownChannels?.[key]);
 export const isStaff = (member) => !!member?.permissions?.has(P.ManageMessages);
 export const clip = (s, n = 1000) => ((s ?? '').length > n ? s.slice(0, n - 1) + '…' : s) || '*(no text)*';
 export const ago = (date) => {
@@ -37,7 +38,7 @@ export const ago = (date) => {
 };
 
 export async function modlog(title, description, color = 0x888888, fields = [], key = 'modlog', components = []) {
-  const ch = channel(key);
+  const ch = channel(key) ?? channel('modlog'); // a split-off channel (#mod-actions, #join-leave…) not made yet: #mod-log
   if (!ch) return null;
   return ch.send({ embeds: [new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).addFields(fields).setTimestamp()], components, allowedMentions: { parse: [] } }).catch((e) => { console.error(e); return null; });
 }

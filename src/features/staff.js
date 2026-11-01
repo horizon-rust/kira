@@ -128,7 +128,7 @@ export function setup() {
     if (!msg.author.bot) return count.message(msg.author.id);
     if (msg.author.id === client.user.id && msg.channelId === state.channels.reports && msg.embeds.length) count.bump('reports');
   });
-  client.on('threadCreate', (thread, newly) => { if (newly && thread.parentId && thread.parentId === channel('modmail')?.id) count.bump('modmail'); });
+  client.on('threadCreate', (thread, newly) => { if (newly && thread.parentId && thread.parentId === channel('modmail')?.id && !/^⚖️/u.test(thread.name)) count.bump('modmail'); });
   client.on('guildAuditLogEntryCreate', (entry, guild) => {
     if (guild.id !== GUILD_ID) return;
     if (entry.action === AuditLogEvent.MemberKick) count.bump('kicks');

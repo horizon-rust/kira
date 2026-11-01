@@ -20,6 +20,8 @@ const live = JSON.parse(readFileSync(new URL('./fixtures/live-channels-2026-11-0
 const specs = LAYOUT.flatMap((g) => g.channels);
 const spec = (key) => specs.find((c) => c.key === key);
 const group = (key) => LAYOUT.find((g) => g.key === key);
+// Added after the 2026-11-01 snapshot (mod cases, src/features/modcases.js): Kira makes them at start when missing.
+const NEW_CHANNELS = ['create #mod-actions in 🛡️ staff', 'create #join-leave in 🛡️ staff', 'create #kira-handoffs in 🛡️ staff', 'create #appeal in 🛡️ staff'];
 const structure = (lines) => lines.filter((l) => /^(rename|retype|move|bitrate)/.test(l) || / category /.test(l));
 
 test('arguments: nothing is additive; --apply-layout prints the diff; it only acts with --yes too', () => {
@@ -42,8 +44,8 @@ test('setup.js refuses a bad command line before it touches anything', () => {
 test('LAYOUT agrees with the live server of 2026-11-01: no rename, retype, move or bitrate to apply', () => {
   const state = { channels: {}, roles: {} };
   assert.deepEqual(structure(layoutDiff({ layout: LAYOUT, live, state })), []);
-  // …found by name alone, with an empty state, and not one of them would be created
-  assert.deepEqual(layoutDiff({ layout: LAYOUT, live, state }).filter((l) => l.startsWith('create')), []);
+  // …found by name alone, with an empty state: only the channels added since would be created
+  assert.deepEqual(layoutDiff({ layout: LAYOUT, live, state }).filter((l) => l.startsWith('create')), NEW_CHANNELS);
 });
 
 test('the names and types the live server has today', () => {
@@ -114,7 +116,7 @@ test('layoutDiff lists every change --apply-layout --yes would make', () => {
   assert.ok(lines.some((l) => /^move #ping-roles to PLAYHORIZON.DEV/.test(l)));
   assert.ok(lines.includes('bitrate of #Lounge: 384000 → 256000'));
   assert.ok(lines.includes('rename category "👋 start here" → "PLAYHORIZON.DEV"'));
-  assert.deepEqual(layoutDiff({ layout: LAYOUT, live, state }).filter((l) => l.startsWith('create')), []);
+  assert.deepEqual(layoutDiff({ layout: LAYOUT, live, state }).filter((l) => l.startsWith('create')), NEW_CHANNELS);
   // a channel that is missing is a creation; a changed topic and a changed order show
   const fewer = live.filter((c) => c.id !== '1566413848678895626');
   assert.ok(layoutDiff({ layout: LAYOUT, live: fewer, state }).includes('create #🚫│no-text in PLAYHORIZON.DEV'));

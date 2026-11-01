@@ -224,7 +224,7 @@ test('a removal: deleted, the short note in the member\'s language, #mod-log get
   await mod.moderate(message('Encore : tous les [nationalité] dehors', { user: 'h' }));
   await mod._test.flushAll();
   assert.deepEqual(timeouts, [10 * 60_000], 'the second the same day: the spam ladder (10 min first)');
-  assert.match(logs.at(-1).description, /2 removals today → timeout 10 min/);
+  assert.match(logs.at(-1).description, /2 removals today → a timeout/);
 
   // Unknown language from the model: the channel's language; elsewhere, English.
   verdicts = (batch) => batch.map(() => ({ verdict: 'remove', category: 'scam', rule: 4, reason: 'Fake Nitro.', english: 'Free nitro', language: '' }));

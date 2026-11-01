@@ -112,7 +112,7 @@ function logAnswer(msg, text, r) {
     { name: 'Tokens', value: `in ${r.input ?? 0} · out ${r.output ?? 0} · cache read ${r.cacheRead ?? 0} · cache write ${r.cacheWrite ?? 0}`, inline: true },
     { name: 'Cost', value: `$${(r.cost ?? 0).toFixed(4)} (today $${spentToday().toFixed(2)} of $${AI.dailyUsd})`, inline: true },
     ...(r.lookups?.length ? [{ name: 'Docs read', value: clip(r.lookups.join(', '), 300) }] : []),
-  ]);
+  ], 'kirahandoffs');
 }
 
 async function respond(msg, text) {
@@ -168,7 +168,7 @@ function logGame(server, player, text, r) {
     ...(r.reason ? [{ name: 'Why', value: clip(r.reason, 200) }] : []),
     { name: 'Model', value: r.models?.length ? r.models.join(' → ') : 'none', inline: true },
     { name: 'Cost', value: `$${(r.cost ?? 0).toFixed(4)} (today $${spentToday().toFixed(2)} of $${AI.dailyUsd})`, inline: true },
-  ]);
+  ], 'kirahandoffs');
 }
 
 // A new #horizon-support post (src/features/support.js): one first answer from the sources, posted in the post, or
@@ -328,7 +328,7 @@ export async function reviewBug(report) {
     { name: 'Model', value: r.model, inline: true },
     { name: 'Tokens', value: `in ${r.input} · out ${r.output}`, inline: true },
     { name: 'Cost', value: `$${r.cost.toFixed(4)} (today $${spentToday().toFixed(2)} of $${AI.dailyUsd})`, inline: true },
-  ]).catch(() => {});
+  ], 'kirahandoffs').catch(() => {});
   return d;
 }
 

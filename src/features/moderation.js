@@ -9,6 +9,8 @@ import { client, state, save, channel, isStaff, clip, ago, modlog, parseDuration
 import { linkify } from '../texts.js';
 import * as kiraAi from './ai.js';
 import { honeypotExempt, honeypotAction, makeHandled, honeypotLog } from '../honeypot-kit.js';
+import { expect, banNotice } from './modcases.js';
+import { KIRA } from '../modcase-kit.js';
 
 const URL_RE = /(https?:\/\/|www\.|discord\.gg\/)\S+/i;
 const URLS = new RegExp(URL_RE.source, 'gi');
@@ -39,7 +41,7 @@ export const commands = [
     .addStringOption((o) => o.setName('duration').setDescription('e.g. 10m, 2h, 1d (max 28d)').setRequired(true)).addStringOption(reason),
   new SlashCommandBuilder().setName('untimeout').setDescription('End a timeout').setDefaultMemberPermissions(P.ModerateMembers).addUserOption(member),
   new SlashCommandBuilder().setName('kick').setDescription('Kick a member').setDefaultMemberPermissions(P.KickMembers).addUserOption(member).addStringOption(reason),
-  new SlashCommandBuilder().setName('ban').setDescription('Ban a member').setDefaultMemberPermissions(P.BanMembers).addUserOption(member).addStringOption(reason)
+  new SlashCommandBuilder().setName('ban').setDescription('Ban: only CSAM, raids, scams, bots, DM abuse. Anything else: /quarantine').setDefaultMemberPermissions(P.BanMembers).addUserOption(member).addStringOption(reason)
     .addIntegerOption((o) => o.setName('delete_days').setDescription('Delete their messages from the last N days (0-7)').setMinValue(0).setMaxValue(7)),
   new SlashCommandBuilder().setName('unban').setDescription('Unban a user by ID').setDefaultMemberPermissions(P.BanMembers)
     .addStringOption((o) => o.setName('user_id').setDescription('Their user ID').setRequired(true)),
@@ -88,8 +90,11 @@ export const handlers = {
     const count = activeWarnings(m.id).length;
     await dm(m.user, `⚠️ You've been warned in **${i.guild.name}**: ${why}\nThat's ${count} in the last ${MOD.warnWindowDays} days; at ${MOD.warnLimit} you get a 1-hour timeout.`);
     let extra = '';
-    if (count >= MOD.warnLimit) { await m.timeout(MOD.warnTimeoutMs, `${count} warnings`).catch(console.error); extra = ' → **1 h timeout**'; }
-    await modlog('⚠️ Warning', `<@${m.id}> (${m.user.tag}) by <@${i.user.id}>: ${why}\n${count}/${MOD.warnLimit} in ${MOD.warnWindowDays} days${extra}`, 0xffb020);
+    if (count >= MOD.warnLimit) {
+      expect(m.id, 'timeout', { by: KIRA, reason: `${count} warnings in ${MOD.warnWindowDays} days (the last by ${i.user.tag}: ${why})` });
+      await m.timeout(MOD.warnTimeoutMs, `${count} warnings`).catch(console.error); extra = ' → **1 h timeout** (a case in #mod-actions)';
+    }
+    await modlog('⚠️ Warning', `<@${m.id}> (${m.user.tag}) by <@${i.user.id}>: ${why}\n${count}/${MOD.warnLimit} in ${MOD.warnWindowDays} days${extra}`, 0xffb020, [], 'modactions');
     return i.reply(ephemeral(`Warned <@${m.id}> (${count}/${MOD.warnLimit})${extra}.`));
   },
   async warnings(i) {
@@ -108,35 +113,37 @@ export const handlers = {
     const m = await target(i); if (!m) return;
     const ms = parseDuration(i.options.getString('duration'));
     if (!ms || ms > 28 * 864e5) return i.reply(ephemeral('Give a duration like 10m, 2h or 3d (28 days at most).'));
-    const why = i.options.getString('reason') ?? 'no reason given';
-    await m.timeout(ms, `${i.user.tag}: ${why}`);
-    await dm(m.user, `⏳ You've been timed out in **${i.guild.name}** for ${human(ms)}: ${why}`);
-    return i.reply(ephemeral(`Timed out <@${m.id}> for ${human(ms)}.`));
+    const why = i.options.getString('reason') ?? null;
+    expect(m.id, 'timeout', { by: i.user.id, reason: why }); // the case (and the DM with the appeal button) follows from the audit log
+    await m.timeout(ms, `${i.user.tag}: ${why ?? 'no reason given'}`);
+    return i.reply(ephemeral(`Timed out <@${m.id}> for ${human(ms)}: the case is in #mod-actions; add evidence there.`));
   },
   async untimeout(i) {
     const m = await i.guild.members.fetch(i.options.getUser('member').id).catch(() => null);
     if (!m) return i.reply(ephemeral("They're not in the server."));
+    expect(m.id, 'untimeout', { by: i.user.id, reason: 'ended by a mod' });
     await m.timeout(null, `by ${i.user.tag}`);
-    await modlog('Timeout ended', `<@${m.id}> by <@${i.user.id}>`);
     return i.reply(ephemeral(`Timeout ended for <@${m.id}>.`));
   },
   async kick(i) {
     const m = await target(i); if (!m) return;
     const why = i.options.getString('reason') ?? 'no reason given';
     await dm(m.user, `👢 You've been kicked from **${i.guild.name}**: ${why}`);
+    expect(m.id, 'kick', { by: i.user.id, reason: why, noDm: true });
     await m.kick(`${i.user.tag}: ${why}`);
-    await modlog('👢 Kicked', `<@${m.id}> (${m.user.tag}) by <@${i.user.id}>: ${why}`, 0xff4d4d);
     return i.reply(ephemeral(`Kicked ${m.user.tag}.`));
   },
   async ban(i) {
     const m = await target(i); if (!m) return;
     const why = i.options.getString('reason') ?? 'no reason given';
-    await dm(m.user, `🔨 You've been banned from **${i.guild.name}**: ${why}`);
+    await banNotice(m.user, why); // before the ban: afterwards Kira can't reach them (the DM has the appeal link)
+    expect(m.id, 'ban', { by: i.user.id, reason: why, noDm: true });
     await m.ban({ reason: `${i.user.tag}: ${why}`, deleteMessageSeconds: (i.options.getInteger('delete_days') ?? 0) * 86400 });
     return i.reply(ephemeral(`Banned ${m.user.tag}.`));
   },
   async unban(i) {
     const id = i.options.getString('user_id').replace(/\D/g, '');
+    expect(id, 'unban', { by: i.user.id, reason: 'unbanned by a mod' });
     await i.guild.bans.remove(id, `by ${i.user.tag}`).catch(() => null);
     return i.reply(ephemeral(`Unbanned ${id} (if they were banned).`));
   },
@@ -184,12 +191,13 @@ async function setRaidMode(guild, on, why) {
 }
 
 // Automatic spam timeouts get longer when it happens again within a day.
-async function spamTimeout(m, why) {
+async function spamTimeout(m, why, meta = {}) {
   const day = Date.now() - 864e5;
   const strikes = (state.spamStrikes[m.id] ?? []).filter((t) => t > day);
   strikes.push(Date.now());
   state.spamStrikes[m.id] = strikes; save();
   const ms = MOD.spamTimeoutsMs[Math.min(strikes.length, MOD.spamTimeoutsMs.length) - 1];
+  expect(m.id, 'timeout', { by: KIRA, reason: `${why} (strike ${strikes.length} today)`, ...meta });
   await m.timeout(ms, `Kira: ${why} (strike ${strikes.length})`).catch(console.error);
   return { ms, strike: strikes.length };
 }
@@ -265,6 +273,9 @@ async function softBan(msg) {
   const why = 'Kira: honeypot (posted in the do-not-post channel)';
   const info = { userId: user.id, tag: user.tag, createdTimestamp: user.createdTimestamp, content: msg.content, clipText: clip };
   let outcome = 'ok';
+  // A soft-ban keeps its own honeypot line: not a case (the unban follows at once).
+  expect(user.id, 'ban', { skip: true });
+  expect(user.id, 'unban', { skip: true });
   try {
     await guild.members.ban(user.id, { deleteMessageSeconds: MOD.honeypotDeleteSeconds, reason: why });
   } catch (e) {
@@ -350,10 +361,11 @@ async function moderate(msg) {
   recent.delete(msg.author.id);
   for (const x of offending) dropAi(x.id); // deleted below: not worth reading
   for (const x of offending) await client.channels.cache.get(x.channelId)?.messages.delete(x.id).catch(() => {});
-  const { ms, strike } = await spamTimeout(m, `spam (${why})`);
-  await msg.channel.send({ content: `<@${msg.author.id}> timed out for ${human(ms)}: spam (${why}).`, allowedMentions: { parse: [] } });
+  // One case in #mod-actions: the deleted messages are its evidence, its Undo button lifts it all.
   const row = undoable({ user: msg.author.id, tag: msg.author.tag, messages: offending, timeout: true, strike: 'spamStrikes' });
-  await modlog('🔇 Spam timeout', `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>: ${why}, ${offending.length} messages deleted, ${human(ms)} (strike ${strike} today).\n> ${clip(msg.content, 300)}`, 0xff4d4d, [], 'modlog', row);
+  const evidence = { text: `${offending.length} messages deleted in <#${msg.channel.id}>:\n${offending.slice(-3).map((x) => `> ${clip(x.content, 200)}`).join('\n')}` };
+  const { ms } = await spamTimeout(m, `spam (${why})`, { evidence, components: () => row });
+  await msg.channel.send({ content: `<@${msg.author.id}> timed out for ${human(ms)}: spam (${why}).`, allowedMentions: { parse: [] } });
   return true;
 }
 
@@ -469,14 +481,12 @@ async function aiAct({ msg, scope }, v, call) {
   const day = Date.now() - 864e5;
   const removals = [...(state.aiRemovals[msg.author.id] ?? []).filter((t) => t > day), Date.now()];
   state.aiRemovals[msg.author.id] = removals; save();
-  let extra = '', timedOut = false;
-  if (removals.length >= 2 && msg.member) {
-    const { ms, strike } = await spamTimeout(msg.member, `rule ${v.rule} (${v.category}), ${removals.length} removals today`);
-    extra = `\n${removals.length} removals today → timeout ${human(ms)} (strike ${strike}).`;
-    timedOut = true;
-  }
+  const timedOut = removals.length >= 2 && !!msg.member;
+  const extra = timedOut ? `\n${removals.length} removals today → a timeout (its case is in #mod-actions, this entry its evidence).` : '';
   const row = undoable({ user: msg.author.id, tag: msg.author.tag ?? msg.author.username, messages: [msg], timeout: timedOut, strike: 'aiRemovals' });
-  return modlog('🤖 Removed by Kira\'s AI', `${who}${extra}`, 0xff4d4d, fields, 'modlog', row);
+  const entry = await modlog('🤖 Removed by Kira\'s AI', `${who}${extra}`, 0xff4d4d, fields, 'modlog', row);
+  if (timedOut) await spamTimeout(msg.member, `rule ${v.rule} (${v.category}), ${removals.length} removals today`, { evidence: entry ? { url: entry.url, label: 'the removed message' } : null });
+  return entry;
 }
 
 // ── Events ──────────────────────────────────────────────────────────────────
@@ -495,7 +505,7 @@ async function everyMinute() {
   // Join and leave logs, grouped (with 10,000 people arriving, one message per join would bury the log).
   while (joinQueue.length) {
     const batch = joinQueue.splice(0, 30);
-    await modlog(`👥 ${batch.length} joins / leaves`, batch.join('\n').slice(0, 4000), 0x2ecc71);
+    await modlog(`👥 ${batch.length} joins / leaves`, batch.join('\n').slice(0, 4000), 0x2ecc71, [], 'joinleave');
   }
   // Raid mode ends by itself after an hour of calm.
   if (state.raidmode && Date.now() > state.raidmode) await setRaidMode(guild, false, 'an hour without a raid');
@@ -534,8 +544,9 @@ export function setup() {
       if (used) via = `, via discord.gg/${used.code}${used.inviter ? ` (by ${used.inviter.tag})` : ''}`;
       for (const inv of now.values()) invites.set(inv.code, inv.uses);
     }
-    const young = Date.now() - m.user.createdTimestamp < 86_400_000;
-    joinQueue.push(`📥 <@${m.id}> (${m.user.tag}), account ${ago(m.user.createdTimestamp)} old${young ? ' ⚠️' : ''}${via}`);
+    // #join-leave keeps the details mods look for (bunchy7s, 2026-11-01): id, account age (⚠️ under 7 days), avatar, invite.
+    const young = Date.now() - m.user.createdTimestamp < 7 * 86_400_000;
+    joinQueue.push(`📥 <@${m.id}> (${m.user.tag}) \`${m.id}\`, account ${ago(m.user.createdTimestamp)} old${young ? ' ⚠️ under 7 days' : ''} · [avatar](${m.user.displayAvatarURL({ size: 256 })})${via}`);
     // Raid: a burst of brand-new accounts (a busy evening of real people doesn't trigger it).
     if (Date.now() - m.user.createdTimestamp < MOD.raidYoungDays * 864e5) {
       youngJoins.push(Date.now());
@@ -551,12 +562,9 @@ export function setup() {
     if (m.guild.id !== GUILD_ID) return;
     joinQueue.push(`📤 <@${m.id}> (${m.user?.tag ?? 'unknown'}) left${m.joinedTimestamp ? `, joined <t:${Math.floor(m.joinedTimestamp / 1000)}:R>` : ''}`);
   });
-  client.on('guildBanAdd', (ban) => ban.guild.id === GUILD_ID && !honeypotHandled.has(ban.user.id) && modlog('🔨 Banned', `<@${ban.user.id}> (${ban.user.tag})${ban.reason ? `: ${ban.reason}` : ''}`, 0xff4d4d));
-  client.on('guildBanRemove', (ban) => ban.guild.id === GUILD_ID && !honeypotHandled.has(ban.user.id) && modlog('Unbanned', `<@${ban.user.id}> (${ban.user.tag})`));
+  // Bans, unbans and timeouts: numbered cases in #mod-actions, from the audit log (src/features/modcases.js).
   client.on('guildMemberUpdate', (before, after) => {
     if (after.guild.id !== GUILD_ID) return;
-    const was = before.communicationDisabledUntilTimestamp ?? 0, is = after.communicationDisabledUntilTimestamp ?? 0;
-    if (is > Date.now() && is !== was) modlog('⏳ Timed out', `<@${after.id}> (${after.user.tag}) until <t:${Math.floor(is / 1000)}:f>`, 0xffb020);
     if (before.nickname !== after.nickname && !before.partial) modlog('🏷️ Nickname', `<@${after.id}>: ${before.nickname ?? '(none)'} → ${after.nickname ?? '(none)'}`);
   });
   client.on('messageDelete', async (msg) => {
