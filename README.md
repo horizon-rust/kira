@@ -69,6 +69,7 @@ setup while Kira is up is safe; restart Kira afterwards so it knows the new chan
 | Work board | The board behind the hub's kanban, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/goodfirst`, `/notify`: see below |
 | Sponsors | 💚 Sponsor for anyone GitHub reports as a sponsor of Ludovic (one-time included). `/sponsor github:<login>`: Kira asks GitHub's `isSponsoredBy`, then gives a code to put in the account's bio or a public gist (`kira.txt`) and a **Verify** button; on success the role and a #mod-log line. A daily recheck takes back only the roles Kira gave, when GitHub stops reporting the sponsorship (a DM says so). Private sponsorships read false: the mods use `/sponsor-grant user: [github:] [remove:]`; roles given by hand are never taken back. 6 tries an hour per member. `SPONSORS` in `config.js`; [`src/features/sponsors.js`](src/features/sponsors.js), rules in [`src/sponsor-kit.js`](src/sponsor-kit.js) |
 | Applications | `/apply role:` (🤝 Support, 🛡️ Mod, 🌌 Horizon Team; Ludovic, 2026-10-30) is the Discord side of the applications on the website's staff dashboards ([docs/staff-api.md](docs/staff-api.md)): Kira asks the staff side whether the member may apply (one open application per role, 14 days after a no), then DMs a one-time link to the form (never in a channel; a refusal is said in words). Applications go to a vote on the dashboards, then Ludovic's 12-hour veto window: the staff side DMs him once through Kira's `dm` hook when it opens (`DECISION_TEXTS.vetoWindow`). When the decision is final, the dashboards call Kira's `decide` (`src/staff-hooks.js`): accept gives the role and DMs where to start, decline DMs a short no with the date they may apply again; each one is a line in #mod-log, and what failed (left the server, closed DMs) goes back to the card. `APPLY` in `config.js`; [`src/features/apply.js`](src/features/apply.js), texts in [`src/apply-kit.js`](src/apply-kit.js) |
+| Notifications | `/notify dm:on`: DMs about your own pull requests and issues (reviews, comments, merged/closed/reopened, a failing required check, merge conflicts, labels like needs-proof), batched: see [Notifications](#notifications-notify) |
 | Contributors | `/verify-github` proves a linked GitHub account is the member's; a merged pull request in Horizon then gives 🛠️ Contributor: see [Contributors](#contributors) |
 | Triage | `/gh` (`label`, `close`, `reopen`, `duplicate`, `pause`, `resume`) for Ludovic's trusted reviewers, through Kira's GitHub token: see [Triage through Kira](#triage-through-kira) |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
@@ -154,8 +155,8 @@ review), and when.
   cached 5 minutes): `{ "contributors": [{ "github", "discord" }] }`, the GitHub login and the Discord display name of
   each member who said yes and is still on the server, nothing else. `credit:False` hides it; a mod linking someone
   else never shows them (they choose by running it themselves).
-- **CI**: a pull request's author gets a DM when CI starts failing on its commit, if they linked GitHub and turned on
-  `/notify dm:on` (5 DMs an hour at most). Nothing for what was already failing at Kira's first look.
+- **CI**: a pull request's author hears about CI starting to fail on its commit through `/notify` (see
+  [Notifications](#notifications-notify)). Nothing for what was already failing at Kira's first look.
 - **Good first tasks**: open, unclaimed issues in To do labelled `good first issue` or `help wanted`
   (`board.goodFirst`); `/goodfirst` lists them, the summary in `#updates` shows three.
 - **For other programs** (the coming agent/MCP feature): [`src/board.js`](src/board.js) has no Discord and no
@@ -255,6 +256,46 @@ Online5277, the three with most merged PRs; he edits the list) triage horizon-ru
   `/gh pause` (Ludovic or a mod) stops everyone until `/gh resume`.
 - Kira's token needs permission to write issues and pull requests for closing and labelling a pull request; if
   GitHub refuses, the reviewer is told nothing changed.
+
+## Notifications (/notify)
+
+Asked by Isloka (2026-11-01): a contributor hears at once when their own pull requests and issues change, so they can
+react fast. [`src/features/notify.js`](src/features/notify.js) (Discord, the webhook, the state), rules in
+[`src/notify-kit.js`](src/notify-kit.js); `NOTIFY` in `config.js`.
+
+- **Who**: members whose GitHub login is **verified** (`/verify-github`; the logins in `WORK.github` count), after they
+  opt in. `/notify dm:on` checks that, then sends a first DM at once (which proves DMs are open); `/notify` alone (or
+  `dm:status`) says where they stand; `/notify dm:off` stops it. The members who had turned on the old CI-only
+  `/notify` stay opted in. A link that changes or loses its verification sends nothing until it is verified again.
+- **What**, for pull requests and issues they authored in horizon-rust/horizon and horizon-mods (`NOTIFY.repos`), one
+  short line each with its link: a review (approved, changes requested, commented: one line per reviewer per batch,
+  however many inline replies), a comment by someone else (people and agents, "🤖 Agent:" comments included; bots'
+  comments are skipped), merged, closed (with "as not planned" / "as a duplicate"), reopened, a label from
+  `NOTIFY.labels` (needs-proof, parity-regression, release-blocker, duplicate, invalid, wontfix, question), a watched
+  check failing on their head (`NOTIFY.checks`: verify, parity, launcher on horizon; check on horizon-mods), and merge
+  conflicts appearing (a pull request going from mergeable to conflicting; nothing for one already in conflict at the
+  first look). Nothing for what they did themselves.
+- **Batching**: a member's events wait 3 minutes after the first one, then go as one DM; never two DMs within 5
+  minutes (`windowMs`, `gapMs`). The same event twice in a batch is one line. Pending batches are in memory: a restart
+  drops them. DMs go with `allowedMentions: { parse: [] }`; every GitHub text in them goes through `plain()` (no
+  Markdown, mentions, masked links or line breaks, links only to the watched repos' pull requests and issues).
+- **Closed DMs**: noted (`state.notify.users[id].closedAt`) and nothing more is tried; `/notify` tells them, and
+  `/notify dm:on` tries again.
+- **Source**: a repo webhook on horizon and horizon-mods → `POST /github/webhook` on Kira's HTTP server (events
+  `pull_request`, `pull_request_review`, `issue_comment`, `issues`, `check_run`, `push`; JSON). Each delivery is checked
+  against `X-Hub-Signature-256` with `KIRA_GITHUB_WEBHOOK_SECRET` (1Password `Kira GitHub webhook secret`, sealed in
+  Railway as `KIRA_GITHUB_WEBHOOK_SECRET_SEALED`); a bad signature is a 401 and counts in the "auth" rate limit; a
+  redelivery (same `X-GitHub-Delivery`) is handled once. No secret, no route. Kira answers 202 at once and works after.
+  A check run from a fork carries no pull request: Kira finds it by its head (the pull requests seen in deliveries,
+  else one GraphQL search per head). Merge conflicts are no webhook event: one GraphQL search of the subscribers'
+  open pull requests (`mergeable`, 1 point per 10 subscribers) after each board refresh and 3 minutes after main
+  moves; GitHub's "unknown" is read again 3 minutes later. GraphQL has its own hour, apart from the REST budget.
+- **Without the webhook** (no secret), only the board's CI look (horizon, every 10 minutes) and the conflicts search
+  feed it, and the #contributors announcement (`ONE_OFFS` `notify-dms`, `when: 'notify'`) waits.
+- **`KIRA_NOTIFY_DRY_RUN=1`**: every DM is printed in the log instead.
+- **Setting the webhook up again** (a new host): `gh api repos/horizon-rust/<repo>/hooks` with `config.url`
+  `<Kira's host>/github/webhook`, `content_type: json`, the secret from 1Password piped in with `--input -` (never on the
+  command line), the events above.
 
 ## Contributors
 

@@ -365,6 +365,23 @@ export const ONE_OFFS = [
       footer: { text: 'Horizon is an unofficial fan project, not affiliated with Mojang or Microsoft.' },
     },
   },
+  // /notify (src/features/notify.js), announced once in #contributors (2026-11-01).
+  {
+    key: 'notify-dms', channel: 'contributors', when: 'notify',
+    content: '🔔 New: Kira can DM you when your Horizon pull requests and issues change.',
+    embed: {
+      title: '🔔 /notify: hear about your pull requests and issues at once',
+      description: [
+        'Run `/notify dm:on` and Kira DMs you when something happens on **your own** pull requests and issues in horizon and horizon-mods:',
+        '• a review (approved, changes requested, comments) and new comments by others, agents included',
+        '• merged, closed or reopened',
+        '• a required check failing on your head (verify, parity), merge conflicts appearing',
+        '• labels like needs-proof',
+        '',
+        'Several things at once come as one DM, at most one every 5 minutes, and nothing for what you did yourself. It needs your GitHub account linked and verified (`/link-github`, then `/verify-github`) and your DMs open for this server. `/notify` alone shows where you stand, `/notify dm:off` stops it.',
+      ].join('\n'),
+    },
+  },
   // Posted once /agent connect is open (KIRA_AGENT_ISSUANCE=on); `editable`: edited in place at each start,
   // so a new endpoint (KIRA_MCP_URL) or text reaches the existing messages. `pin`: pinned where it's posted.
   { key: 'agents-live', channel: 'announcements', when: 'agents', editable: true, content: 'Contributors: your AI coding agent can now work with Horizon\'s board.', embed: AGENT_GUIDE },
@@ -458,6 +475,18 @@ export const CONTRIBUTORS = {
   // Discord id → login of Ludovic's trusted reviewers (found by hand). Nothing automatic ever takes the role from
   // them: the clean-up gives an unlinked one the DM and 7 days, and the sweep and a changed link leave them the role.
   protectedMembers: { '437262688930889730': 'kacpherek', '777346923232886784': 'rdbtCVS', '1531466016054444261': 'Online5277' },
+};
+
+// /notify (src/features/notify.js): DMs to a verified contributor who opted in, about their own pull requests and
+// issues in these repos of GITHUB.owner (asked by Isloka, 2026-11-01). `checks`: per repo, the check runs whose failure
+// is worth a DM (horizon's required one is verify); `labels`: the labels worth a DM when someone else adds them.
+export const NOTIFY = {
+  repos: ['horizon', 'horizon-mods'],
+  checks: { horizon: ['verify', 'parity', 'launcher'], 'horizon-mods': ['check'] },
+  labels: ['needs-proof', 'parity-regression', 'release-blocker', 'duplicate', 'invalid', 'wontfix', 'question'],
+  windowMs: 3 * 60_000, // a member's events wait this long after the first one, then go as one DM
+  gapMs: 5 * 60_000, // never two DMs to a member closer than this
+  conflictDelayMs: 3 * 60_000, // after main moves, GitHub needs a moment to work out mergeability
 };
 
 // 💚 Sponsor for GitHub sponsors of GITHUB.maintainer (src/features/sponsors.js, src/sponsor-kit.js). Ludovic,
