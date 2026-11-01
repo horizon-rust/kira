@@ -149,6 +149,6 @@ createServer(handler).listen(PORT, '127.0.0.1', () => {
   console.log(`staff dev API on http://127.0.0.1:${PORT} (store: ${dir})
   in horizon-site: STAFF_UPSTREAM=http://127.0.0.1:${PORT} STAFF_PROXY_KEY=${KEY} node serve.mjs
   logins: ludovic (both), aurora (team), cinder (team + mod), dune (mod); password "${PASSWORD}"
-  set a password (newcomer): ${SITE}/staff/setup#${setup.token}
+  set a password (newcomer): ${SITE}/hub/setup#${setup.token}
   apply (glacier, Mod): ${apply.url}`);
 });

@@ -1,6 +1,6 @@
 // Fetches what the dashboards' statistics need from GitHub (public data of horizon: pull requests of the last 12
 // weeks and every open one, open issues, releases), at most once an hour, and serves src/team-stats.js's numbers:
-// /staff/team's at GET team/stats, /staff/mod's at GET mod/stats. GraphQL's own budget, paced; a failed refresh keeps
+// /hub/team's at GET team/stats, /hub/mod's at GET mod/stats. GraphQL's own budget, paced; a failed refresh keeps
 // the last good numbers.
 import { GITHUB, WORK } from '../config.js';
 import { makeGitHub } from '../github.js';
