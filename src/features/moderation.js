@@ -4,10 +4,11 @@ import {
   SlashCommandBuilder, ContextMenuCommandBuilder, ApplicationCommandType, PermissionFlagsBits as P,
   MessageFlags, GuildVerificationLevel, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } from 'discord.js';
-import { GUILD_ID, MOD, LAYOUT, AI, RULES } from '../config.js';
+import { GUILD_ID, OWNER_ID, MOD, LAYOUT, AI, RULES } from '../config.js';
 import { client, state, save, channel, isStaff, clip, ago, modlog, parseDuration, human, quietDeletes } from '../core.js';
 import { linkify } from '../texts.js';
 import * as kiraAi from './ai.js';
+import { honeypotExempt, honeypotAction, makeHandled, honeypotLog } from '../honeypot-kit.js';
 
 const URL_RE = /(https?:\/\/|www\.|discord\.gg\/)\S+/i;
 const URLS = new RegExp(URL_RE.source, 'gi');
@@ -252,7 +253,63 @@ async function remove(msg, note, log, { strike = null } = {}) {
 
 // ── Automatic filters ──────────────────────────────────────────────────────
 
+// ── Honeypot ────────────────────────────────────────────────────────────────
+// Whoever posts in the honeypot channel is soft-banned: banned with the last day of their messages deleted, then
+// unbanned at once so a real person can rejoin. Staff, bots and Ludovic only have their message deleted.
+
+const honeypotHandled = makeHandled(MOD.honeypotWindowMs);
+const BAN_HINT = 'Kira needs the Ban Members permission and a role above theirs';
+
+async function softBan(msg) {
+  const guild = msg.guild, user = msg.author;
+  const why = 'Kira: honeypot (posted in the do-not-post channel)';
+  const info = { userId: user.id, tag: user.tag, createdTimestamp: user.createdTimestamp, content: msg.content, clipText: clip };
+  let outcome = 'ok';
+  try {
+    await guild.members.ban(user.id, { deleteMessageSeconds: MOD.honeypotDeleteSeconds, reason: why });
+  } catch (e) {
+    outcome = { title: 'soft-ban failed', detail: `The ban failed (${e.message}). ${BAN_HINT}. I deleted the message only.` };
+    await msg.delete().catch(() => {});
+  }
+  if (outcome === 'ok') {
+    // The ban took: unbanned right away (one retry), or a real person stays out.
+    let err = await guild.bans.remove(user.id, why).then(() => null, (e) => e);
+    if (err) err = await new Promise((r) => setTimeout(r, 1500)).then(() => guild.bans.remove(user.id, why)).then(() => null, (e) => e);
+    if (err) outcome = { title: 'STILL BANNED, unban needed', detail: `The ban worked but the unban failed (${err.message}). Use /unban ${user.id}.` };
+  }
+  const line = honeypotLog({ ...info, outcome });
+  await modlog(line.title, line.description, line.failed ? 0xff4d4d : 0xffb020);
+}
+
+// Returns true when the message was in the honeypot (nothing else should read it).
+async function honeypot(msg) {
+  if (!MOD.honeypot || !state.channels?.honeypot || msg.channelId !== state.channels.honeypot) return false; // nearly every message
+  const m = msg.member;
+  const exempt = honeypotExempt({
+    isBot: !!msg.author?.bot, isStaff: isStaff(m), userId: msg.author?.id, ownerId: OWNER_ID,
+    roleIds: m?.roles?.cache ? [...m.roles.cache.keys()] : [], exemptRoleIds: [state.roles?.mod, state.roles?.team, state.roles?.owner],
+  });
+  const action = honeypotAction({
+    enabled: MOD.honeypot, channelId: msg.channelId, honeypotId: state.channels?.honeypot, exempt,
+    handled: honeypotHandled.has(msg.author.id),
+  });
+  if (action === 'ignore') return false;
+  if (action === 'delete' || action === 'drop') {
+    quietDeletes.add(msg.id); // no "message deleted" line for it in #mod-log
+    await msg.delete().catch(() => quietDeletes.delete(msg.id));
+    return true;
+  }
+  if (!honeypotHandled.claim(msg.author.id)) { // another message of the burst got here first
+    quietDeletes.add(msg.id);
+    await msg.delete().catch(() => quietDeletes.delete(msg.id));
+    return true;
+  }
+  await softBan(msg);
+  return true;
+}
+
 async function moderate(msg) {
+  if (await honeypot(msg)) return true;
   const m = msg.member;
   if (!m || isStaff(m)) return;
 
@@ -494,8 +551,8 @@ export function setup() {
     if (m.guild.id !== GUILD_ID) return;
     joinQueue.push(`📤 <@${m.id}> (${m.user?.tag ?? 'unknown'}) left${m.joinedTimestamp ? `, joined <t:${Math.floor(m.joinedTimestamp / 1000)}:R>` : ''}`);
   });
-  client.on('guildBanAdd', (ban) => ban.guild.id === GUILD_ID && modlog('🔨 Banned', `<@${ban.user.id}> (${ban.user.tag})${ban.reason ? `: ${ban.reason}` : ''}`, 0xff4d4d));
-  client.on('guildBanRemove', (ban) => ban.guild.id === GUILD_ID && modlog('Unbanned', `<@${ban.user.id}> (${ban.user.tag})`));
+  client.on('guildBanAdd', (ban) => ban.guild.id === GUILD_ID && !honeypotHandled.has(ban.user.id) && modlog('🔨 Banned', `<@${ban.user.id}> (${ban.user.tag})${ban.reason ? `: ${ban.reason}` : ''}`, 0xff4d4d));
+  client.on('guildBanRemove', (ban) => ban.guild.id === GUILD_ID && !honeypotHandled.has(ban.user.id) && modlog('Unbanned', `<@${ban.user.id}> (${ban.user.tag})`));
   client.on('guildMemberUpdate', (before, after) => {
     if (after.guild.id !== GUILD_ID) return;
     const was = before.communicationDisabledUntilTimestamp ?? 0, is = after.communicationDisabledUntilTimestamp ?? 0;
@@ -515,5 +572,5 @@ export function setup() {
   });
 }
 
-export { moderate };
-export const _test = { pending, LANG_OF, undo, undoable, flushAll: () => Promise.all([...pending.keys()].map((id) => flushAi(id))) };
+export { moderate, honeypot };
+export const _test = { honeypotHandled, pending, LANG_OF, undo, undoable, flushAll: () => Promise.all([...pending.keys()].map((id) => flushAi(id))) };
