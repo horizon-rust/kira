@@ -18,6 +18,7 @@ import * as forums from './features/forums.js';
 import * as github from './features/github.js';
 import * as workboard from './features/workboard.js';
 import * as contributors from './features/contributors.js';
+import * as notify from './features/notify.js';
 import * as triage from './features/triage.js';
 import * as agents from './features/agents.js';
 import * as hub from './features/hub.js';
@@ -37,7 +38,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply];
+const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, notify, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
@@ -81,8 +82,8 @@ async function checkVideos() {
 }
 
 // Hand-written announcements (ONE_OFFS in config.js), each posted once (its id in state.oneOffs). `when`:
-// posted only once that is on ('agents': /agent connect open). `editable`: edited in place at every start.
-const ON = { agents: () => AGENTS.issuance };
+// posted only once that is on ('agents': /agent connect open; 'notify': /notify's webhook is set up). `editable`: edited in place at every start.
+const ON = { agents: () => AGENTS.issuance, notify: () => notify.webhookOn() };
 async function postOneOffs() {
   state.oneOffs ??= {};
   for (const post of ONE_OFFS) {
@@ -132,6 +133,7 @@ if (port) {
       res.end(JSON.stringify({ contributors: workboard.creditedPairs() }));
     },
     ...kiraAi.usageRoutes({ limiter }),
+    ...notify.routes({ limiter }), // POST /github/webhook, when KIRA_GITHUB_WEBHOOK_SECRET is set (/notify's DMs)
     ...(DISCORD ? staff.routes() : {}), // the staff dashboards' API, only through the website's proxy (STAFF_PROXY_KEY)
     ...gameRoutes({ store: gameServers, ask: kiraAi.askInGame, limiter }),
     ...adminRoutes({ hash: process.env.KIRA_ADMIN_TOKEN_SHA256, limiter, save, freeze, gameTokens: gameTokens({ store: gameServers, dm: async (id, text) => (await client.users.fetch(id)).send({ content: text, allowedMentions: { parse: [] } }), endpoint: `${AGENTS.url.replace(/\/mcp$/, '')}/game/ask` }), cleanup: DISCORD && contributors.enabled ? contributors.cleanup : null, files: { state: dataFile('state.json'), agents: process.env.KIRA_AGENTS || dataFile('agents.json') } }),

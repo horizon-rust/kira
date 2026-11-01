@@ -4,7 +4,6 @@
 // each refresh. /claim marks an issue as taken (the "in progress" label and a comment on GitHub); a claim lapses
 // after 14 days without activity, with a DM a few days before. /move: maintainers place a card.
 import { SlashCommandBuilder, MessageFlags, MessageType } from 'discord.js';
-import { rateLimiter } from '../agents.js';
 import { WORK, GITHUB, HUB } from '../config.js';
 import { client, state, save, channel, isStaff } from '../core.js';
 import { dataFile } from '../store.js';
@@ -14,6 +13,7 @@ import * as board from '../board.js';
 import * as wk from '../workkit.js';
 import { summaryText } from '../journal.js';
 import * as contributors from './contributors.js';
+import * as notify from './notify.js';
 import { writeFileSync, renameSync, readFileSync } from 'node:fs';
 
 const TOKEN = githubToken();
@@ -299,25 +299,14 @@ async function render() {
 }
 
 // ── CI failures ──────────────────────────────────────────────────────────────
-// A pull request's author gets a DM when CI starts failing on its commit, if their GitHub login is linked and they
-// turned it on with /notify (at most 5 DMs an hour each). Nothing for what was already failing at the first look.
-const dms = rateLimiter({ dm: [5, 3_600_000] });
-async function dmAuthor(login, text) {
-  const id = userOf(login);
-  if (!id || !work.notify?.[id] || !dms.take(id, 'dm')) return;
-  const u = await client.users.fetch(id).catch(() => null);
-  await u?.send({ content: text, allowedMentions: { parse: [] } }).catch(() => {});
-}
-
+// A pull request's author hears about CI starting to fail on its commit through /notify (src/features/notify.js),
+// which uses the webhook's check runs when it is on. Nothing for what was already failing at the first look.
 async function notices() {
   const open = raw.pulls.filter((p) => p.state === 'open').map((p) => ({ number: p.number, title: p.title, url: p.html_url, login: p.user?.login, sha: p.head?.sha, ci: p.ci }));
   const ci = wk.ciChanges(open, work.ciSeen);
   work.ciSeen = ci.seen;
   save();
-  for (const p of ci.report) {
-    await dmAuthor(p.login, `❌ CI is failing on your Horizon pull request #${p.number} (${p.title}): ${p.url}
--# You get these because you turned them on with /notify. /notify off stops them.`);
-  }
+  for (const p of ci.report) notify.fromBoardCi(p);
 }
 
 let running = null;
@@ -332,6 +321,7 @@ export function refresh() {
       await render();
       await notices().catch((e) => console.error('notices', e.message));
       await contributors.afterRefresh(raw).catch((e) => console.error('contributors', e.message));
+      await notify.checkConflicts();
     } catch (e) {
       console.error('work board', e.message);
       refreshSoon(60_000); // GitHub failed (a 5xx, a timeout): try again in a minute, not in 10
@@ -390,8 +380,6 @@ export const commands = enabled ? [
     .addStringOption((o) => o.setName('column').setDescription('Where to').setRequired(true).addChoices(...COLUMN_CHOICES))
     .addStringOption((o) => o.setName('kind').setDescription('If an issue and a pull request share the number').addChoices({ name: 'issue', value: 'issue' }, { name: 'pull request', value: 'pr' })),
   new SlashCommandBuilder().setName('goodfirst').setDescription('Good first tasks for newcomers: open issues nobody claimed yet'),
-  new SlashCommandBuilder().setName('notify').setDescription('DMs from Kira when CI fails on your pull requests (needs /link-github)')
-    .addStringOption((o) => o.setName('dm').setDescription('On or off').setRequired(true).addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })),
   new SlashCommandBuilder().setName('link-github').setDescription('Link your GitHub account, so your pull requests show your Discord name')
     .addStringOption((o) => o.setName('username').setDescription('Your GitHub username').setRequired(true).setMaxLength(39))
     .addBooleanOption((o) => o.setName('credit').setDescription("Show your Discord name and GitHub together on the hub's contributors page (default: no)"))
@@ -403,14 +391,6 @@ export const handlers = {
     const picks = snapshot ? board.goodFirst(snapshot, 10) : [];
     if (!picks.length) return i.reply(ephemeral(`No good first tasks labelled right now. See what is being built with \`/roadmap\`, or the kanban on <${HUB.url}>, or ask in #horizon-chat.`));
     return i.reply(ephemeral(`🌱 **Good first tasks** (open, nobody on them):\n${picks.map((c) => `• [#${c.number} ${c.title.replace(/[[\]]/g, '')}](<${c.url}>)`).join('\n')}\n\n\`/claim <number>\` before you start.`));
-  },
-  notify(i) {
-    const on = i.options.getString('dm') === 'on';
-    work.notify ??= {};
-    if (on) work.notify[i.user.id] = true; else delete work.notify[i.user.id];
-    save();
-    const linked = loginOf(i.user.id);
-    return i.reply(ephemeral(on ? `🔔 You'll get a DM when CI fails on your pull requests${linked ? ` (GitHub **${linked}**)` : '. Link your GitHub account first: `/link-github <username>`'}. \`/notify dm:off\` stops it.` : '🔕 No more CI DMs.'));
   },
   async claim(i) {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
