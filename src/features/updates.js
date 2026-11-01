@@ -9,6 +9,7 @@ import { client, state, save, channel } from '../core.js';
 import * as journal from '../journal.js';
 import * as hub from '../hub.js';
 import { roadmap } from './hub.js';
+import * as webhook from '../webhook.js';
 
 const U = (state.updates ??= {});
 const hooks = []; // other readers of the journal (the X poster): called with each good journal fetched
@@ -18,6 +19,9 @@ let fetchJson = async (url) => {
   const res = await fetch(url, { headers: { 'User-Agent': 'Kira (Horizon Discord bot)' }, signal: AbortSignal.timeout(15_000) });
   return res.ok ? res.json() : null;
 };
+
+// After the site's journal was revalidated (src/features/site.js): read it again soon, not in 10 minutes.
+export const pollSoon = webhook.throttle(() => poll(), 60_000, { delayMs: 5_000 });
 
 export async function poll() {
   const ch = channel('updates');

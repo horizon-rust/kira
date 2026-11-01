@@ -3,8 +3,8 @@
 // merge conflicts appearing), so they can react fast. Asked by Isloka, 2026-11-01.
 //
 // - Who: members whose GitHub login is verified (/verify-github), after they opt in with `/notify dm:on`.
-// - Source: a GitHub webhook on the repos in NOTIFY.repos (POST /github/webhook, signed with
-//   KIRA_GITHUB_WEBHOOK_SECRET): free and at once. Merge conflicts aren't a webhook event: one GraphQL search of the
+// - Source: GitHub's webhook (src/webhook.js: POST /github/webhook, signed with KIRA_GITHUB_WEBHOOK_SECRET), for
+//   every public repository of GITHUB.owner (NOTIFY.repos: 'public', or a list): free and at once. Merge conflicts aren't a webhook event: one GraphQL search of the
 //   subscribers' open pull requests after each board refresh and a few minutes after main moves. Without the
 //   webhook, only the board's CI look (horizon) and the conflicts search run.
 // - Batching (src/notify-kit.js): a member's events wait NOTIFY.windowMs, then go as one DM; never two DMs within
@@ -15,17 +15,15 @@ import { GITHUB, NOTIFY, WORK } from '../config.js';
 import { client, state, save } from '../core.js';
 import { makeGitHub } from '../github.js';
 import { githubToken } from '../github-app.js';
-import { clientIp } from '../agents.js';
+import * as webhook from '../webhook.js';
 import * as ckit from '../contributor-kit.js';
 import * as kit from '../notify-kit.js';
 
 const TOKEN = githubToken();
 export const enabled = !!TOKEN;
 let gh = makeGitHub({ token: TOKEN });
-const SECRET = process.env.KIRA_GITHUB_WEBHOOK_SECRET?.trim() || null;
-export const webhookOn = () => !!SECRET;
+export const webhookOn = () => webhook.configured();
 const DRY = process.env.KIRA_NOTIFY_DRY_RUN === '1';
-const MAX_BODY = 10 * 1024 * 1024; // GitHub sends at most 25 MB; the events read here are far smaller
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
 
 // users: Discord id → { since, closedAt? }; conflicts: "repo#n" → the last mergeable state seen.
@@ -111,16 +109,21 @@ async function pullOfHead(repo, sha) {
 
 // ── The webhook ──────────────────────────────────────────────────────────────
 
-const deliveries = new Set(); // X-GitHub-Delivery ids already handled (GitHub redelivers on a timeout)
-const watched = (full) => NOTIFY.repos.some((r) => `${GITHUB.owner}/${r}`.toLowerCase() === String(full ?? '').toLowerCase());
+// A repository whose authors get DMs: GITHUB.owner's public ones ('public'), or the ones listed.
+export function watched(repository) {
+  const [owner, name] = String(repository?.full_name ?? '').toLowerCase().split('/');
+  if (!name || owner !== GITHUB.owner.toLowerCase()) return false;
+  if (NOTIFY.repos === 'public') return repository.private === false;
+  return NOTIFY.repos.some((r) => r.toLowerCase() === name);
+}
 
 // One delivery, already checked. Returns how many events were queued.
 export async function handle(name, p) {
-  if (!watched(p?.repository?.full_name)) return 0;
+  if (!watched(p?.repository)) return 0;
   const repo = p.repository.name;
   const pr = p.pull_request;
   if (pr?.head?.sha && pr.state === 'open') rememberHead(repo, pr.head.sha, { repo, number: pr.number, title: pr.title, url: pr.html_url, author: pr.user?.login });
-  if (name === 'push' && p.ref === `refs/heads/${p.repository.default_branch ?? 'main'}`) {
+  if (webhook.pushToMain(name, p)) {
     conflictsSoon(NOTIFY.conflictDelayMs);
     return 0;
   }
@@ -136,44 +139,6 @@ export async function handle(name, p) {
   return n;
 }
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    const parts = [];
-    let size = 0;
-    req.on('data', (c) => {
-      size += c.length;
-      if (size > MAX_BODY) { reject(Object.assign(new Error('too large'), { status: 413 })); req.destroy(); return; }
-      parts.push(c);
-    });
-    req.on('end', () => resolve(Buffer.concat(parts)));
-    req.on('error', reject);
-  });
-}
-
-// POST /github/webhook (only when the secret is set). Bad signatures count in the "auth" rate limit.
-export function routes({ limiter, secret = SECRET } = {}) {
-  if (!secret) return {};
-  const reply = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
-  return {
-    'POST /github/webhook': async (req, res) => {
-      let body;
-      try { body = await readBody(req); } catch (e) { return reply(res, e.status ?? 400, { error: 'bad body' }); }
-      if (!kit.signatureOk(secret, body, req.headers['x-hub-signature-256'])) {
-        const limited = limiter && !limiter.take(clientIp(req), 'auth');
-        return reply(res, limited ? 429 : 401, { error: limited ? 'too many attempts' : 'bad signature' });
-      }
-      const id = String(req.headers['x-github-delivery'] ?? '');
-      if (id && deliveries.has(id)) return reply(res, 200, { ok: true, duplicate: true });
-      if (id) { deliveries.add(id); if (deliveries.size > 2000) deliveries.delete(deliveries.values().next().value); }
-      let payload;
-      try { payload = JSON.parse(body.toString('utf8')); } catch { return reply(res, 400, { error: 'not JSON' }); }
-      const name = String(req.headers['x-github-event'] ?? '');
-      reply(res, 202, { ok: true }); // GitHub waits 10 s at most: the work goes on after the answer
-      await handle(name, payload).catch((e) => console.error('notify webhook', name, e.message));
-    },
-  };
-}
-
 // ── Merge conflicts ──────────────────────────────────────────────────────────
 
 let checking = null;
@@ -187,7 +152,7 @@ export function checkConflicts() {
         const res = await gh.graphql(kit.CONFLICT_GRAPHQL, { q: kit.conflictQuery(GITHUB.owner, NOTIFY.repos, logins.slice(i, i + 10)) });
         if (!res?.data?.search) throw new Error(`search: ${res?.errors?.[0]?.message ?? 'no answer'}`);
         for (const n of res.data.search.nodes ?? []) {
-          if (n?.number) pulls.push({ repo: n.repository?.name, number: n.number, title: n.title, url: n.url, author: n.author?.login, mergeable: n.mergeable });
+          if (n?.number && watched({ full_name: `${GITHUB.owner}/${n.repository?.name}`, private: n.repository?.isPrivate })) pulls.push({ repo: n.repository?.name, number: n.number, title: n.title, url: n.url, author: n.author?.login, mergeable: n.mergeable });
         }
       }
       const { known, events } = kit.conflictChanges(box.conflicts, pulls);
@@ -259,9 +224,11 @@ export const handlers = {
   },
 };
 
+if (enabled) webhook.on((name, p) => handle(name, p));
+
 export function setup() {
   if (!enabled) return;
-  console.log(`notify: ${Object.keys(box.users).length} members opted in, webhook ${SECRET ? 'on' : 'off (KIRA_GITHUB_WEBHOOK_SECRET is not set)'}${DRY ? ', dry run' : ''}`);
+  console.log(`notify: ${Object.keys(box.users).length} members opted in, webhook ${webhookOn() ? 'on' : 'off (KIRA_GITHUB_WEBHOOK_SECRET is not set)'}${DRY ? ', dry run' : ''}`);
 }
 
 export const _test = { box, work, batch, heads, setGitHub: (g) => { gh = g; }, setDm: (f) => { dm = f; }, deliver };

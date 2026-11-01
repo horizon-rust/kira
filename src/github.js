@@ -103,17 +103,19 @@ export function makeGitHub({ token, keep: reserve = KEEP, dryRun = false, fetchI
   if (saved) seed(cache, saved[kind]);
   const budget = typeof token === 'function' ? appBudget : token ? userBudget : anonBudget;
   const floor = token ? reserve : 1;
-  async function call(method, path, body, { cache: keep = true, person = false } = {}) {
+  // `accept`: another media type (the site's releases want body_html: 'application/vnd.github.full+json').
+  async function call(method, path, body, { cache: keep = true, person = false, accept = null } = {}) {
     const get = method === 'GET';
     if (get && budget.remaining < (person ? Math.min(floor, FLOOR) : floor) && Date.now() < budget.reset) {
       throw new Error(`GitHub GET ${path}: holding back, ${budget.remaining} calls left until ${new Date(budget.reset).toISOString()}`);
     }
     const auth = typeof token === 'function' ? await token() : token;
-    const cached = get && keep ? cache.get(path) : undefined;
+    const key = accept ? `${accept} ${path}` : path;
+    const cached = get && keep ? cache.get(key) : undefined;
     const res = await fetchImpl(`https://api.github.com${path}`, {
       method,
       headers: {
-        Accept: 'application/vnd.github+json',
+        Accept: accept ?? 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
         'User-Agent': 'Kira (Discord bot of ludovic\'s server)',
         ...(auth ? { Authorization: `Bearer ${auth}` } : {}),
@@ -137,8 +139,8 @@ export function makeGitHub({ token, keep: reserve = KEEP, dryRun = false, fetchI
     const data = res.status === 204 ? {} : await res.json();
     const etag = get && keep ? res.headers?.get?.('etag') : null;
     if (etag) {
-      cache.delete(path); // re-inserted last: the oldest entry goes first when the cache is full
-      cache.set(path, { etag, body: data });
+      cache.delete(key); // re-inserted last: the oldest entry goes first when the cache is full
+      cache.set(key, { etag, body: data });
       if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
     }
     return data;

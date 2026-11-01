@@ -287,12 +287,12 @@ react fast. [`src/features/notify.js`](src/features/notify.js) (Discord, the web
   opt in. `/notify dm:on` checks that, then sends a first DM at once (which proves DMs are open); `/notify` alone (or
   `dm:status`) says where they stand; `/notify dm:off` stops it. The members who had turned on the old CI-only
   `/notify` stay opted in. A link that changes or loses its verification sends nothing until it is verified again.
-- **What**, for pull requests and issues they authored in horizon-rust/horizon and horizon-mods (`NOTIFY.repos`), one
+- **What**, for pull requests and issues they authored in any public repository of horizon-rust (`NOTIFY.repos`: `'public'`, or a list of names), one
   short line each with its link: a review (approved, changes requested, commented: one line per reviewer per batch,
   however many inline replies), a comment by someone else (people and agents, "🤖 Agent:" comments included; bots'
   comments are skipped), merged, closed (with "as not planned" / "as a duplicate"), reopened, a label from
   `NOTIFY.labels` (needs-proof, parity-regression, release-blocker, duplicate, invalid, wontfix, question), a watched
-  check failing on their head (`NOTIFY.checks`: verify, parity, launcher on horizon; check on horizon-mods), and merge
+  check failing on their head (`NOTIFY.checks`: verify, parity, launcher on horizon; check on horizon-mods; any check elsewhere), and merge
   conflicts appearing (a pull request going from mergeable to conflicting; nothing for one already in conflict at the
   first look). Nothing for what they did themselves.
 - **Batching**: a member's events wait 3 minutes after the first one, then go as one DM; never two DMs within 5
@@ -301,21 +301,65 @@ react fast. [`src/features/notify.js`](src/features/notify.js) (Discord, the web
   Markdown, mentions, masked links or line breaks, links only to the watched repos' pull requests and issues).
 - **Closed DMs**: noted (`state.notify.users[id].closedAt`) and nothing more is tried; `/notify` tells them, and
   `/notify dm:on` tries again.
-- **Source**: a repo webhook on horizon and horizon-mods → `POST /github/webhook` on Kira's HTTP server (events
-  `pull_request`, `pull_request_review`, `issue_comment`, `issues`, `check_run`, `push`; JSON). Each delivery is checked
-  against `X-Hub-Signature-256` with `KIRA_GITHUB_WEBHOOK_SECRET` (1Password `Kira GitHub webhook secret`, sealed in
-  Railway as `KIRA_GITHUB_WEBHOOK_SECRET_SEALED`); a bad signature is a 401 and counts in the "auth" rate limit; a
-  redelivery (same `X-GitHub-Delivery`) is handled once. No secret, no route. Kira answers 202 at once and works after.
-  A check run from a fork carries no pull request: Kira finds it by its head (the pull requests seen in deliveries,
-  else one GraphQL search per head). Merge conflicts are no webhook event: one GraphQL search of the subscribers'
-  open pull requests (`mergeable`, 1 point per 10 subscribers) after each board refresh and 3 minutes after main
-  moves; GitHub's "unknown" is read again 3 minutes later. GraphQL has its own hour, apart from the REST budget.
+- **Source**: GitHub's webhook ([GitHub's webhook](#githubs-webhook)). A check run from a fork carries no pull request:
+  Kira finds it by its head (the pull requests seen in deliveries, else one GraphQL search per head). Merge conflicts
+  are no webhook event: one GraphQL search of the subscribers' open pull requests in the org (`mergeable`, 1 point per
+  10 subscribers; private repositories dropped) after each board refresh and 3 minutes after main moves; GitHub's
+  "unknown" is read again 3 minutes later. GraphQL has its own hour, apart from the REST budget.
 - **Without the webhook** (no secret), only the board's CI look (horizon, every 10 minutes) and the conflicts search
   feed it, and the #contributors announcement (`ONE_OFFS` `notify-dms`, `when: 'notify'`) waits.
 - **`KIRA_NOTIFY_DRY_RUN=1`**: every DM is printed in the log instead.
-- **Setting the webhook up again** (a new host): `gh api repos/horizon-rust/<repo>/hooks` with `config.url`
-  `<Kira's host>/github/webhook`, `content_type: json`, the secret from 1Password piped in with `--input -` (never on the
-  command line), the events above.
+
+## GitHub's webhook
+
+One signed endpoint, `POST /github/webhook` on Kira's HTTP server ([`src/webhook.js`](src/webhook.js)), receives
+GitHub's deliveries for horizon-rust's repositories (events `push`, `pull_request`, `pull_request_review`,
+`issue_comment`, `issues`, `check_run`, `check_suite`, `release`; JSON). Each delivery is checked against
+`X-Hub-Signature-256` with `KIRA_GITHUB_WEBHOOK_SECRET` (1Password `Kira GitHub webhook secret`, sealed in Railway as
+`KIRA_GITHUB_WEBHOOK_SECRET_SEALED`); a bad signature is a 401 and counts in the "auth" rate limit; a redelivery (same
+`X-GitHub-Delivery`) is handled once; deliveries from repositories of another account are dropped. No secret, no route.
+Kira answers 202 at once and hands the delivery to every listener:
+
+| Listener | Does at once | Its polling meanwhile |
+| --- | --- | --- |
+| `/notify` | the DMs ([Notifications](#notifications-notify)) | the board's CI look, only without the webhook |
+| Work board | a refresh after Horizon's issues, pull requests, reviews, comments, finished checks or a push to main (at most one a minute, `WORK.webhookGapMs`); contributor roles for merged pull requests come with it | every 10 minutes → hourly (`WORK.slowRefreshMs`) |
+| Releases | `#releases` after a `release` event (30 s apart at most) | every 3 minutes → every 30 (`RELEASE_SLOW_MS`) |
+| Forum posts ↔ issues | the answers poll after an issue or comment on an issue a post follows | every 5 minutes → every 30 (`GITHUB.pollSlowMs`) |
+| Kira's AI sources | the docs and README reload at the next question after a push to main, release notes after a release | daily / hourly, as before |
+| The website | below | |
+
+"Meanwhile" holds while deliveries keep coming (`webhook.healthy()`: one in the last 30 minutes; Horizon's check runs
+alone send several a minute): if they stop, every poll goes back to its own pace by itself. Every GET still stops at
+the reserve (`KIRA_GITHUB_KEEP`), so the webhook can never push Kira under the rate floor.
+
+**The website** ([`src/features/site.js`](src/features/site.js), `SITE` in `config.js`): playhorizon.dev caches what it
+reads from GitHub for 15 minutes or more. A push to Horizon's main, its issues and pull requests (opened, closed,
+labelled…), its releases and a push to horizon-mods' main make Kira call the site's `POST /api/revalidate` with the
+matching cache tags (`github:horizon:main`, `github:horizon:issues`, `github:horizon:releases`,
+`github:horizon-mods:main`; horizon-site's `components/github-fresh.ts`), `Authorization: Bearer
+$KIRA_SITE_REVALIDATE_SECRET` (1Password `Site revalidate secret`, sealed in Railway; the site's `REVALIDATE_SECRET`).
+At most one call every 30 s per tag; horizon-mods' tag once more 3 minutes later (its registry index is published by a
+Pages build). Then Kira loads the pages that show the data once (`SITE.warm`) so the next visitor gets them fresh, and
+#updates reads the journal again. `KIRA_SITE_DRY_RUN=1` logs the calls instead.
+
+The site has no GitHub token of its own (60 requests an hour for its host's address), and revalidating on every change
+would spend them in minutes. So it reads GitHub's REST API **through Kira**: `GET /github/proxy/repos/horizon-rust/
+{horizon,horizon-mods}/{issues,releases,releases/latest,contributors,commits/main}` with the same bearer secret, a few
+query keys (`state`, `sort`, `direction`, `per_page`, `page`) and `X-GitHub-Accept: full` for releases' `body_html`.
+Kira answers from its GitHub App client (`makePublicGitHub`: ETag cache, a 304 costs nothing, its own reserve, never
+Ludovic's token). Anything else is a 404; a wrong secret a 401 in the "auth" rate limit. The site's `GITHUB_PROXY_URL`
+is `https://mcp.playhorizon.dev/github/proxy`; when Kira doesn't answer, the site reads GitHub directly, as before.
+
+**Setting the webhook up** (a new host or a new secret): one organization webhook, `gh api orgs/horizon-rust/hooks`
+(needs the `admin:org_hook` scope: `gh auth refresh -h github.com -s admin:org_hook`), or one per repository with
+`gh api repos/horizon-rust/<repo>/hooks`; `config.url` `<Kira's host>/github/webhook`, `content_type: json`, the
+events above, and the secret from 1Password piped in with `--input -`, never on the command line:
+
+    ~/fleet/op read "op://Agents/Kira GitHub webhook secret/password" | jq -Rn '{name:"web", active:true,
+      events:["push","pull_request","pull_request_review","issue_comment","issues","check_run","check_suite","release"],
+      config:{url:"https://mcp.playhorizon.dev/github/webhook", content_type:"json", insecure_ssl:"0", secret: input}}' \
+      | gh api -X POST orgs/horizon-rust/hooks --input - --jq .id
 
 ## Contributors
 

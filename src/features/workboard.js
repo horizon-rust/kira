@@ -14,6 +14,7 @@ import * as wk from '../workkit.js';
 import { summaryText } from '../journal.js';
 import * as contributors from './contributors.js';
 import * as notify from './notify.js';
+import * as webhook from '../webhook.js';
 import { writeFileSync, renameSync, readFileSync } from 'node:fs';
 
 const TOKEN = githubToken();
@@ -310,8 +311,10 @@ async function notices() {
 }
 
 let running = null;
+let lastRefresh = 0;
 export function refresh() {
   running ??= (async () => {
+    lastRefresh = Date.now();
     try {
       raw = await fetchAll();
       const open = raw.pulls.filter((p) => p.state === 'open').map(brief);
@@ -337,6 +340,18 @@ export function refreshSoon(ms = 3000) {
   soon = setTimeout(() => refresh(), ms);
   soon.unref?.(); // never what keeps the process alive (the Discord client does)
 }
+
+// GitHub's webhook: a change on Horizon's issues, pull requests, reviews, checks or main refreshes the board within a
+// minute (at most one refresh every WORK.webhookGapMs); the 10-minute refresh then only runs hourly as a fallback.
+const BOARD_EVENTS = new Set(['issues', 'issue_comment', 'pull_request', 'pull_request_review', 'check_suite', 'check_run', 'status', 'create', 'delete']);
+export function boardEvent(name, p) {
+  if (webhook.repoOf(p) !== WORK.repo) return false;
+  if (webhook.pushToMain(name, p)) return true;
+  if (name === 'check_run' || name === 'check_suite') return p.action === 'completed';
+  return BOARD_EVENTS.has(name);
+}
+const fromWebhook = webhook.throttle(() => refresh(), WORK.webhookGapMs, { delayMs: 5_000 });
+if (enabled) webhook.on((name, p) => { if (boardEvent(name, p)) fromWebhook(); });
 
 // A GitHub link to Horizon's pull requests or issues posted in the server: something probably changed.
 export function onMessage(msg) {
@@ -468,6 +483,6 @@ export function setup() {
   client.once('clientReady', async () => {
     await client.guilds.cache.first()?.members.fetch().catch(() => {}); // Discord names on the board from the first refresh
     refreshSoon(10_000);
-    setInterval(() => refresh(), WORK.refreshMs);
+    setInterval(() => { if (Date.now() - lastRefresh >= webhook.every(WORK.refreshMs, WORK.slowRefreshMs) - 5_000) refresh(); }, WORK.refreshMs);
   });
 }

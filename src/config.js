@@ -294,6 +294,7 @@ export const PINS = {
 // Releases announced in #releases: Horizon's game (`v…` tags) and launcher (`launcher-v…` tags) only.
 export const RELEASE_REPOS = ['horizon'];
 export const RELEASE_EVERY_MS = 3 * 60 * 1000; // one GitHub API request each time
+export const RELEASE_SLOW_MS = 30 * 60 * 1000; // while GitHub's webhook delivers (src/webhook.js): its release events say it at once
 
 // Ludovic's YouTube videos → #ludovic-videos (src/videos.js): the channel's public Atom feed, polled every 10 minutes.
 // His channel is @lu4ovic (LINKS.youtube).
@@ -426,6 +427,7 @@ export const GITHUB = {
   private: [], // repos whose issues get no link in Discord (players can't open them)
   labels: { bug: 'bug', idea: 'enhancement', from: 'from-discord' },
   pollEveryMs: 5 * 60 * 1000,
+  pollSlowMs: 30 * 60 * 1000, // while GitHub's webhook delivers: its issue and comment events trigger the poll
   rate: { perUser: 3, global: 20, windowMs: 60 * 60 * 1000 }, // issues opened per hour
   notifyByDm: false, // also DM the poster when their post gets an answer (the thread mention is the main channel)
 };
@@ -437,6 +439,8 @@ export const WORK = {
   repo: 'horizon',
   label: 'in progress', labelColor: 'fbca04',
   refreshMs: 10 * 60 * 1000,
+  slowRefreshMs: 60 * 60 * 1000, // while GitHub's webhook delivers: its events trigger the refresh instead
+  webhookGapMs: 60_000, // at most one refresh a minute from webhook events
   claimCooldownMs: 10 * 60 * 1000, // between a claim and an unclaim of the same issue (each writes to GitHub)
   maxClaims: 8, // issues a member may hold at once (maintainers: no limit)
   memberCooldownMs: 2 * 60 * 1000, // between two claims or unclaims by the same member, any issues
@@ -488,15 +492,31 @@ export const CONTRIBUTORS = {
 };
 
 // /notify (src/features/notify.js): DMs to a verified contributor who opted in, about their own pull requests and
-// issues in these repos of GITHUB.owner (asked by Isloka, 2026-11-01). `checks`: per repo, the check runs whose failure
-// is worth a DM (horizon's required one is verify); `labels`: the labels worth a DM when someone else adds them.
+// issues in GITHUB.owner's repos (asked by Isloka, 2026-11-01): 'public' = every public repository of the org (levzzz,
+// 2026-11-01), or a list of names. `checks`: per repo, the check runs whose failure is worth a DM (horizon's required
+// one is verify), '*' for the other repos ('*' in a list: any check); `labels`: worth a DM when someone else adds them.
 export const NOTIFY = {
-  repos: ['horizon', 'horizon-mods'],
-  checks: { horizon: ['verify', 'parity', 'launcher'], 'horizon-mods': ['check'] },
+  repos: 'public',
+  checks: { horizon: ['verify', 'parity', 'launcher'], 'horizon-mods': ['check'], '*': ['*'] },
   labels: ['needs-proof', 'parity-regression', 'release-blocker', 'duplicate', 'invalid', 'wontfix', 'question'],
   windowMs: 3 * 60_000, // a member's events wait this long after the first one, then go as one DM
   gapMs: 5 * 60_000, // never two DMs to a member closer than this
   conflictDelayMs: 3 * 60_000, // after main moves, GitHub needs a moment to work out mergeability
+};
+
+// The website (horizon-rust/horizon-site, playhorizon.dev; src/features/site.js): when GitHub's webhook says something
+// it shows changed, Kira calls its POST /api/revalidate with the matching cache tags (KIRA_SITE_REVALIDATE_SECRET, the
+// site's REVALIDATE_SECRET), then loads the pages that show it once, so visitors get the new data within a minute.
+export const SITE = {
+  url: process.env.KIRA_SITE_URL || 'https://playhorizon.dev',
+  gapMs: 30_000, // at most one call every 30 s per tag
+  modsDelayMs: 3 * 60_000, // horizon-mods' registry index is published by a Pages build after the push
+  warm: { // what to load after a tag expires
+    'github:horizon:main': ['/', '/hub', '/docs', '/data/roadmap.json', '/data/journal.json'],
+    'github:horizon:issues': ['/hub', '/data/journal.json'],
+    'github:horizon:releases': ['/', '/releases', '/data/journal.json'],
+    'github:horizon-mods:main': ['/mods', '/mods/policy'],
+  },
 };
 
 // 💚 Sponsor for GitHub sponsors of GITHUB.maintainer (src/features/sponsors.js, src/sponsor-kit.js). Ludovic,

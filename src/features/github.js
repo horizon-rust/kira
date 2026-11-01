@@ -11,6 +11,7 @@ import * as kit from '../issuekit.js';
 import { isOwnPost } from '../adopt.js';
 import { reviewBug, onBugPostMention } from './ai.js';
 import { searchTerms, yesNo, missingAsk } from '../ai-kit.js';
+import * as webhook from '../webhook.js';
 
 const TOKEN = githubToken();
 const DRY = process.env.KIRA_GITHUB_DRY_RUN === '1';
@@ -306,6 +307,15 @@ async function refreshVotes() {
 }
 
 let lastPoll = 0;
+// GitHub's webhook: an issue or a comment on an issue a forum post follows → the next minute's tick polls. Without
+// deliveries the poll runs every GITHUB.pollEveryMs, with them every GITHUB.pollSlowMs as a fallback.
+export function followsIssue(name, p) {
+  if (name !== 'issues' && name !== 'issue_comment') return false;
+  const repo = webhook.repoOf(p);
+  const n = p?.issue?.number;
+  return Object.values(store.issues).some((e) => e.repo === repo && e.number === n);
+}
+if (enabled) webhook.on((name, p) => { if (followsIssue(name, p)) lastPoll = 0; });
 let lastVotes = 0;
 async function tick(now = Date.now()) {
   for (const [threadId, p] of Object.entries(store.pending)) if (now - p.at >= AI.pendingMs) await settle(threadId, null).catch((e) => console.error('github settle', e.message));
@@ -315,7 +325,7 @@ async function tick(now = Date.now()) {
     const items = kit.takeAnswers(entry, now);
     if (items) await deliver(threadId, entry, items);
   }
-  if (now - lastPoll >= GITHUB.pollEveryMs) { lastPoll = now; await poll(); }
+  if (now - lastPoll >= webhook.every(GITHUB.pollEveryMs, GITHUB.pollSlowMs, now)) { lastPoll = now; await poll(); }
   if (now - lastVotes >= 30 * kit.MINUTE) { lastVotes = now; await refreshVotes(); }
   if (!DRY) save();
 }

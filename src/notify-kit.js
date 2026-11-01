@@ -102,7 +102,8 @@ export function checkFailure(name, p, checks = {}) {
   const run = p.check_run;
   if (!run || !['failure', 'timed_out'].includes(run.conclusion)) return null;
   const repo = p.repository?.name;
-  if (!(checks[repo] ?? []).some((c) => same(c, run.name))) return null;
+  const names = checks[repo] ?? checks['*'] ?? [];
+  if (!names.includes('*') && !names.some((c) => same(c, run.name))) return null;
   return { repo, sha: run.head_sha, name: run.name, url: run.html_url, numbers: (run.pull_requests ?? []).map((x) => x.number) };
 }
 export const checkEvent = (pr, fail) => ({
@@ -139,8 +140,9 @@ export function conflictChanges(known = {}, pulls = []) {
 }
 
 // GitHub's search, for the open pull requests of these logins in these repos (OR within each qualifier).
-export const conflictQuery = (owner, repos, logins) => `is:pr is:open archived:false ${repos.map((r) => `repo:${owner}/${r}`).join(' ')} ${logins.map((l) => `author:${l}`).join(' ')}`;
-export const CONFLICT_GRAPHQL = `query($q: String!) { search(query: $q, type: ISSUE, first: 100) { nodes { ... on PullRequest { number title url mergeable author { login } repository { name } } } } }`;
+// `repos`: 'public' (every repository of `owner`; the caller drops private ones) or a list.
+export const conflictQuery = (owner, repos, logins) => `is:pr is:open archived:false ${repos === 'public' ? `org:${owner}` : repos.map((r) => `repo:${owner}/${r}`).join(' ')} ${logins.map((l) => `author:${l}`).join(' ')}`;
+export const CONFLICT_GRAPHQL = `query($q: String!) { search(query: $q, type: ISSUE, first: 100) { nodes { ... on PullRequest { number title url mergeable author { login } repository { name isPrivate } } } } }`;
 
 // ── The DM ───────────────────────────────────────────────────────────────────
 
