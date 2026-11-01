@@ -138,7 +138,7 @@ if (port) {
       res.end(JSON.stringify({ contributors: workboard.creditedPairs() }));
     },
     ...kiraAi.usageRoutes({ limiter }),
-    ...smp.routes({ limiter }), // GET /smp/market.json, /smp/economy.json: the official server's market for the hub, with KIRA_SCULK_FILES_KEY
+    ...smp.routes({ limiter }), // POST /smp/ingest/*, GET /smp/*.json: the official server's market for the hub, with KIRA_SMP_INGEST_TOKEN
     ...site.routes({ limiter }), // GET /github/proxy/…: the website's GitHub reads, with KIRA_SITE_REVALIDATE_SECRET
     ...webhook.routes({ limiter, owner: GITHUB.owner }), // POST /github/webhook, when KIRA_GITHUB_WEBHOOK_SECRET is set (src/webhook.js)
     ...(DISCORD ? staff.routes(modcases.routes()) : {}), // the staff dashboards' API, only through the website's proxy (STAFF_PROXY_KEY)

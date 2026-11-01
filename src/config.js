@@ -408,14 +408,10 @@ export const ONE_OFFS = [
   { key: 'agents-info', channel: 'horizoninfo', when: 'agents', editable: true, pin: true, content: '', embed: AGENT_GUIDE },
 ];
 
-// The official server's market and economy (src/features/smp.js): the pages the SMP mod writes, read through Sculk's
-// panel (server 83b1516f) with a read-only subuser's key (KIRA_SCULK_FILES_KEY), and the market's day posted once.
+// The official server's market and economy (src/features/smp.js): the pages the SMP mod POSTs once a minute with
+// KIRA_SMP_INGEST_TOKEN, served to the hub, and the market's day posted once.
 export const SMP = {
-  panel: 'https://panel.sculkhosting.com',
-  server: '83b1516f',
-  webDir: '/world/horizon-smp/web',
   summaryChannel: 'serverchat',
-  summaryEveryMs: 10 * 60_000,
 };
 
 // The hub (playhorizon.dev/hub): the one public place for the roadmap, the kanban, the journal and how to help.

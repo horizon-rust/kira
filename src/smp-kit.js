@@ -1,49 +1,59 @@
-// The official server's market and economy pages, read from the server (no Discord here; src/features/smp.js wires
-// it). The SMP mod writes world/horizon-smp/web/market.json and economy.json once a minute (horizon-mods native/smp
-// README, "Data"); Kira reads them through Sculk's panel API with a read-only key, at most once a minute each, and
-// serves them as they are. Nothing else on the server can be asked for: only these two names.
+// The official server's market and economy pages (no Discord here; src/features/smp.js wires it). The SMP mod writes
+// world/horizon-smp/web/market.json and economy.json once a minute (horizon-mods native/smp README, "Data") and POSTs
+// each one that changed to Kira (`POST /smp/ingest/<name>`, a bearer token only the server and Kira hold). Kira keeps
+// the last copy of each, in memory and on disk, and serves it. Kira holds no key to the server.
+import { timingSafeEqual } from 'node:crypto';
+import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 
 export const FILES = new Set(['market.json', 'economy.json']);
 export const MAX_BYTES = 8 * 1024 * 1024;
-export const TTL_MS = 60_000;
 
 // A document the mod wrote: schema 1 and a time; anything else is refused.
 export function valid(doc) {
   return !!doc && typeof doc === 'object' && !Array.isArray(doc) && doc.schema === 1 && Number.isFinite(doc.generated);
 }
 
-// One reader per file: a fresh copy is kept for TTL_MS, concurrent readers share one request, and a failed read
-// serves the last good copy (marked `stale`) rather than nothing.
-export function makeReader({ panel, server, key, dir = '/world/horizon-smp/web', fetchImpl = (...a) => fetch(...a), now = () => Date.now() }) {
-  const cache = new Map(); // name → { at, doc }
-  const flying = new Map(); // name → Promise
-  async function load(name) {
-    const file = encodeURIComponent(`${dir}/${name}`);
-    const res = await fetchImpl(`${panel}/api/client/servers/${server}/files/contents?file=${file}`, {
-      headers: { Authorization: `Bearer ${key}`, Accept: 'application/json', 'User-Agent': 'Kira (playhorizon.dev hub)' },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) throw new Error(`panel: HTTP ${res.status}`);
-    const text = await res.text();
-    if (text.length > MAX_BYTES) throw new Error(`panel: ${name} is too big (${text.length} bytes)`);
-    const doc = JSON.parse(text);
-    if (!valid(doc)) throw new Error(`panel: ${name} isn't the SMP's page`);
-    return doc;
-  }
-  return async function read(name) {
-    if (!FILES.has(name)) return null;
-    const hit = cache.get(name);
-    if (hit && now() - hit.at < TTL_MS) return { doc: hit.doc, stale: false };
-    if (!flying.has(name)) {
-      flying.set(name, load(name).then((doc) => { cache.set(name, { at: now(), doc }); return doc; }).finally(() => flying.delete(name)));
-    }
-    try {
-      return { doc: await flying.get(name), stale: false };
-    } catch (e) {
-      if (hit) return { doc: hit.doc, stale: true, error: e.message };
-      throw e;
+// The server's token, compared in constant time; no token configured accepts nothing.
+export function tokenOk(want, header) {
+  if (!want) return false;
+  const got = Buffer.from(String(header ?? '').startsWith('Bearer ') ? String(header).slice(7).trim() : '');
+  const w = Buffer.from(want);
+  return got.length === w.length && timingSafeEqual(got, w);
+}
+
+// The last copy of each page: `put` checks and keeps it (and writes it to `path(name)` when given), `get` returns it
+// with the time it came. An older page than the one kept (by `generated`) is ignored.
+export function makeStore({ path = null, now = () => Date.now() } = {}) {
+  const pages = new Map(); // name → { doc, text, at }
+  if (path) {
+    for (const name of FILES) {
+      try {
+        const text = readFileSync(path(name), 'utf8');
+        const doc = JSON.parse(text);
+        if (valid(doc)) pages.set(name, { doc, text, at: doc.generated });
+      } catch { /* none yet */ }
     }
   }
+  return {
+    put(name, text) {
+      if (!FILES.has(name)) return { status: 404, error: 'unknown page' };
+      if (text.length > MAX_BYTES) return { status: 413, error: 'too large' };
+      let doc;
+      try { doc = JSON.parse(text); } catch { return { status: 400, error: 'not JSON' }; }
+      if (!valid(doc)) return { status: 400, error: 'not the SMP\'s page' };
+      const kept = pages.get(name);
+      if (kept && kept.doc.generated > doc.generated) return { status: 200, ignored: true };
+      pages.set(name, { doc, text, at: now() });
+      if (path) {
+        try {
+          writeFileSync(`${path(name)}.tmp`, text);
+          renameSync(`${path(name)}.tmp`, path(name));
+        } catch (e) { console.error(`smp: keeping ${name}:`, e.message); }
+      }
+      return { status: 200 };
+    },
+    get: (name) => pages.get(name) ?? null,
+  };
 }
 
 // The market's daily summary to post, once: its lines when its day is newer than the last one posted and recent
