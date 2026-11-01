@@ -136,6 +136,7 @@ if (port) {
       res.end(JSON.stringify({ contributors: workboard.creditedPairs() }));
     },
     ...kiraAi.usageRoutes({ limiter }),
+    ...site.routes({ limiter }), // GET /github/proxy/…: the website's GitHub reads, with KIRA_SITE_REVALIDATE_SECRET
     ...webhook.routes({ limiter, owner: GITHUB.owner }), // POST /github/webhook, when KIRA_GITHUB_WEBHOOK_SECRET is set (src/webhook.js)
     ...(DISCORD ? staff.routes() : {}), // the staff dashboards' API, only through the website's proxy (STAFF_PROXY_KEY)
     ...gameRoutes({ store: gameServers, ask: kiraAi.askInGame, limiter }),

@@ -343,6 +343,14 @@ At most one call every 30 s per tag; horizon-mods' tag once more 3 minutes later
 Pages build). Then Kira loads the pages that show the data once (`SITE.warm`) so the next visitor gets them fresh, and
 #updates reads the journal again. `KIRA_SITE_DRY_RUN=1` logs the calls instead.
 
+The site has no GitHub token of its own (60 requests an hour for its host's address), and revalidating on every change
+would spend them in minutes. So it reads GitHub's REST API **through Kira**: `GET /github/proxy/repos/horizon-rust/
+{horizon,horizon-mods}/{issues,releases,releases/latest,contributors,commits/main}` with the same bearer secret, a few
+query keys (`state`, `sort`, `direction`, `per_page`, `page`) and `X-GitHub-Accept: full` for releases' `body_html`.
+Kira answers from its GitHub App client (`makePublicGitHub`: ETag cache, a 304 costs nothing, its own reserve, never
+Ludovic's token). Anything else is a 404; a wrong secret a 401 in the "auth" rate limit. The site's `GITHUB_PROXY_URL`
+is `https://mcp.playhorizon.dev/github/proxy`; when Kira doesn't answer, the site reads GitHub directly, as before.
+
 **Setting the webhook up** (a new host or a new secret): one organization webhook, `gh api orgs/horizon-rust/hooks`
 (needs the `admin:org_hook` scope: `gh auth refresh -h github.com -s admin:org_hook`), or one per repository with
 `gh api repos/horizon-rust/<repo>/hooks`; `config.url` `<Kira's host>/github/webhook`, `content_type: json`, the

@@ -99,3 +99,28 @@ test('board: Horizon\'s issues, pull requests, reviews, finished checks and main
   assert.equal(wb.boardEvent('push', { ref: 'refs/heads/topic', repository: h }), false);
   assert.equal(wb.boardEvent('issues', { action: 'opened', repository: repo('horizon-mods') }), false);
 });
+
+test('site proxy: only the site (bearer), only its few public reads, through Kira\'s GitHub client', async () => {
+  const asked = [];
+  site._test.setProxyGitHub({ get: async (path, opts) => { asked.push([path, opts?.accept ?? null]); return path.includes('releases/latest') ? null : [{ ok: path }]; } });
+  const routes = site.routes({});
+  const call = async (url, headers = {}) => {
+    const route = routes[`GET ${new URL(url, 'http://x').pathname}`];
+    if (!route) return { status: 404 };
+    const res = { status: 0, body: '', writeHead(st) { this.status = st; }, end(b) { this.body = b; } };
+    await route({ url, headers, socket: { remoteAddress: '1.2.3.4' } }, res);
+    return res;
+  };
+  const auth = { authorization: 'Bearer site-secret' };
+  assert.equal((await call('/github/proxy/repos/horizon-rust/horizon/issues?state=open&per_page=100&page=2', {})).status, 401);
+  const ok = await call('/github/proxy/repos/horizon-rust/horizon/issues?state=open&per_page=100&page=2', auth);
+  assert.equal(ok.status, 200);
+  assert.deepEqual(asked.at(-1), ['/repos/horizon-rust/horizon/issues?page=2&per_page=100&state=open', null]);
+  await call('/github/proxy/repos/horizon-rust/horizon/releases?per_page=50', { ...auth, 'x-github-accept': 'full' });
+  assert.deepEqual(asked.at(-1), ['/repos/horizon-rust/horizon/releases?per_page=50', 'application/vnd.github.full+json']);
+  assert.equal((await call('/github/proxy/repos/horizon-rust/horizon/releases/latest', auth)).status, 404);
+  assert.equal((await call('/github/proxy/repos/horizon-rust/horizon/issues?labels=x', auth)).status, 404, 'unknown query');
+  assert.equal((await call('/github/proxy/repos/horizon-rust/kira/issues', auth)).status, 404, 'a private repo');
+  assert.equal((await call('/github/proxy/user', auth)).status, 404);
+  assert.equal(site.proxyTarget('/github/proxy/repos/horizon-rust/horizon/issues?page=1;x'), null);
+});

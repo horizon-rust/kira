@@ -4,7 +4,11 @@
 // components/github-fresh.ts), then loads the pages that show it once so the next visitor gets them fresh, and has
 // #updates read the journal again. Off without KIRA_SITE_REVALIDATE_SECRET.
 import { GITHUB, SITE } from '../config.js';
+import { timingSafeEqual } from 'node:crypto';
 import * as webhook from '../webhook.js';
+import { makePublicGitHub } from '../github.js';
+import { appToken } from '../github-app.js';
+import { clientIp } from '../agents.js';
 
 const SECRET = process.env.KIRA_SITE_REVALIDATE_SECRET?.trim() || null;
 export const enabled = !!SECRET;
@@ -66,6 +70,61 @@ export function setup() {
   console.log(`site: ${enabled ? `revalidates ${SITE.url} on GitHub's webhook${DRY ? ' (dry run)' : ''}` : 'off (KIRA_SITE_REVALIDATE_SECRET is not set)'}`);
 }
 
+// ── The site's GitHub reads, through Kira ─────────────────────────────────────
+// The site has no GitHub token of its own (60 requests an hour for Railway's address): with revalidations on every
+// change it would run out. It reads through GET /github/proxy/<API path> instead, with the same bearer secret: Kira's
+// GitHub App client with its ETag cache (a 304 costs nothing) and its public reserve (src/github.js makePublicGitHub).
+// Only the few public reads the site makes are allowed.
+const PROXY_PATH = /^\/repos\/horizon-rust\/(horizon|horizon-mods)\/(issues|releases|releases\/latest|contributors|commits\/main)$/;
+const PROXY_QUERY = new Set(['state', 'sort', 'direction', 'per_page', 'page']);
+let proxyGh = null;
+// The API path a proxy request may read, or null.
+export function proxyTarget(url) {
+  const u = new URL(url, 'http://x');
+  const path = u.pathname.replace(/^\/github\/proxy/, '');
+  if (!PROXY_PATH.test(path)) return null;
+  const q = new URLSearchParams();
+  for (const [k, v] of u.searchParams) {
+    if (!PROXY_QUERY.has(k) || !/^[\w-]{1,20}$/.test(v)) return null;
+    q.append(k, v);
+  }
+  q.sort();
+  const query = q.toString();
+  return query ? `${path}?${query}` : path;
+}
+const bearerOk = (header) => {
+  const got = Buffer.from(String(header ?? '').startsWith('Bearer ') ? String(header).slice(7).trim() : '');
+  const want = Buffer.from(SECRET ?? '');
+  return !!SECRET && got.length === want.length && timingSafeEqual(got, want);
+};
+export function routes({ limiter } = {}) {
+  if (!SECRET) return {};
+  proxyGh ??= makePublicGitHub({ appToken: appToken() });
+  const reply = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
+  const handler = async (req, res) => {
+    if (!bearerOk(req.headers.authorization)) {
+      const limited = limiter && !limiter.take(clientIp(req), 'auth');
+      return reply(res, limited ? 429 : 401, { error: limited ? 'too many attempts' : 'unauthorized' });
+    }
+    const target = proxyTarget(req.url);
+    if (!target) return reply(res, 404, { error: 'not allowed' });
+    try {
+      const accept = req.headers['x-github-accept'] === 'full' ? 'application/vnd.github.full+json' : null;
+      const data = await proxyGh.get(target, accept ? { accept } : undefined);
+      if (data === null) return reply(res, 404, { error: 'not found' });
+      return reply(res, 200, data);
+    } catch (e) {
+      console.error('site proxy', target, e.message);
+      return reply(res, 502, { error: 'GitHub did not answer' });
+    }
+  };
+  const out = {};
+  for (const repo of ['horizon', 'horizon-mods']) {
+    for (const what of ['issues', 'releases', 'releases/latest', 'contributors', 'commits/main']) out[`GET /github/proxy/repos/horizon-rust/${repo}/${what}`] = handler;
+  }
+  return out;
+}
+
 export const commands = [];
 export const handlers = {};
-export const _test = { setFetch: (f) => { fetchImpl = f; }, revalidate };
+export const _test = { setFetch: (f) => { fetchImpl = f; }, revalidate, setProxyGitHub: (g) => { proxyGh = g; } };
