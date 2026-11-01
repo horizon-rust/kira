@@ -207,13 +207,24 @@ const send = (res, status, body, headers = {}) => {
 };
 const rpcError = (res, status, code, message, headers) => send(res, status, { jsonrpc: '2.0', error: { code, message }, id: null }, headers);
 
+// A route declared as `GET /prefix/*` serves every path under /prefix/ (the longest prefix wins).
+function prefixRoute(routes, method, path) {
+  let best = null;
+  for (const key of Object.keys(routes)) {
+    if (!key.startsWith(`${method} `) || !key.endsWith('/*')) continue;
+    const prefix = key.slice(method.length + 1, -1);
+    if (path.startsWith(prefix) && (!best || prefix.length > best[0].length)) best = [prefix, routes[key]];
+  }
+  return best?.[1] ?? null;
+}
+
 // The HTTP handler. `store`: the token store; `api`: what the tools do; `routes`: extra GET routes.
 export function makeHandler({ store, api, limiter = rateLimiter(), routes = {}, now = () => Date.now() }) {
   return async (req, res) => {
     const path = new URL(req.url, 'http://x').pathname;
     try {
       if (req.method === 'GET' && path === '/health') return send(res, 200, { ok: true, board: !!api.snapshot() });
-      const route = routes[`${req.method} ${path}`] ?? (req.method === 'GET' ? routes[path] : null);
+      const route = routes[`${req.method} ${path}`] ?? (req.method === 'GET' ? routes[path] : null) ?? prefixRoute(routes, req.method, path);
       if (route) return route(req, res);
       if (path !== '/mcp' && path !== '/') return send(res, 404, { error: 'not found' });
       if (req.method !== 'POST') return rpcError(res, 405, -32000, 'Method not allowed: this server is stateless, POST only.', { Allow: 'POST' });

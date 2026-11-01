@@ -37,6 +37,7 @@ import * as apply from './features/apply.js';
 import * as modcases from './features/modcases.js';
 import { startServer } from './mcp.js';
 import { adminRoutes } from './admin.js';
+import * as launcherGithub from './launcher-github.js';
 import { rateLimiter } from './agents.js';
 import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
@@ -139,6 +140,7 @@ if (port) {
     },
     ...kiraAi.usageRoutes({ limiter }),
     ...smp.routes({ limiter }), // POST /smp/ingest/*, GET /smp/*.json: the official server's market for the hub, with KIRA_SMP_INGEST_TOKEN
+    ...launcherGithub.routes({ limiter }), // GET /github/public/…: the launcher's release reads when GitHub rate-limits it (public, read-only)
     ...site.routes({ limiter }), // GET /github/proxy/…: the website's GitHub reads, with KIRA_SITE_REVALIDATE_SECRET
     ...webhook.routes({ limiter, owner: GITHUB.owner }), // POST /github/webhook, when KIRA_GITHUB_WEBHOOK_SECRET is set (src/webhook.js)
     ...(DISCORD ? staff.routes(modcases.routes()) : {}), // the staff dashboards' API, only through the website's proxy (STAFF_PROXY_KEY)

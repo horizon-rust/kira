@@ -410,6 +410,14 @@ Kira answers from its GitHub App client (`makePublicGitHub`: ETag cache, a 304 c
 Ludovic's token). Anything else is a 404; a wrong secret a 401 in the "auth" rate limit. The site's `GITHUB_PROXY_URL`
 is `https://mcp.playhorizon.dev/github/proxy`; when Kira doesn't answer, the site reads GitHub directly, as before.
 
+The launcher has no token either, and players behind a shared address (school, dorm, carrier NAT) spend GitHub's 60
+anonymous calls an hour together. When GitHub answers it with a rate limit (or not at all), it asks Kira instead:
+`GET /github/public/repos/horizon-rust/horizon/{releases,releases/latest,releases/tags/<tag>,git/matching-refs/tags/<prefix>,commits/<ref>}`
+(`src/launcher-github.js`), **public, no secret, read-only**, only those paths of that public repository, `per_page`
+and `page` only. Each answer (a 404 too) is kept 60 s, so a crowd of launchers costs one GitHub call per path a minute,
+through the same `makePublicGitHub` client; when GitHub fails, the last answer is served. 60 requests a minute per
+address (`launcherGithub` in `LIMITS`). The launcher's base is `https://mcp.playhorizon.dev/github/public`.
+
 **Setting the webhook up** (a new host or a new secret): one organization webhook, `gh api orgs/horizon-rust/hooks`
 (needs the `admin:org_hook` scope: `gh auth refresh -h github.com -s admin:org_hook`), or one per repository with
 `gh api repos/horizon-rust/<repo>/hooks`; `config.url` `<Kira's host>/github/webhook`, `content_type: json`, the
