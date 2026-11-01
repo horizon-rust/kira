@@ -16,16 +16,17 @@ export const MIN = 60_000;
 export const HOUR = 60 * MIN;
 export const DAY = 24 * HOUR;
 export const APPEAL = {
-  cooldownMs: 7 * DAY,     // a second appeal of the same action, 7 days after the first one's decision
+  cooldownMs: 7 * DAY,     // one new appeal per member every 7 days (pointofpressure's spec)
   windowMs: 30 * DAY,      // an action can be appealed for 30 days
   remindMs: DAY,           // an open appeal older than this pings the mods in its thread, then again every day
   linkMs: 30 * DAY,        // a web appeal link (banned users) works for 30 days, also to read the outcome
-  max: { what: 1000, why: 1000, more: 1000, ign: 16, banText: 300, evidence: 1000, note: 500 },
+  max: { what: 1000, why: 1000, more: 1000, ign: 16, banText: 300, evidence: 1000, note: 200 },
+  staleMs: 12 * HOUR,      // appeals not decided after this go on #mod-chat's daily list too
 };
 // The form's questions (a Discord modal, and the web page for banned users): fixed, answered once.
 export const QUESTIONS = [
   { id: 'what', label: 'What happened?', max: APPEAL.max.what, required: true },
-  { id: 'why', label: 'Why should it be lifted?', max: APPEAL.max.why, required: true },
+  { id: 'why', label: 'Why should it be lifted or shortened?', max: APPEAL.max.why, required: true },
   { id: 'more', label: 'Anything else the mods should know?', max: APPEAL.max.more, required: false },
 ];
 export const MODMAIL = { staleMs: 12 * HOUR };
@@ -217,7 +218,6 @@ export function tokenUser(mc, token, now = Date.now()) {
 
 // ── Appeals ─────────────────────────────────────────────────────────────────
 
-const appealsOf = (mc, n) => Object.values(mc.appeals).filter((a) => a.case === n);
 const live = (c, now) => !c.liftedAt && !c.ended && (!c.until || c.until > now);
 
 // Whether `userId` may appeal case `c` now: { ok } or { ok: false, why, retryAt? }.
@@ -226,9 +226,10 @@ export function canAppeal(mc, c, userId, now = Date.now()) {
   if (!ACTIONS[c.action]?.appealable) return { ok: false, why: 'not-appealable' };
   if (!live(c, now)) return { ok: false, why: 'over' };
   if (now - c.at > APPEAL.windowMs) return { ok: false, why: 'too-old' };
-  const mine = appealsOf(mc, c.n);
+  // One open appeal per member, and one new appeal per member every 7 days (pointofpressure's spec, 2026-11-01).
+  const mine = Object.values(mc.appeals).filter((a) => a.userId === userId);
   if (mine.some((a) => a.status !== 'decided')) return { ok: false, why: 'open' };
-  const last = Math.max(0, ...mine.map((a) => a.outcome?.at ?? 0));
+  const last = Math.max(0, ...mine.map((a) => a.at));
   if (last && now - last < APPEAL.cooldownMs) return { ok: false, why: 'cooldown', retryAt: last + APPEAL.cooldownMs };
   return { ok: true };
 }
@@ -237,8 +238,8 @@ export const WHY = {
   'not-appealable': 'Only timeouts, quarantines and bans can be appealed.',
   over: 'That action is over or was lifted already.',
   'too-old': 'That action is more than 30 days old.',
-  open: 'Your appeal of it is still open: the mods will decide, and Kira tells you.',
-  cooldown: 'It was appealed already: another appeal is possible 7 days after the first decision.',
+  open: 'You have an appeal open already: the mods will decide, and Kira tells you.',
+  cooldown: 'One appeal every 7 days: your next one is possible later.',
   none: 'You have nothing to appeal right now.',
 };
 
@@ -246,10 +247,9 @@ export const WHY = {
 // ban that can be appealed. Returns { case } or { why, retryAt? }.
 export function appealTarget(mc, userId, now = Date.now(), kinds = ['quarantine', 'timeout', 'ban']) {
   const mine = Object.values(blank(mc).cases).filter((c) => c.userId === userId && kinds.includes(c.action) && live(c, now)).sort((x, y) => y.at - x.at);
-  for (const c of mine) if (canAppeal(mc, c, userId, now).ok) return { case: c };
   if (!mine.length) return { why: 'none' };
   const r = canAppeal(mc, mine[0], userId, now);
-  return { why: r.why, retryAt: r.retryAt };
+  return r.ok ? { case: mine[0] } : { why: r.why, retryAt: r.retryAt };
 }
 
 // Submits an appeal; throws an exposed error when it is refused. A Minecraft appeal opens its own case.
@@ -305,6 +305,8 @@ export const DECISIONS = { uphold: 'upheld', ban: 'upheld and turned into a ban'
 export function decide(mc, a, { decision, by, ms = null, note = null }, now = Date.now()) {
   if (a.status === 'decided') throw fail('This appeal was decided already.');
   const c = mc.cases[a.case];
+  note = text(note, APPEAL.max.note).replace(/\s*\n\s*/g, ' ');
+  if (!note) throw fail('Give a one-line reason: they read it.');
   if (!decisionsFor(c).includes(decision)) throw fail('That decision doesn\'t apply to this case.');
   let until = null;
   if (decision === 'shorten') {
@@ -327,16 +329,26 @@ export function decide(mc, a, { decision, by, ms = null, note = null }, now = Da
 export function outcomeText(c, a) {
   const what = ACTIONS[c.action].label.toLowerCase();
   const d = a.outcome;
-  const note = d.note ? `\nThe mods' note: ${d.note}` : '';
+  const note = d.note ? `\nWhy: ${d.note}` : '';
   if (d.decision === 'lift') return `✅ Your appeal of case #${c.n} (${what}) was accepted: it is lifted.${c.action === 'mcban' ? ` An op unbans \`${c.ign}\` on the server.` : ''}${note}`;
   if (d.decision === 'shorten') return `⏱️ Your appeal of case #${c.n} (${what}) was partly accepted: it now ends <t:${Math.floor(d.until / 1000)}:f>.${note}`;
   if (d.decision === 'ban') return `⛔ Your appeal of case #${c.n} (${what}) was refused, and the quarantine became a ban.${note}`;
-  return `❌ Your appeal of case #${c.n} (${what}) was refused: it stays. You may appeal again in 7 days.${note}`;
+  return `❌ Your appeal of case #${c.n} (${what}) was refused: it stays.${note}`;
 }
 
 // Open appeals older than a day whose thread had no reminder in the last day.
 export function dueReminders(mc, now = Date.now()) {
-  return Object.values(blank(mc).appeals).filter((a) => a.status === 'open' && now - a.at >= APPEAL.remindMs && now - (a.remindedAt ?? 0) >= APPEAL.remindMs);
+  return Object.values(blank(mc).appeals).filter((a) => a.status !== 'decided' && now - a.at >= APPEAL.remindMs && now - (a.remindedAt ?? 0) >= APPEAL.remindMs);
+}
+
+// Appeals not decided after 12 hours (the daily list in #mod-chat), oldest first.
+export const staleAppeals = (mc, now = Date.now()) => Object.values(blank(mc).appeals).filter((a) => a.status !== 'decided' && now - a.at > APPEAL.staleMs).sort((x, y) => x.at - y.at);
+
+// Waiting: a mod marks the appeal as waiting on something (the acting mod's evidence, a second opinion); Open again.
+export function setWaiting(a, waiting) {
+  if (a.status === 'decided') throw fail('This appeal was decided already.');
+  a.status = waiting ? 'waiting' : 'open';
+  return a;
 }
 
 // The web page's view for a banned user: their bans and Minecraft cases, and their appeals with the outcome.
@@ -387,8 +399,8 @@ export function markedName(name, mark) {
   return `${mark} ${String(name ?? '').replace(MAIL_MARK, '').replace(/^⚖️\s*/u, '')}`.slice(0, 100);
 }
 export const mailName = (name, status) => markedName(name, MAIL[status]?.mark ?? MAIL.open.mark);
-// Appeals live in #mod-mail too: "⚖️ 🟢 Appeal #12 · name" while open, "⚖️ ⚪ …" once decided.
-export const appealName = (c, name, status) => `⚖️ ${status === 'decided' ? '⚪' : '🟢'} Appeal · case #${c.n} · ${String(name ?? '').slice(0, 60)}`.slice(0, 100);
+// Appeals live in #mod-mail too: "⚖️ 🟢 Appeal · case #12 · name" while open, 🟡 waiting, ⚪ once decided.
+export const appealName = (c, name, status) => `⚖️ ${status === 'decided' ? '⚪' : status === 'waiting' ? '🟡' : '🟢'} Appeal · case #${c.n} · ${String(name ?? '').slice(0, 60)}`.slice(0, 100);
 
 export function mailSet(mc, threadId, { status, userId = null }, now = Date.now()) {
   blank(mc);

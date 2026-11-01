@@ -41,7 +41,7 @@ export const commands = [
     .addStringOption((o) => o.setName('duration').setDescription('e.g. 10m, 2h, 1d (max 28d)').setRequired(true)).addStringOption(reason),
   new SlashCommandBuilder().setName('untimeout').setDescription('End a timeout').setDefaultMemberPermissions(P.ModerateMembers).addUserOption(member),
   new SlashCommandBuilder().setName('kick').setDescription('Kick a member').setDefaultMemberPermissions(P.KickMembers).addUserOption(member).addStringOption(reason),
-  new SlashCommandBuilder().setName('ban').setDescription('Ban: only CSAM, raids, scammers and bots. Anything else: /quarantine').setDefaultMemberPermissions(P.BanMembers).addUserOption(member).addStringOption(reason)
+  new SlashCommandBuilder().setName('ban').setDescription('Ban: only CSAM, raids, scams, bots, DM abuse. Anything else: /quarantine').setDefaultMemberPermissions(P.BanMembers).addUserOption(member).addStringOption(reason)
     .addIntegerOption((o) => o.setName('delete_days').setDescription('Delete their messages from the last N days (0-7)').setMinValue(0).setMaxValue(7)),
   new SlashCommandBuilder().setName('unban').setDescription('Unban a user by ID').setDefaultMemberPermissions(P.BanMembers)
     .addStringOption((o) => o.setName('user_id').setDescription('Their user ID').setRequired(true)),
@@ -544,8 +544,9 @@ export function setup() {
       if (used) via = `, via discord.gg/${used.code}${used.inviter ? ` (by ${used.inviter.tag})` : ''}`;
       for (const inv of now.values()) invites.set(inv.code, inv.uses);
     }
-    const young = Date.now() - m.user.createdTimestamp < 86_400_000;
-    joinQueue.push(`📥 <@${m.id}> (${m.user.tag}), account ${ago(m.user.createdTimestamp)} old${young ? ' ⚠️' : ''}${via}`);
+    // #join-leave keeps the details mods look for (bunchy7s, 2026-11-01): id, account age (⚠️ under 7 days), avatar, invite.
+    const young = Date.now() - m.user.createdTimestamp < 7 * 86_400_000;
+    joinQueue.push(`📥 <@${m.id}> (${m.user.tag}) \`${m.id}\`, account ${ago(m.user.createdTimestamp)} old${young ? ' ⚠️ under 7 days' : ''} · [avatar](${m.user.displayAvatarURL({ size: 256 })})${via}`);
     // Raid: a burst of brand-new accounts (a busy evening of real people doesn't trigger it).
     if (Date.now() - m.user.createdTimestamp < MOD.raidYoungDays * 864e5) {
       youngJoins.push(Date.now());

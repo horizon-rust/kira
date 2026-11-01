@@ -79,7 +79,7 @@ test('quarantine: the roles kept aside (not managed ones), a length that runs ou
   assert.deepEqual(kit.quarantinesDue(mc, T0 + D), ['u']);
 });
 
-test('appeals: the person\'s own live action, one at a time, another 7 days after the decision', () => {
+test('appeals (pointofpressure\'s spec): the person\'s own live action, one open per member, one new per 7 days', () => {
   const mc = kit.blank({});
   const c = kit.openCase(mc, { action: 'quarantine', userId: 'u', by: 'mod1', reason: 'slurs' }, T0);
   kit.openCase(mc, { action: 'kick', userId: 'u', by: 'mod1' }, T0);
@@ -90,19 +90,24 @@ test('appeals: the person\'s own live action, one at a time, another 7 days afte
   assert.throws(() => kit.submitAppeal(mc, { userId: 'u', caseNo: 1, answers: { what: 'x' } }, T0), /why it should be lifted/);
   const { appeal } = kit.submitAppeal(mc, { userId: 'u', caseNo: 1, answers: { what: 'I joked', why: 'it was a joke', more: '' } }, T0 + H);
   assert.equal(appeal.status, 'open');
-  assert.throws(() => kit.submitAppeal(mc, { userId: 'u', caseNo: 1, answers: { what: 'a', why: 'b' } }, T0 + H), /still open/);
+  assert.throws(() => kit.submitAppeal(mc, { userId: 'u', caseNo: 1, answers: { what: 'a', why: 'b' } }, T0 + H), /appeal open already/);
   // the reviewer rule
   assert.match(kit.decideRefusal(c, 'mod1', { isMod: true }), /You acted on case #1: another mod decides/);
   assert.match(kit.decideRefusal(c, 'mod2', { isMod: false }), /Only the mods/);
   assert.equal(kit.decideRefusal(c, 'mod2', { isMod: true }), null);
   assert.deepEqual(kit.decisionsFor(c), ['uphold', 'ban', 'shorten', 'lift'], 'uphold on a quarantine can turn it into a ban');
-  kit.decide(mc, appeal, { decision: 'uphold', by: 'mod2', note: 'Rule 1.' }, T0 + 2 * H);
-  assert.match(kit.outcomeText(c, appeal), /refused: it stays\. You may appeal again in 7 days\.\nThe mods' note: Rule 1\./);
-  assert.throws(() => kit.decide(mc, appeal, { decision: 'lift', by: 'mod3' }), /decided already/);
-  const again = kit.canAppeal(mc, c, 'u', T0 + 3 * H);
-  assert.equal(again.why, 'cooldown');
-  assert.equal(again.retryAt, T0 + 2 * H + 7 * D);
-  assert.ok(kit.canAppeal(mc, c, 'u', T0 + 2 * H + 7 * D).ok);
+  // another of their cases waits too: one open appeal per member
+  const t = kit.openCase(mc, { action: 'timeout', userId: 'u', by: 'mod3', ms: D, until: T0 + D }, T0 + H);
+  assert.equal(kit.canAppeal(mc, t, 'u', T0 + H).why, 'open');
+  assert.throws(() => kit.decide(mc, appeal, { decision: 'uphold', by: 'mod2', note: ' ' }, T0 + 2 * H), /one-line reason/);
+  kit.decide(mc, appeal, { decision: 'uphold', by: 'mod2', note: 'Rule 1:\nslurs.' }, T0 + 2 * H);
+  assert.match(kit.outcomeText(c, appeal), /refused: it stays\.\nWhy: Rule 1: slurs\./);
+  assert.throws(() => kit.decide(mc, appeal, { decision: 'lift', by: 'mod3', note: 'x' }), /decided already/);
+  const again = kit.canAppeal(mc, t, 'u', T0 + 3 * H);
+  assert.equal(again.why, 'cooldown', 'one new appeal per 7 days, whatever the case');
+  assert.equal(again.retryAt, T0 + H + 7 * D);
+  assert.equal(kit.appealTarget(mc, 'u', T0 + 3 * H).why, 'cooldown');
+  assert.ok(kit.canAppeal(mc, c, 'u', T0 + H + 7 * D).ok);
 });
 
 test('decisions: shorten sets a new end from the action, lift ends it, Kira\'s own actions any mod decides', () => {
@@ -110,16 +115,17 @@ test('decisions: shorten sets a new end from the action, lift ends it, Kira\'s o
   const c = kit.openCase(mc, { action: 'timeout', userId: 'u', by: kit.KIRA, ms: D, until: T0 + D }, T0);
   assert.equal(kit.decideRefusal(c, 'mod1', { isMod: true }), null);
   const { appeal: a } = kit.submitAppeal(mc, { userId: 'u', caseNo: c.n, answers: { what: 'a', why: 'b' } }, T0);
-  assert.throws(() => kit.decide(mc, a, { decision: 'shorten', by: 'mod1', ms: 2 * D }, T0 + H), /not shorter/);
-  assert.throws(() => kit.decide(mc, a, { decision: 'shorten', by: 'mod1', ms: H / 2 }, T0 + H), /in the past/);
-  assert.throws(() => kit.decide(mc, a, { decision: 'ban', by: 'mod1' }, T0 + H), /doesn't apply/);
-  const { until } = kit.decide(mc, a, { decision: 'shorten', by: 'mod1', ms: 2 * H }, T0 + H);
+  const r = 'ok';
+  assert.throws(() => kit.decide(mc, a, { decision: 'shorten', by: 'mod1', ms: 2 * D, note: r }, T0 + H), /not shorter/);
+  assert.throws(() => kit.decide(mc, a, { decision: 'shorten', by: 'mod1', ms: H / 2, note: r }, T0 + H), /in the past/);
+  assert.throws(() => kit.decide(mc, a, { decision: 'ban', by: 'mod1', note: r }, T0 + H), /doesn't apply/);
+  const { until } = kit.decide(mc, a, { decision: 'shorten', by: 'mod1', ms: 2 * H, note: r }, T0 + H);
   assert.equal(until, T0 + 2 * H);
   assert.equal(c.ms, 2 * H);
   assert.match(c.appealNote, /^shortened by <@mod1>/);
   const b = kit.openCase(mc, { action: 'ban', userId: 'w', by: 'mod1' }, T0);
   const { appeal: ab } = kit.submitAppeal(mc, { userId: 'w', caseNo: b.n, answers: { what: 'a', why: 'b' }, via: 'web' }, T0);
-  kit.decide(mc, ab, { decision: 'lift', by: 'mod2' }, T0 + H);
+  kit.decide(mc, ab, { decision: 'lift', by: 'mod2', note: 'it was a mistake' }, T0 + H);
   assert.ok(b.liftedAt);
   assert.equal(kit.canAppeal(mc, b, 'w', T0 + 9 * D).why, 'over');
   assert.match(kit.outcomeText(b, ab), /accepted: it is lifted/);
@@ -134,7 +140,7 @@ test('Minecraft appeals: their own case, decided by the ops only', () => {
   assert.equal(c.banText, 'xray');
   assert.match(kit.decideRefusal(c, 'mod1', { isMod: true }), /ops/);
   assert.equal(kit.decideRefusal(c, kit.MC_OPS[1], { isMod: false }), null);
-  assert.throws(() => kit.submitAppeal(mc, { userId: 'u', kind: 'minecraft', ign: 'steve_1', answers: { what: 'a', why: 'b' } }, T0), /still open/, 'the same name: the same case');
+  assert.throws(() => kit.submitAppeal(mc, { userId: 'u', kind: 'minecraft', ign: 'steve_1', answers: { what: 'a', why: 'b' } }, T0), /appeal open already/, 'the same name: the same case');
   assert.match(kit.caseView(c).fields.find((x) => x.name.startsWith('Ban reason')).value, /xray/);
 });
 
@@ -147,6 +153,11 @@ test('reminders after 24 h, then daily; the web link; the views', () => {
   a.remindedAt = T0 + D;
   assert.deepEqual(kit.dueReminders(mc, T0 + D + H), []);
   assert.deepEqual(kit.dueReminders(mc, T0 + 2 * D), [a]);
+  assert.deepEqual(kit.staleAppeals(mc, T0 + 11 * H), []);
+  assert.deepEqual(kit.staleAppeals(mc, T0 + 13 * H), [a], 'the daily list: not decided after 12 h');
+  kit.setWaiting(a, true);
+  assert.equal(kit.appealName(c, 'joe', a.status), `⚖️ 🟡 Appeal · case #${c.n} · joe`);
+  assert.deepEqual(kit.dueReminders(mc, T0 + 3 * D), [a], 'waiting still reminds');
   const { token } = kit.issueToken(mc, 'u', T0);
   assert.equal(kit.tokenUser(mc, token, T0 + D), 'u');
   assert.equal(kit.tokenUser(mc, token, T0 + 31 * D), null);
@@ -155,9 +166,9 @@ test('reminders after 24 h, then daily; the web link; the views', () => {
   const p = kit.personView(mc, 'u', T0 + H);
   assert.equal(p.cases[0].n, c.n);
   assert.equal(p.cases[0].canAppeal, false);
-  assert.equal(p.appeals[0].status, 'open');
+  assert.equal(p.appeals[0].status, 'waiting');
   const s = kit.staffView(mc);
-  assert.equal(s.cases[0].appeal.status, 'open');
+  assert.equal(s.cases[0].appeal.status, 'waiting');
   assert.equal(s.appeals[0].case, c.n);
   assert.ok(!JSON.stringify(s).includes('"what"'), 'no answers on the dashboard list');
 });
@@ -232,7 +243,7 @@ test('a mod\'s timeout from the audit log: one case in #mod-actions, a DM with t
   // The form, as a modal submit.
   const replies = [];
   const modal = {
-    customId: `appeal:form:${c.n}`, user, fields: { getTextInputValue: (k) => ({ what: 'I streamed a wallpaper', why: 'not explicit', more: '' })[k] ?? '' },
+    customId: `appeal:form:${c.n}`, user, fields: { getTextInputValue: (k) => ({ case: `#${c.n}`, what: 'I streamed a wallpaper', why: 'not explicit', more: '' })[k] ?? '' },
     deferReply: async () => { modal.deferred = true; }, editReply: async (x) => replies.push(x), reply: async (x) => replies.push(x),
     isButton: () => false, isModalSubmit: () => true,
   };
@@ -253,9 +264,9 @@ test('a mod\'s timeout from the audit log: one case in #mod-actions, a DM with t
   const refused = press('mod1');
   await new Promise((r) => setTimeout(r, 10));
   assert.match(refused[0].content, /You acted on case #\d+: another mod decides/);
-  await f._test.applyDecision(a, c, { decision: 'lift', by: 'mod3' });
+  await f._test.applyDecision(a, c, { decision: 'lift', by: 'mod3', note: 'the wallpaper was not explicit' });
   assert.deepEqual(timeouts, [null]);
-  assert.match(dms.at(-1).content, /was accepted: it is lifted/);
+  assert.match(dms.at(-1).content, /was accepted: it is lifted\.\nWhy: the wallpaper was not explicit/);
   assert.equal(a.outcome.told, 'dm');
   assert.match(thread.name, /^⚖️ ⚪ Appeal/);
   assert.equal(thread.locked, true);

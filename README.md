@@ -72,7 +72,7 @@ already exists, and a voice channel's `bitrate` is its own (not "the most the bo
 | --- | --- |
 | Moderation | Floods / copy-paste / link floods (5 messages with links in 30 s) → messages deleted, timeout of 10 min, then 1 h, then 1 day the same day. All-caps, emoji walls, more than 5 links in a message and executables removed. Accounts under 3 days can't post links. Discord AutoMod (`src/automod.js`, applied by setup): spam, slurs, mention spam, invites and scams, bad names, piracy (rule 3: TLauncher, SKlauncher, cracked Minecraft, offline mode + bypass, warez… `MOD.piracy` in `config.js`), and Telegram links (t.me, telegram.me/.dog/.org, tg://, "t . me/": blocked and a 1-hour timeout; `TELEGRAM_PATTERNS`). Every rule alerts #mod-log (the piracy alert too, since 2026-10-30: #mod-chat is for the mods talking); mods and the Horizon Team are exempt. In every language, Kira's AI reads the 🌍 languages channels, #horizon-chat, #general and non-English messages anywhere: clear cases removed, borderline ones flagged for a mod (see [AI answers](#ai-answers)). **Honeypot** (Kacper, 2026-11-01): `#🚫│no-text` (PLAYHORIZON.DEV; everyone sees and can post in it, its topic and a pinned Kira message say posting there removes you instantly) catches scam bots: whoever posts there is soft-banned, i.e. banned with the last day of their messages deleted, then unbanned at once so a real person can rejoin; one soft-ban per user however many messages, a line in #mod-log (user, account age, the message, "honeypot soft-ban"; a failed ban or unban is logged too, with `/unban` for the second). Bots, mods, the Horizon Team and Ludovic are exempt (their message there is just deleted). On by default: `MOD.honeypot` in `config.js`, or `KIRA_HONEYPOT=off`; [`src/honeypot-kit.js`](src/honeypot-kit.js), handler in `src/features/moderation.js`. Raids (15 accounts younger than 7 days in 2 minutes) → raid mode for an hour: verified phone, DMs between members paused. No slowmode (Ludovic, 2026-10-28): none set (`slowmode` in `LAYOUT`) and none automatic (`MOD.autoSlowmode`); mods and the Horizon Team have Bypass slowmode for when they set one with `/slowmode`. Verification level high (10 minutes on the server before talking); @everyone can't ping everyone, open threads or use outside apps. `/warn` (3 in 30 days → 1 h timeout), `/warnings`, `/clearwarnings`, `/timeout`, `/untimeout`, `/quarantine`, `/unquarantine`, `/kick`, `/ban` (only CSAM, raids, scammers and bots: anything else is a quarantine), `/unban` (kick and ban: the Horizon Team only; mods time out and quarantine), `/case`; every action is a numbered case in #mod-actions with appeals: see [Mod cases, quarantine and appeals](#mod-cases-quarantine-and-appeals), `/purge`, `/clear-chat`, `/slowmode`, `/lock`, `/unlock`, `/raidmode` |
 | Chat clears | Every 6 hours the messages older than 24 h in #horizon-chat and #general are deleted (bulk deletes under 14 days, one by one beyond, paced); pins and messages that started a thread stay, nothing else is touched. One line in `#mod-log` per run. `/clear-chat [older_than:<hours>]` (Manage Messages) does it now in the current chat channel. `CLEAR` in `config.js`; [`src/features/chatclear.js`](src/features/chatclear.js) |
-| Logs | `#mod-actions`: the numbered cases (timeouts, quarantines, bans, unbans, kicks, appeals' outcomes; the one channel mods watch) and warnings. `#join-leave`: joins (account age, **which invite**) and leaves grouped every minute. `#kira-handoffs`: Kira's AI answers, the questions she passes to the team, their cost. `#mod-log`: deleted and edited messages, nicknames, AutoMod and the filters' removals (each with its Undo), everything else. A split-off channel not there yet: its lines go to #mod-log |
+| Logs | `#mod-actions`: the numbered cases (timeouts, quarantines, bans, unbans, kicks, appeals' outcomes; the one channel mods watch) and warnings. `#join-leave`: joins (id, account age, ⚠️ under 7 days, avatar, **which invite**) and leaves grouped every minute. `#kira-handoffs`: Kira's AI answers, the questions she passes to the team, their cost. `#mod-log`: deleted and edited messages, nicknames, AutoMod and the filters' removals (each with its Undo), everything else. A split-off channel not there yet: its lines go to #mod-log |
 | Reports | `/report-member` and "Report to mods" (right-click a message → Apps) → `#reports` (`/report` is the bug form: below) |
 | Mod-mail | DM kira → a thread in `#mod-mail`; mods answer in the thread (`//` for notes, `//close` or `/close`). Each thread's name starts with its status: 🟢 Open (the member wrote last), 🟡 Waiting (a mod answered), ⚪ Closed; buttons set it by hand. Every day from 09:00 UTC, #mod-chat gets the threads Open for more than 12 h |
 | Levels | XP for messages (once a minute) and for voice time with others; lvl 5/10/20/30/50 roles; `/rank`, `/leaderboard`, `/givexp` |
@@ -99,7 +99,8 @@ already exists, and a voice channel's `bitrate` is its own (not "the most the bo
 
 ## Mod cases, quarantine and appeals
 
-Asked by the mods (pointofpressure, bunchy7s, dezer-x) and Ludovic on 2026-11-01, after a day of disputed bans. The rules
+Asked by the mods (pointofpressure, bunchy7s, dezer-x) and Ludovic on 2026-11-01, after a day of disputed bans; built to
+pointofpressure's spec (`horizon-mod-spec.md`, posted in #mod-chat). The rules
 are [`src/modcase-kit.js`](src/modcase-kit.js) (no Discord), the Discord side [`src/features/modcases.js`](src/features/modcases.js);
 everything lives in `state.modcases`.
 
@@ -113,27 +114,28 @@ everything lives in `state.modcases`.
   removal entry in #mod-log. A human's case has **Add evidence** (a link or text), usable only by the mod who acted. The
   honeypot's soft-bans keep their own line (a ban undone at once, not a case).
 - **Quarantine instead of most bans** (pointofpressure's idea, 2026-11-01). The **🔒 Quarantined** role hides every channel but
-  `#appeal`. `/quarantine member reason [length]` (mods) keeps the member's roles aside and gives the role (one role change,
+  `#appeal` (read and press the button only: no voice, no reactions). `/quarantine member reason [evidence] [length]` (mods) keeps the member's roles aside and gives the role (one role change,
   one audit entry); giving the role by hand in Discord does the same. `/unquarantine`, the end of its length, or a lifted
-  appeal give the roles back. Leaving and rejoining keeps it. Real bans (`/ban`, the Team) are only for CSAM, raids, scammers
-  and bots. To hide the channels, Kira adds **one overwrite** for the Quarantined role (deny View, Send, Connect…) to every
+  appeal give the roles back. Leaving and rejoining keeps it. Real bans (`/ban`, the Team) are only for CSAM, raids, scams,
+  bots and DM abuse. The member gets a DM with the reason, the case number and how to appeal. To hide the channels, Kira adds **one overwrite** for the Quarantined role (deny View, Send, Connect…) to every
   channel and category that lacks it, at start and on each new channel: the one change to existing channels this feature
   makes; nothing else of theirs is touched. Kira makes the role, `#appeal`, `#mod-actions`, `#join-leave` and
   `#kira-handoffs` herself when they are missing (they are in `LAYOUT` too, so setup finds them and never makes a second).
-- **Appeals are a form, not a chat** (dezer-x's point). Fixed questions (`QUESTIONS`: what happened, why it should be lifted,
-  anything else) in a Discord pop-up: the **Open appeal** button in Kira's pinned message in `#appeal` (quarantined members)
+- **Appeals are a form, not a chat** (dezer-x's point). Fixed questions (the case number, prefilled; then `QUESTIONS`: what happened, why it
+  should be lifted or shortened, anything else) in a Discord pop-up: the **Open appeal** button in Kira's pinned message in `#appeal` (quarantined members)
   and in the DM Kira sends with every timeout and quarantine (a timed-out member can't use `/appeal` everywhere, the DM
   button always works), and `/appeal` (`minecraft_name:` for a ban of the official Minecraft server). Banned users can't see
   the server: Kira DMs them a link to **playhorizon.dev/hub/appeal** before `/ban` bans (30 days, only its SHA-256 kept), and
-  the page has a Discord sign-in (below). One appeal per action at a time; another one 7 days after a decision; 30 days after
-  the action at most.
+  the page has a Discord sign-in (below). One open appeal per member, and one new appeal per member every 7 days; 30 days
+  after the action at most.
 - **Where it goes.** Each appeal is a thread in `#mod-mail` (a text channel: it has no forum tags, so the name carries the
   status: `⚖️ 🟢 Appeal · case #12 · name`, then `⚖️ ⚪` once decided), with the case (action, evidence) and the answers,
-  pinging 🛡️ Mod (Minecraft cases: the ops, luzW and bunchy7s, `MC_OPS`). An appeal still open after 24 hours pings again
-  in its thread, then every day.
+  pinging 🛡️ Mod (Minecraft cases: the ops, luzW and bunchy7s, `MC_OPS`). **Waiting** marks it 🟡 (waiting on evidence, a
+  second opinion) and back. An appeal not decided after 24 hours pings again in its thread, then every day, and appeals
+  not decided after 12 hours are on #mod-chat's daily list with the mod-mail threads.
 - **Deciding.** Buttons **Uphold**, **Shorten** (a new total length from the action), **Lift**, and on a quarantine **Uphold +
   ban** (the Team only). They are refused to the mod who acted (anyone may decide on Kira's own actions; Minecraft cases:
-  the ops). Each takes an optional note the person reads. Lift ends the timeout, gives the roles back, or unbans; Shorten
+  the ops). Each takes a one-line reason the person reads. Lift ends the timeout, gives the roles back, or unbans; Shorten
   sets a new timeout, a quarantine's end or a ban's end (Kira lifts it then); Minecraft decisions say what an op does in
   game (Kira can't reach the server, and can't read `banned-players.json`: the op adds the ban reason with Add evidence).
   Kira DMs the outcome (if DMs are closed: in `#appeal` while quarantined; banned users read it on the website), logs it in

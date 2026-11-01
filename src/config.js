@@ -141,8 +141,6 @@ export const LAYOUT = [
       { key: 'officialserver', name: '🗝️│join-server', aka: ['official-server'], type: 'text', readonly: true, staffPost: true, topic: 'Official Horizon SMP, hosted by https://sculkhosting.com : play.playhorizon.dev' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
-      // Only 🔒 Quarantined members (and the staff) see it: Kira's pinned "Open appeal" form (src/features/modcases.js).
-      { key: 'appeal', name: 'appeal', type: 'text', quarantine: true, topic: 'Quarantined? Press "Open appeal" below: a short form the mods read and decide on.' },
       // Kacper (kacpherek, Horizon Team) in #horizon-team, 2026-11-01: scam bots post in every channel, so one channel catches
       // them. Everyone sees it and can post in it (no flags: that is the trap). Whoever posts there is soft-banned (banned
       // with the last day of their messages deleted, then unbanned at once), src/features/moderation.js, MOD.honeypot.
@@ -266,6 +264,8 @@ export const LAYOUT = [
       { key: 'modactions', name: 'mod-actions', type: 'text', staff: true, topic: 'The numbered cases: every timeout, quarantine, ban, unban and kick, by a mod or by Kira, and the appeals\' outcomes. The one channel to watch.' },
       { key: 'joinleave', name: 'join-leave', type: 'text', staff: true, topic: 'Joins (account age, the invite they used) and leaves, grouped every minute.' },
       { key: 'kirahandoffs', name: 'kira-handoffs', type: 'text', staff: true, topic: "Kira's AI: the questions she passes to the team, her answers and their cost." },
+      // Only 🔒 Quarantined members (and the staff) see it, in the staff category; read and press the button only: Kira's pinned "Open appeal" form (src/features/modcases.js).
+      { key: 'appeal', name: 'appeal', type: 'text', quarantine: true, topic: 'Quarantined? Press "Open appeal" below: a short form the mods read and decide on.' },
       { key: 'reports', name: 'reports', type: 'text', staff: true, topic: 'Reports from members: /report-member and "Report to mods" on a message.' },
       { key: 'modmail', name: 'mod-mail', type: 'text', staff: true, topic: "Members DM Kira; each conversation is a thread here. Write in the thread to answer (start with // for a note they don't see, //close to close)." },
       { key: 'discordupdates', name: 'discord-updates', type: 'text', staff: true, topic: 'Messages from Discord to community servers.' },

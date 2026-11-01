@@ -245,6 +245,7 @@ async function ensure() {
 function formModal(id, { minecraft = false, ign = '' } = {}) {
   const input = (q) => new TextInputBuilder().setCustomId(q.id).setLabel(q.label).setStyle(TextInputStyle.Paragraph).setMaxLength(q.max).setRequired(!!q.required);
   const rows = kit.QUESTIONS.map((q) => new ActionRowBuilder().addComponents(input(q)));
+  if (!minecraft) rows.unshift(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('case').setLabel('Case number').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(8).setValue(String(id))));
   if (minecraft) {
     const name = new TextInputBuilder().setCustomId('ign').setLabel('Your in-game name').setStyle(TextInputStyle.Short).setMinLength(3).setMaxLength(16).setRequired(true);
     if (/^[A-Za-z0-9_]{3,16}$/.test(ign)) name.setValue(ign);
@@ -278,7 +279,8 @@ async function submitForm(i) {
   const get = (k) => { try { return i.fields.getTextInputValue(k); } catch { return ''; } };
   const answers = Object.fromEntries(kit.QUESTIONS.map((q) => [q.id, get(q.id)]));
   try {
-    const { appeal, case: c } = kit.submitAppeal(mc, { userId: i.user.id, tag: tagOf(i.user), caseNo: id === 'mc' ? null : Number(id), kind: id === 'mc' ? 'minecraft' : 'discord', answers, ign: get('ign'), banText: get('banText') });
+    const caseNo = id === 'mc' ? null : Number(String(get('case') || id).replace(/\D/g, '')) || Number(id);
+    const { appeal, case: c } = kit.submitAppeal(mc, { userId: i.user.id, tag: tagOf(i.user), caseNo, kind: id === 'mc' ? 'minecraft' : 'discord', answers, ign: get('ign'), banText: get('banText') });
     save();
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     if (c.action === 'mcban' && !c.url) await postCase(c);
@@ -293,8 +295,9 @@ async function submitForm(i) {
 // ── Appeals in #mod-mail ─────────────────────────────────────────────────────
 
 const LABELS = { uphold: ['Uphold', ButtonStyle.Secondary, '🛑'], ban: ['Uphold + ban', ButtonStyle.Danger, '🔨'], shorten: ['Shorten', ButtonStyle.Primary, '⏱️'], lift: ['Lift', ButtonStyle.Success, '✅'] };
-const decisionRow = (c, a, disabled = false) => new ActionRowBuilder().addComponents(kit.decisionsFor(c).map((d) => new ButtonBuilder()
-  .setCustomId(`appeal:d:${d}:${a.id}`).setLabel(LABELS[d][0]).setStyle(LABELS[d][1]).setEmoji(LABELS[d][2]).setDisabled(disabled)));
+const decisionRow = (c, a, disabled = false) => new ActionRowBuilder().addComponents(
+  ...kit.decisionsFor(c).map((d) => new ButtonBuilder().setCustomId(`appeal:d:${d}:${a.id}`).setLabel(LABELS[d][0]).setStyle(LABELS[d][1]).setEmoji(LABELS[d][2]).setDisabled(disabled)),
+  new ButtonBuilder().setCustomId(`appeal:w:${a.id}`).setLabel(a.status === 'waiting' ? 'Open again' : 'Waiting').setStyle(ButtonStyle.Secondary).setEmoji(a.status === 'waiting' ? '🟢' : '🟡').setDisabled(disabled));
 const pingFor = (c) => (c.action === 'mcban' ? kit.MC_OPS.map((id) => `<@${id}>`).join(' ') : state.roles.mod ? `<@&${state.roles.mod}>` : '');
 const mentionsFor = (c) => (c.action === 'mcban' ? { users: kit.MC_OPS } : { roles: [state.roles.mod].filter(Boolean) });
 
@@ -333,7 +336,7 @@ async function onDecisionButton(i) {
   if (decision === 'ban' && !i.member.permissions.has(P.BanMembers)) return i.reply(ephemeral('A ban goes through the Horizon Team: ask one of them to press it.'));
   const modal = new ModalBuilder().setCustomId(`appeal:dm:${decision}:${id}`).setTitle(`${LABELS[decision][0]}: case #${c.n}`);
   if (decision === 'shorten') modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('length').setLabel('New total length (e.g. 2h, 3d)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(20)));
-  modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('note').setLabel('A note for them (optional, they read it)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(kit.APPEAL.max.note)));
+  modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('note').setLabel('One-line reason (they read it)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(kit.APPEAL.max.note)));
   return i.showModal(modal);
 }
 
@@ -354,6 +357,19 @@ async function onDecisionModal(i) {
     if (!e.expose) throw e;
     return i.editReply(e.message);
   }
+}
+
+async function onWaitingButton(i) {
+  const a = mc.appeals[i.customId.split(':')[2]];
+  const c = a && mc.cases[a.case];
+  if (!a || !c) return i.reply(ephemeral('That appeal is gone.'));
+  if (c.action === 'mcban' ? !kit.MC_OPS.includes(i.user.id) : !isStaff(i.member)) return i.reply(ephemeral('Only the mods (the ops, for Minecraft).'));
+  try { kit.setWaiting(a, a.status !== 'waiting'); } catch (e) { if (e.expose) return i.reply(ephemeral(e.message)); throw e; }
+  save();
+  await i.update({ components: [decisionRow(c, a)] });
+  const user = await client.users.fetch(a.userId).catch(() => null);
+  rename(i.channelId, kit.appealName(c, user?.username ?? a.userId, a.status));
+  return null;
 }
 
 // Records the decision, does it on Discord, tells the person, logs it under the case, closes the thread.
@@ -495,8 +511,13 @@ async function mailReminder(now = Date.now()) {
   mc.mailReminderDay = day;
   save();
   const stale = kit.staleMail(mc, now).filter((t) => mailUser(t.threadId));
-  if (!stale.length) return;
-  await channel('modchat')?.send({ content: `📬 Mod-mail open for more than 12 h (the member wrote last, nobody answered):\n${stale.slice(0, 25).map((t) => `- <#${t.threadId}> (<@${t.userId}>), open since <t:${Math.floor(t.since / 1000)}:R>`).join('\n')}`, allowedMentions: { parse: [] } });
+  const appeals = kit.staleAppeals(mc, now).filter((a) => a.threadId);
+  if (!stale.length && !appeals.length) return;
+  const lines = [
+    ...(stale.length ? ['📬 **Mod-mail** open for more than 12 h (the member wrote last, nobody answered):', ...stale.slice(0, 20).map((t) => `- <#${t.threadId}> (<@${t.userId}>), open since <t:${Math.floor(t.since / 1000)}:R>`)] : []),
+    ...(appeals.length ? ['⚖️ **Appeals** not decided after 12 h (a mod who didn\'t act decides):', ...appeals.slice(0, 20).map((a) => `- <#${a.threadId}>: case #${a.case}, ${a.status}, sent <t:${Math.floor(a.at / 1000)}:R>`)] : []),
+  ];
+  await channel('modchat')?.send({ content: lines.join('\n').slice(0, 2000), allowedMentions: { parse: [] } });
 }
 
 // ── Every minute: lengths that ran out; every hour: reminders on open appeals ──
@@ -536,6 +557,7 @@ export const commands = [
     .setDefaultMemberPermissions(P.ModerateMembers)
     .addUserOption((o) => o.setName('member').setDescription('Who').setRequired(true))
     .addStringOption((o) => o.setName('reason').setDescription('Why (they read it)').setRequired(true).setMaxLength(500))
+    .addStringOption((o) => o.setName('evidence').setDescription('A link (message, screenshot) or a few words').setMaxLength(1000))
     .addStringOption((o) => o.setName('length').setDescription('How long, e.g. 1d, 7d (empty: until a mod lifts it)')),
   new SlashCommandBuilder().setName('unquarantine').setDescription('Lift a quarantine: their roles come back')
     .setDefaultMemberPermissions(P.ModerateMembers)
@@ -559,8 +581,10 @@ export const handlers = {
     const ms = len ? parseDuration(len) : null;
     if (len && !ms) return i.reply(ephemeral('Give a length like 1d or 7d, or leave it empty.'));
     await i.deferReply({ flags: MessageFlags.Ephemeral });
-    await quarantine(m, { by: i.user.id, reason: i.options.getString('reason'), ms });
-    return i.editReply(`Quarantined <@${m.id}>${ms ? ` for ${kit.human(ms)}` : ''}: the case is in #mod-actions; add evidence there.`);
+    const ev = i.options.getString('evidence')?.trim();
+    const evidence = ev ? (kit.isLink(ev) ? { url: ev, label: 'evidence', by: i.user.id } : { text: ev, by: i.user.id }) : null;
+    await quarantine(m, { by: i.user.id, reason: i.options.getString('reason'), ms, evidence });
+    return i.editReply(`Quarantined <@${m.id}>${ms ? ` for ${kit.human(ms)}` : ''}: the case is in #mod-actions${evidence ? '' : '; add evidence there'}.`);
   },
   async unquarantine(i) {
     const user = i.options.getUser('member');
@@ -673,7 +697,7 @@ export function setup() {
   client.on('interactionCreate', (i) => {
     const id = i.customId ?? '';
     const run = i.isButton?.() ? (id.startsWith('appeal:open') ? () => openForm(i, Number(id.split(':')[2]) || null)
-      : id.startsWith('appeal:d:') ? () => onDecisionButton(i) : id.startsWith('case:evidence:') ? () => onEvidenceButton(i)
+      : id.startsWith('appeal:d:') ? () => onDecisionButton(i) : id.startsWith('appeal:w:') ? () => onWaitingButton(i) : id.startsWith('case:evidence:') ? () => onEvidenceButton(i)
       : id.startsWith('mail:') && i.guildId === GUILD_ID ? () => onMailButton(i) : null)
       : i.isModalSubmit?.() ? (id.startsWith('appeal:form:') ? () => submitForm(i) : id.startsWith('appeal:dm:') ? () => onDecisionModal(i)
       : id.startsWith('case:evform:') ? () => onEvidenceModal(i) : null) : null;
