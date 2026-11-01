@@ -1,5 +1,5 @@
 // Applications for 🛡️ Mod, 🤝 Support and 🌌 Horizon Team, sent with the website's form (playhorizon.dev/apply)
-// and decided on the staff dashboards: Mod and Support on /staff/mod, Team on /staff/team. The member opens the form
+// and decided on the staff dashboards: Mod and Support on /hub/mod, Team on /hub/team. The member opens the form
 // with a one-time link /apply DMs them (src/staff-auth.js, purpose 'apply'); granting the role and the DMs are the
 // Discord side's (src/staff-hooks.js, docs/staff-api.md). No Discord and no network here: `deps` brings them.
 import { randomBytes } from 'node:crypto';

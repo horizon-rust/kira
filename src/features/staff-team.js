@@ -1,4 +1,4 @@
-// The Team dashboard's routes (/staff/team): the work board (read-only here: moves stay /move and the MCP tools), the
+// The Team dashboard's routes (/hub/team): the work board (read-only here: moves stay /move and the MCP tools), the
 // Team kanban, the decisions log and the roadmap with its Team layer. Loaded by src/features/staff.js. What it reads:
 // staff.json, Kira's board snapshot (public GitHub data), the website's roadmap.json, and the Team role's members.
 import { GUILD_ID, OWNER_ID } from '../config.js';

@@ -533,8 +533,8 @@ discord.com/developers/applications › Kira › *Bot* (the running bot also app
 
 ## Staff dashboards
 
-Two dashboards on the website, each behind a password its member sets: **playhorizon.dev/staff/team** (🌌 Horizon
-Team) and **playhorizon.dev/staff/mod** (🛡️ Mod); Ludovic sees both. Applications for Mod, Support and the Team are
+Two dashboards on the website, each behind a password its member sets: **playhorizon.dev/hub/team** (🌌 Horizon
+Team) and **playhorizon.dev/hub/mod** (🛡️ Mod); Ludovic sees both. Applications for Mod, Support and the Team are
 a form at playhorizon.dev/apply. Who owns what between the dashboards and the Discord side:
 [`docs/staff-api.md`](docs/staff-api.md).
 
@@ -550,7 +550,7 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   service (`railway redeploy --service kira` or the dashboard). Everything since that copy is lost (sessions,
   decisions, applications), and members whose password was set later need a new link.
 - **Getting in**: `/staff password` (Team and Mods; `member:` sends it to another of them) DMs a one-time link
-  `playhorizon.dev/staff/setup#…`; the username is the Discord username. Losing the role, or leaving, removes the
+  `playhorizon.dev/hub/setup#…`; the username is the Discord username. Losing the role, or leaving, removes the
   password and ends the sessions at once (and at start, for what happened while Kira was away).
 - **Counters** ([`src/staff-counters.js`](src/staff-counters.js)): per day, counts only (messages, distinct authors,
   joins, leaves, reports, mod-mail threads, warns, timeouts, kicks, bans, AutoMod blocks), 120 days kept.
@@ -562,7 +562,7 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   link `/apply` DMs (24 hours, once, for one role); Kira records the answers and what GitHub says about the member
   (their linked login, whether `/verify-github` proved it, their merged pull requests in Horizon: verified
   contributors are listed first). Then a vote on the dashboards ([`src/application-votes.js`](src/application-votes.js)):
-  Mods vote on Mod and Support applications (shown on /staff/mod), the Team on Team and Support ones (/staff/team);
+  Mods vote on Mod and Support applications (shown on /hub/mod), the Team on Team and Support ones (/hub/team);
   For / Against (with a comment) / Abstain, blind until you vote (then the others' ballots show; Ludovic sees only the counts and the Against comments, without names, until it closes), changeable until
   it closes, recusal; quorum max(2, ceil(40% of
   the voters active in the last 30 days: logged in or acted)); it passes with 2/3 of For and Against; it closes 72 h

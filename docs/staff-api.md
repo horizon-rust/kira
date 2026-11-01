@@ -1,7 +1,7 @@
 # Staff dashboards and applications: the line between the two sides
 
 Two dashboards on the website, behind passwords each person sets for themselves:
-**playhorizon.dev/staff/team** (🌌 Horizon Team) and **playhorizon.dev/staff/mod** (🛡️ Mod). Ludovic (`OWNER_ID`)
+**playhorizon.dev/hub/team** (🌌 Horizon Team) and **playhorizon.dev/hub/mod** (🛡️ Mod). Ludovic (`OWNER_ID`)
 sees both whatever his roles. Applications for 🛡️ Mod, 🤝 Support and 🌌 Horizon Team are a form on the website
 (**playhorizon.dev/apply**): Mod and Support ones land in the Moderation dashboard, Team ones in the Team dashboard.
 

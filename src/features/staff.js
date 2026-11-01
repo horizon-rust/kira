@@ -1,5 +1,5 @@
-// The staff dashboards' Discord side: who may open which dashboard (🌌 Horizon Team → /staff/team, 🛡️ Mod →
-// /staff/mod, Ludovic both), /staff password (a one-time link to set one's password, DMed), taking access back
+// The staff dashboards' Discord side: who may open which dashboard (🌌 Horizon Team → /hub/team, 🛡️ Mod →
+// /hub/mod, Ludovic both), /staff password (a one-time link to set one's password, DMed), taking access back
 // when the role goes, and the counters behind the stats. The HTTP API is src/staff-http.js; applications are
 // src/applications.js (contract: docs/staff-api.md).
 import { SlashCommandBuilder, MessageFlags, Routes, AuditLogEvent, PermissionFlagsBits as P } from 'discord.js';
@@ -91,7 +91,7 @@ export const handlers = {
     const by = target.id === i.user.id ? '' : `\n<@${i.user.id}> asked for this link for you.`;
     try {
       await target.send({
-        content: `Your link to set your password for Horizon's staff dashboards (${theirs.dashboards.map((d) => `${SITE}/staff/${d}`).join(', ')}). It works once, for 30 minutes; your username is **${theirs.name}**.${by}\n${SITE}/staff/setup#${token}\nDon't share it. Didn't ask for it? Ignore it, or tell a mod.`,
+        content: `Your link to set your password for Horizon's staff dashboards (${theirs.dashboards.map((d) => `${SITE}/hub/${d}`).join(', ')}). It works once, for 30 minutes; your username is **${theirs.name}**.${by}\n${SITE}/hub/setup#${token}\nDon't share it. Didn't ask for it? Ignore it, or tell a mod.`,
         allowedMentions: { parse: [] },
       });
     } catch {

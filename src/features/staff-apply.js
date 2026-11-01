@@ -53,7 +53,7 @@ export function applicationRoutes({ store, site, log, deps = {} }) {
   const holders = deps.holders ?? ((key) => new Set(client.guilds.cache.get(GUILD_ID)?.roles.cache.get(roleId(key))?.members.keys() ?? []));
   const ctxAt = (now) => ({
     now, owner: OWNER_ID, holders: { mod: holders('mod'), team: holders('team') }, lastActive: store.data.activity ?? {},
-    hooks: { decide, dm, revokeRole }, url: (a) => `${site}/staff/${apps.DASHBOARD_OF[a.role]}#application-${a.id}`,
+    hooks: { decide, dm, revokeRole }, url: (a) => `${site}/hub/${apps.DASHBOARD_OF[a.role]}#application-${a.id}`,
   });
   const find = (dashboard, id) => {
     const a = store.data.applications[String(id ?? '')];
@@ -127,7 +127,7 @@ export function applicationRoutes({ store, site, log, deps = {} }) {
       if (!m) return { status: 403, body: { error: 'You need to be on Horizon\'s Discord server to apply.' } };
       apps.cleanAnswers(link.role, ctx.body.answers); // refuse before the GitHub lookup
       const a = apps.submit(store, { token: ctx.body.token, answers: ctx.body.answers, name: m.user.username, contributor: await contributorOf(link.user), hasRole: m.roles.includes(roleId(link.role)) }, ctx.now);
-      log(`📝 New ${apps.ROLE_NAMES[a.role]} application from <@${a.user}>${a.contributor?.verified && a.contributor.merged ? ` (${a.contributor.merged} merged pull requests)` : ''}: ${site}/staff/${apps.DASHBOARD_OF[a.role]}#application-${a.id}`);
+      log(`📝 New ${apps.ROLE_NAMES[a.role]} application from <@${a.user}>${a.contributor?.verified && a.contributor.merged ? ` (${a.contributor.merged} merged pull requests)` : ''}: ${site}/hub/${apps.DASHBOARD_OF[a.role]}#application-${a.id}`);
       return { body: { ok: true, role: a.role } };
     } },
     ...actions('team'),
