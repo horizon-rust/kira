@@ -17,6 +17,7 @@ import { parseVerb } from '../hub.js';
 import * as ai from '../ai.js';
 import * as kit from '../ai-kit.js';
 import * as game from '../game-kit.js';
+import * as webhook from '../webhook.js';
 import { linkify } from '../texts.js';
 
 const KEY = !!process.env.ANTHROPIC_API_KEY?.trim();
@@ -296,6 +297,12 @@ export function setup() {
   console.log(`kira ai moderation: ${modEnabled ? (store.modOn ? 'on' : 'off (/kira-ai mod on)') : 'off'}`);
   console.log(`kira ai: ${enabled ? `${store.on ? 'on' : 'off (/kira-ai)'}, ${AI.mode}, $${AI.dailyUsd} a day` : `off (${AI.mode ? 'no ANTHROPIC_API_KEY' : 'KIRA_AI is not set'})`}`);
   if (enabled) client.once('clientReady', () => sources.refresh().catch((e) => console.error('kira ai sources', e.message)));
+  // GitHub's webhook: the docs and README after a push to main, the release notes after a release.
+  webhook.on((name, p) => {
+    if (webhook.repoOf(p) !== 'horizon') return;
+    if (webhook.pushToMain(name, p)) sources.stale?.('docs');
+    if (name === 'release') sources.stale?.('releases');
+  });
 }
 
 // A bug report before it's filed (src/features/github.js): the checked draft (ai-kit's checkBugDraft), or null when

@@ -135,6 +135,8 @@ export function makeSources({ gh, faq = [...FAQ, ...FAQ_MORE], guide = serverGui
   return {
     refresh,
     ready,
+    // GitHub's webhook said it changed (a push to main, a release): the next question reloads that part.
+    stale(part) { if (part in at) at[part] = 0; },
     names: () => [...docs.keys()].sort(),
     text: () => kit.sourcesBlock({
       faq,

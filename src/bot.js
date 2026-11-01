@@ -2,7 +2,7 @@
 // KIRA_DISCORD=off: no Discord connection at all, only the board (from GitHub) and the MCP server, to test a
 // new host. PORT (Railway) or KIRA_HTTP_PORT: where the MCP server listens; none, no server.
 import { MessageFlags, MessageType } from 'discord.js';
-import { GUILD_ID, RELEASE_EVERY_MS, VIDEOS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS } from './config.js';
+import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_SLOW_MS, VIDEOS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS, GITHUB } from './config.js';
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
 import { releaseMessage, remember, announced, pingDecision } from './releases.js';
@@ -19,6 +19,8 @@ import * as github from './features/github.js';
 import * as workboard from './features/workboard.js';
 import * as contributors from './features/contributors.js';
 import * as notify from './features/notify.js';
+import * as site from './features/site.js';
+import * as webhook from './webhook.js';
 import * as triage from './features/triage.js';
 import * as agents from './features/agents.js';
 import * as hub from './features/hub.js';
@@ -38,7 +40,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, notify, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply];
+const FEATURES = [moderation, levels, rooms, community, forums, github, workboard, contributors, notify, site, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
@@ -114,6 +116,7 @@ async function postOneOffs() {
   }
 }
 
+site.afterRevalidate(() => updates.pollSoon());
 if (DISCORD) for (const f of FEATURES) f.setup?.();
 else { // the board alone, from GitHub
   console.log('discord: off (KIRA_DISCORD=off): board and MCP server only');
@@ -133,7 +136,7 @@ if (port) {
       res.end(JSON.stringify({ contributors: workboard.creditedPairs() }));
     },
     ...kiraAi.usageRoutes({ limiter }),
-    ...notify.routes({ limiter }), // POST /github/webhook, when KIRA_GITHUB_WEBHOOK_SECRET is set (/notify's DMs)
+    ...webhook.routes({ limiter, owner: GITHUB.owner }), // POST /github/webhook, when KIRA_GITHUB_WEBHOOK_SECRET is set (src/webhook.js)
     ...(DISCORD ? staff.routes() : {}), // the staff dashboards' API, only through the website's proxy (STAFF_PROXY_KEY)
     ...gameRoutes({ store: gameServers, ask: kiraAi.askInGame, limiter }),
     ...adminRoutes({ hash: process.env.KIRA_ADMIN_TOKEN_SHA256, limiter, save, freeze, gameTokens: gameTokens({ store: gameServers, dm: async (id, text) => (await client.users.fetch(id)).send({ content: text, allowedMentions: { parse: [] } }), endpoint: `${AGENTS.url.replace(/\/mcp$/, '')}/game/ask` }), cleanup: DISCORD && contributors.enabled ? contributors.cleanup : null, files: { state: dataFile('state.json'), agents: process.env.KIRA_AGENTS || dataFile('agents.json') } }),
@@ -150,7 +153,11 @@ client.once('clientReady', async () => {
   await applyBrand(client, guild, state, save).catch((e) => console.error('brand', e.message));
   console.log(`Kira ready as ${client.user.tag}, ${commands.length} commands`);
   await checkReleases();
-  setInterval(checkReleases, RELEASE_EVERY_MS);
+  // GitHub's webhook: a release event checks at once; the 3-minute poll then runs every 30 minutes as a fallback.
+  let lastReleases = Date.now();
+  const releasesNow = webhook.throttle(() => { lastReleases = Date.now(); return checkReleases(); }, 30_000, { delayMs: 3_000 });
+  webhook.on((name, p) => { if (name === 'release' && RELEASE_REPOS.includes(webhook.repoOf(p))) releasesNow(); });
+  setInterval(() => { if (Date.now() - lastReleases >= webhook.every(RELEASE_EVERY_MS, RELEASE_SLOW_MS) - 5_000) { lastReleases = Date.now(); checkReleases(); } }, RELEASE_EVERY_MS);
   checkVideos().catch((e) => console.error('videos', e.message));
   setInterval(() => checkVideos().catch((e) => console.error('videos', e.message)), VIDEOS.everyMs);
   await postOneOffs();
