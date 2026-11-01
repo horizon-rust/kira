@@ -133,7 +133,7 @@ test('#ludovic-videos: read-only, in "start here" right after #announcements, wi
   assert.equal(keys.indexOf('ludovicvideos'), keys.indexOf('announcements') + 1);
   const spec = start.channels.find((c) => c.key === 'ludovicvideos');
   assert.equal(spec.name, 'ludovic-videos');
-  assert.equal(spec.type, 'text');
+  assert.equal(spec.type, 'announcement'); // an announcement channel on the live server
   assert.equal(spec.readonly, true);
   assert.equal(spec.topic, "Ludovic's new YouTube videos, posted by Kira as they come out.");
 });

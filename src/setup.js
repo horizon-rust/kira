@@ -1,5 +1,11 @@
-// Makes the server match config.js: settings, roles, channels, Community, texts, AutoMod, Onboarding, invite.
-// Safe to run again: everything is found by the ID it got the first time (data/state.json) and updated.
+// Makes the server have everything config.js lists: roles, categories, channels, Community, texts, AutoMod, Onboarding, invite.
+// ADDITIVE: it creates what is missing and never changes what exists (found by the ID it got the first time, in
+// data/state.json, else by its name). The live server is the truth: on 2026-11-01 a plain run applied a stale LAYOUT to
+// it. Changing what exists takes an explicit flag:
+//   npm run setup                        creates what is missing, touches nothing else
+//   npm run setup -- --apply-layout      prints what would change (channels, roles) and stops
+//   npm run setup -- --apply-layout --yes   applies it: renames, retypes, topics, bitrates, overwrites, order,
+//                                        roles, Onboarding, server guide, AutoMod rules, screening, Community settings
 import {
   Client, GatewayIntentBits, ChannelType, PermissionFlagsBits as P,
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Routes,
@@ -12,13 +18,18 @@ import { applyAutomod } from './automod.js';
 import { overwrites as permissionOverwrites } from './permissions.js';
 import { load, save, claim } from './store.js';
 import { unique, isCopy, ensureThread } from './adopt.js';
-import { linkify, rolesMessage, howToPost, faqMessages } from './texts.js';
+import { linkify, rolesMessage, howToPost, faqMessages, channelTopic } from './texts.js';
+import { parseArgs, findChannel, findCategory, layoutDiff, rolesDiff } from './layout-diff.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { exportChannel } from './archive.js';
 import { createHash } from 'node:crypto';
 
 const TYPES = { text: ChannelType.GuildText, voice: ChannelType.GuildVoice, forum: ChannelType.GuildForum, announcement: ChannelType.GuildAnnouncement };
+let options;
+try { options = parseArgs(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(2); }
+// APPLY: may change what exists. Without it, setup only creates what is missing.
+const APPLY = options.mode === 'apply';
 claim('setup');
 const state = load();
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
@@ -40,6 +51,7 @@ async function ensureRoles(guild) {
   // Roles of the old scope: deleted when nobody holds them, else kept as they are (never lossy).
   for (const key of RETIRED_ROLES) {
     const role = guild.roles.cache.get(state.roles[key]);
+    if (role && !APPLY) continue; // deleting is a change to what exists
     if (role?.members.size) { log('kept retired role', role.name, `(${role.members.size} members hold it)`); continue; }
     if (role) { await role.delete('No longer used: the server is Horizon\'s only'); log('role removed', role.name); }
     delete state.roles[key];
@@ -51,7 +63,7 @@ async function ensureRoles(guild) {
     role ??= guild.roles.cache.find((r) => r.name === spec.name);
     const data = { name: spec.name, colors: { primaryColor: spec.color }, hoist: !!spec.hoist, mentionable: !!spec.mentionable };
     if (!spec.managed) data.permissions = (spec.permissions ?? []).map((p) => P[p]);
-    if (role) await role.edit(data);
+    if (role) { if (APPLY) await role.edit(data); }
     else if (spec.managed) { log('no', spec.name, 'role yet (Discord makes it)'); continue; }
     else { role = await guild.roles.create(data); log('role created', spec.name); }
     state.roles[spec.key] = role.id;
@@ -59,10 +71,12 @@ async function ensureRoles(guild) {
   }
   // Order: the list is lowest first, with Kira's own role above all of them (so it can moderate everyone).
   const ordered = ROLES.filter((spec) => state.roles[spec.key]);
-  await guild.roles.setPositions([
-    ...ordered.map((spec, i) => ({ role: state.roles[spec.key], position: i + 1 })),
-    { role: me.roles.botRole.id, position: ordered.length + 1 },
-  ]);
+  if (APPLY) {
+    await guild.roles.setPositions([
+      ...ordered.map((spec, i) => ({ role: state.roles[spec.key], position: i + 1 })),
+      { role: me.roles.botRole.id, position: ordered.length + 1 },
+    ]);
+  }
   const owner = await guild.members.fetch(OWNER_ID);
   if (!owner.roles.cache.has(state.roles.owner)) await owner.roles.add(state.roles.owner);
   save();
@@ -75,6 +89,7 @@ const overwrites = (guild, spec, staffCategory) => permissionOverwrites(
 // Channels another one replaced (REPLACED): every message exported to scratch/replaced-channels-<date>/ (not
 // committed), then the channel deleted. A failed export keeps the channel (setup stops, nothing is lost).
 async function replaced(guild) {
+  if (!APPLY) return; // deleting channels is a change to what exists
   const dir = fileURLToPath(new URL(`../scratch/replaced-channels-${new Date().toISOString().slice(0, 10)}/`, import.meta.url));
   for (const { key, name, by } of REPLACED) {
     const ch = guild.channels.cache.get(state.channels[key]) ?? unique([...guild.channels.cache.filter((c) => c.name === name && c.isTextBased() && !c.isVoiceBased()).values()], `channel #${name}`);
@@ -94,6 +109,7 @@ async function ensureChannels(guild, community) {
   const bitrate = guild.maximumBitrate; // 128 kbps with the server's boosts
   for (const key of RETIRED) {
     const ch = guild.channels.cache.get(state.channels[key]);
+    if (ch && !APPLY) continue; // deleting channels is a change to what exists
     if (ch) {
       const humans = ch.isTextBased() && !ch.isVoiceBased() ? (await ch.messages.fetch({ limit: 50 })).filter((m) => !m.author.bot).size : ch.members?.size ?? 0;
       if (humans) { log('kept retired', ch.name, '(members wrote in it)'); continue; }
@@ -105,11 +121,10 @@ async function ensureChannels(guild, community) {
     const ckey = 'cat:' + group.key;
     state.channels[ckey] ??= state.channels['cat:' + group.was];
     if (group.was) delete state.channels['cat:' + group.was];
-    let cat = guild.channels.cache.get(state.channels[ckey])
-      ?? unique([...guild.channels.cache.filter((c) => c.type === ChannelType.GuildCategory && c.name === group.category).values()], `category ${group.category}`);
+    let cat = findCategory(group, guild.channels.cache.values(), state);
     if (cat && !state.channels[ckey]) log('category found', group.category);
     const catData = { name: group.category, type: ChannelType.GuildCategory, permissionOverwrites: group.staff ? overwrites(guild, { staff: true }) : [] };
-    if (cat) await cat.edit(catData);
+    if (cat) { if (APPLY) await cat.edit(catData); }
     else { cat = await guild.channels.create(catData); log('category created', group.category); }
     state.channels[ckey] = cat.id;
     save();
@@ -119,26 +134,28 @@ async function ensureChannels(guild, community) {
       // Forums and announcement channels need Community: until it's on, announcements is a text channel and forums wait.
       if (!community && spec.type === 'forum') continue;
       const type = !community && spec.type === 'announcement' ? ChannelType.GuildText : wanted;
-      const sameKind = (c) => c.type === type || (c.isTextBased() && !c.isVoiceBased() && [ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(type) && c.type !== ChannelType.GuildForum);
       if (spec.was && !state.channels[spec.key] && state.channels[spec.was]) { state.channels[spec.key] = state.channels[spec.was]; delete state.channels[spec.was]; delete state.messages['howto:' + spec.was]; }
-      let ch = guild.channels.cache.get(state.channels[spec.key])
-        ?? unique([...guild.channels.cache.filter((c) => c.name === spec.name && sameKind(c) && !state.rooms?.[c.id]).values()], `channel #${spec.name}`);
+      // By the ID in state, else the one in LAYOUT, else by name (the same kind, not a member's temporary room).
+      // An existing channel is never touched unless APPLY; a missing one is made in its category.
+      // Announcement channels may stand where LAYOUT says text (and the other way round), when Community was off at the time.
+      let ch = findChannel(spec, guild.channels.cache.values(), state, { type, skip: (c) => !!state.rooms?.[c.id] });
       if (ch && !state.channels[spec.key]) log('channel found', spec.name);
+      if (ch && !APPLY) { state.channels[spec.key] = ch.id; save(); continue; }
       const data = { name: spec.name, parent: cat.id, permissionOverwrites: overwrites(guild, spec, group.staff) };
-      if (spec.type === 'voice') data.bitrate = bitrate;
+      if (spec.type === 'voice') data.bitrate = spec.bitrate ?? bitrate;
       else { data.topic = spec.topic ?? null; data.rateLimitPerUser = spec.slowmode ?? 0; }
       if (spec.type === 'forum') {
         const existing = ch?.availableTags ?? [];
         const tags = spec.template ? [HOWTO.tag, ...spec.tags] : spec.tags; // the guide post carries the "read me" tag
         data.availableTags = tags.map(([emoji, name, staffOnly]) => ({ ...(existing.find((t) => t.name === name) ?? {}), name, emoji: { id: null, name: emoji }, moderated: !!staffOnly }));
-        data.topic = linkify(`${spec.topic}\n\n${spec.guide ?? ''}${spec.template ? `\n\n**Template:**\n${spec.template}` : ''}`, state).slice(0, 4096);
+        data.topic = channelTopic(spec, state);
         data.defaultForumLayout = spec.gallery ? ForumLayoutType.GalleryView : ForumLayoutType.ListView;
         data.defaultSortOrder = SortOrderType.CreationDate;
         data.defaultReactionEmoji = spec.reaction ? { id: null, name: spec.reaction } : null;
         data.rateLimitPerUser = Math.min(spec.every ?? 0, 21600);            // time between two posts by the same member
         data.defaultThreadRateLimitPerUser = 0;              // and between two replies inside a post (none)
         data.flags = spec.readonly ? 0 : ChannelFlags.RequireTag;
-      } else if (spec.type !== 'voice' && spec.topic) data.topic = linkify(spec.topic, state);
+      } else if (spec.type !== 'voice' && spec.topic) data.topic = channelTopic(spec, state);
       if (ch && ch.type !== type) await ch.setType(type);
       if (ch) await ch.edit(data);
       else { ch = await guild.channels.create({ ...data, type }); log('channel created', spec.name); }
@@ -151,6 +168,7 @@ async function ensureChannels(guild, community) {
 
 // Puts categories and channels in the order of LAYOUT; removes empty categories that are no longer in it.
 async function order(guild) {
+  if (!APPLY) return; // moving and removing categories is a change to what exists
   await guild.channels.fetch();
   const keep = new Set(LAYOUT.map((g) => state.channels['cat:' + g.key]));
   const rooms = new Set(Object.keys(state.rooms ?? {}));
@@ -314,9 +332,15 @@ async function posts(guild) {
   save();
 }
 
-const automod = (guild) => applyAutomod(guild, { modlog: state.channels.modlog, mod: state.roles.mod, team: state.roles.team }, log);
+// Missing rules are made; existing ones are edited only with APPLY.
+const automod = (guild) => applyAutomod(guild, { modlog: state.channels.modlog, mod: state.roles.mod, team: state.roles.team }, log, { update: APPLY });
 
 async function onboarding(guild) {
+  // An Onboarding that already has questions is Ludovic's now: replaced only with --apply-layout --yes.
+  if (!APPLY) {
+    const current = await client.rest.get(Routes.guildOnboarding(guild.id)).catch(() => null);
+    if (current?.prompts?.length) return log('onboarding: left as it is');
+  }
   let n = 0;
   const id = () => String(((BigInt(Date.now()) - 1420070400000n) << 22n) + BigInt(n++));
   const c = state.channels, r = state.roles;
@@ -356,6 +380,7 @@ async function onboarding(guild) {
 
 // The Server Guide (Discord's "home" for newcomers): a welcome from Ludovic, first steps, useful channels.
 async function serverGuide(guild) {
+  if (!APPLY) return;
   const c = state.channels;
   const action = (key, type, title, description, emoji) => ({ channel_id: c[key], action_type: type, title, description, emoji: { name: emoji } });
   const res = (key, title, description, emoji) => ({ channel_id: c[key], title, description, emoji: { name: emoji } });
@@ -395,6 +420,7 @@ async function screening(guild) {
   const route = `/guilds/${guild.id}/member-verification`;
   const body = screeningBody(RULES);
   try {
+    if (!APPLY && guild.features.includes('MEMBER_VERIFICATION_GATE_ENABLED')) return log('rules screening: left as it is');
     const current = await client.rest.get(route).catch(() => null);
     if (screeningUpToDate(current, body, guild.features.includes('MEMBER_VERIFICATION_GATE_ENABLED'))) return log('rules screening up to date');
     await client.rest.patch(route, { body });
@@ -417,14 +443,32 @@ async function invite(guild) {
   return `https://discord.gg/${inv.code}`;
 }
 
+// --apply-layout without --yes: what applying LAYOUT and ROLES would change, and nothing else happens.
+async function dryRun(guild) {
+  const live = await client.rest.get(Routes.guildChannels(guild.id));
+  const roles = await client.rest.get(Routes.guildRoles(guild.id));
+  const bitrate = guild.maximumBitrate;
+  const ids = { everyone: guild.roles.everyone.id, mod: state.roles.mod, kira: guild.members.me.id, owner: OWNER_ID, roles: state.roles };
+  const wantedOverwrites = (spec, group, kind) => kind === 'category'
+    ? (group.staff ? permissionOverwrites(ids, { staff: true }, undefined) : [])
+    : permissionOverwrites(ids, spec, group.staff, CHANNEL_MODS[spec.key]);
+  const lines = [...layoutDiff({ layout: LAYOUT, live, state, wantedOverwrites, bitrate }), ...rolesDiff({ roles: ROLES, live: roles, state })];
+  for (const l of lines) console.log('~', l);
+  console.log(lines.length ? `${lines.length} change(s) to channels and roles.` : 'Channels and roles already match LAYOUT.');
+  console.log('Also re-applied by --yes: Onboarding questions, server guide, AutoMod rules, rules screening, Community settings, role order, channel order, retired and replaced channels.');
+  console.log('Dry run: nothing changed. Add --yes to apply.');
+}
+
 client.once('clientReady', async () => {
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
     await guild.channels.fetch();
     await guild.roles.fetch();
+    if (options.mode === 'diff') { await guild.members.fetchMe(); return await dryRun(guild); }
     await ensureRoles(guild);
     await ensureChannels(guild, guild.features.includes('COMMUNITY'));
-    await enableCommunity(guild);
+    // Community settings (verification level, @everyone's permissions, icon…): set once, when Community is turned on.
+    if (APPLY || !guild.features.includes('COMMUNITY')) await enableCommunity(guild);
     await guild.fetch();
     await ensureChannels(guild, true); // forums and the announcement channel, now that Community is on
     await replaced(guild); // after the channels that replace them exist

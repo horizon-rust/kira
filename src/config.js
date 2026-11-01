@@ -1,5 +1,6 @@
 // Everything Kira knows about the server: its layout, its texts and its feeds.
-// `npm run setup` makes the server match this file; the bot reads the same file at runtime.
+// `npm run setup` creates what this file lists and the server lacks, and changes nothing that exists (README: Setup is
+// additive); `--apply-layout --yes` makes the server match it. The bot reads the same file at runtime.
 // Since 2026-10-14 the server is Horizon's alone: the channels about Ludovic's other projects, videos and
 // music were deleted (their messages were exported first), and the roles of the old scope are gone (RETIRED_ROLES).
 
@@ -89,7 +90,7 @@ export const ROLES = [
   {
     key: 'team', name: '🌌 Horizon Team', color: 0x9b59b6, hoist: true,
     about: "Horizon's maintainers and core contributors: they review and merge, and moderate too.",
-    permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps'],
+    permissions: ['KickMembers', 'BanMembers', 'ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode', 'MentionEveryone', 'UseEmbeddedActivities', 'UseExternalApps'],
   },
   { key: 'owner', name: '👑 ludovic', color: 0xf2a33a, hoist: true, owner: true, about: "Ludovic, who started Horizon and owns the server." },
 ];
@@ -108,6 +109,9 @@ export const RETIRED_ROLES = ['videos', 'beatmaker', 'rapper', 'singer', 'youtub
 // /done puts on a post (solved, taken, found…); `react` the reactions Kira adds; `every` the minimum time
 // between two posts by the same member (seconds); `gallery` for media forums.
 // `was` on a category: the name it had, so setup moves it instead of making a new one.
+// LAYOUT follows the live server (2026-11-01): `name` is the channel's exact name there, decoration included
+// ("💬│horizon-chat"); texts still write #horizon-chat. `aka`: names the channel or category went by, found by setup
+// and by texts' #mentions. `id`: pins a channel that exists (setup never makes a second one). `bitrate`: a voice channel's.
 
 const LINK_OR_FILE = 'a file or a link';
 
@@ -125,30 +129,28 @@ const CLEARED = ' Messages older than a day are cleared every 6 hours; pins stay
 
 export const LAYOUT = [
   {
-    key: 'start', category: '👋 start here',
+    key: 'start', category: 'PLAYHORIZON.DEV', aka: ['👋 start here'],
     channels: [
-      { key: 'welcome', name: 'welcome', type: 'text', readonly: true, topic: 'Start here: what Horizon is, where everything is, and your roles (buttons below).' },
+      { key: 'welcome', name: 'ping-roles', aka: ['welcome'], type: 'announcement', readonly: true, topic: 'Start here: what Horizon is, where everything is, and your roles (buttons below).' },
       { key: 'newmembers', name: 'new-members', type: 'text', readonly: true, topic: 'Everyone who joins, welcomed here.' },
       { key: 'horizoninfo', name: 'horizon-info', type: 'text', readonly: true, topic: 'Horizon: Minecraft Java Edition rewritten in Rust. What it is, the download, the disclaimer.' },
       // Ludovic, 2026-10-29: Horizon's official survival server; the game and the launcher list it. Hosted by Sculk since 2026-10-31.
-      { key: 'officialserver', name: 'official-server', type: 'text', readonly: true, staffPost: true, topic: 'Official Horizon SMP, hosted by Sculk: play.playhorizon.dev' },
-      // Anthony S. via Ludovic, 2026-10-31: the official server's chat, posted by its horizon-server through a webhook ([discord] in server.toml).
-      { key: 'serverchat', name: 'server-chat', type: 'text', readonly: true, staffPost: true, topic: 'Live chat of the official server (play.playhorizon.dev), drawn as in game. Read-only: talk in game.' },
+      { key: 'officialserver', name: '🗝️│join-server', aka: ['official-server'], type: 'text', readonly: true, staffPost: true, topic: 'Official Horizon SMP, hosted by https://sculkhosting.com : play.playhorizon.dev' },
       { key: 'faq', name: 'faq', type: 'text', readonly: true, topic: 'Every question you might have, answered: downloading Horizon, posting a bug, contributing, roles, the mods.' },
       { key: 'rules', name: 'rules', type: 'text', readonly: true, topic: 'The rules. Kira enforces them, day and night.' },
       // Kacper (kacpherek, Horizon Team) in #horizon-team, 2026-11-01: scam bots post in every channel, so one channel catches
       // them. Everyone sees it and can post in it (no flags: that is the trap). Whoever posts there is soft-banned (banned
       // with the last day of their messages deleted, then unbanned at once), src/features/moderation.js, MOD.honeypot.
-      { key: 'honeypot', name: '⚠️│do-not-post', type: 'text', pin: 'honeypot', topic: '⚠️ DO NOT POST HERE. Anyone who posts in this channel is removed from the server instantly (banned, their last day of messages deleted, then unbanned). It exists to catch scam bots. You can rejoin, but please do not post.' },
-      { key: 'announcements', name: 'announcements', type: 'announcement', readonly: true, topic: 'Big Horizon news. Pick the 📣 Big news role to get pinged.' },
-      { key: 'ludovicvideos', name: 'ludovic-videos', type: 'text', readonly: true, topic: 'Ludovic\'s new YouTube videos, posted by Kira as they come out.' },
+      { key: 'honeypot', name: '🚫│no-text', aka: ['do-not-post', '⚠️│do-not-post'], type: 'text', pin: 'honeypot', topic: '⚠️ DO NOT POST HERE. Anyone who posts in this channel is removed from the server instantly (banned, their last day of messages deleted, then unbanned). It exists to catch scam bots. You can rejoin, but please do not post.' },
+      { key: 'announcements', name: '📢│announcements', type: 'announcement', readonly: true, topic: 'Big Horizon news. Pick the 📣 Big news role to get pinged.' },
+      { key: 'ludovicvideos', name: 'ludovic-videos', type: 'announcement', readonly: true, topic: 'Ludovic\'s new YouTube videos, posted by Kira as they come out.' },
       // In 👋 start here (Team, 2026-10-28). Ludovic, 2026-10-28: one channel for every way to support him: the Sculk affiliate link, his GitHub Sponsors (also the
       // org-wide Sponsor button) and, later, a crypto address.
-      { key: 'sponsors', name: 'support-horizon', type: 'text', readonly: true, topic: 'Every way to support Horizon: Sculk server hosting (affiliate link), GitHub Sponsors, and crypto (Bitcoin, Solana, Ethereum and EVM chains).' },
+      { key: 'sponsors', name: 'sponsors', aka: ['support-horizon'], type: 'text', readonly: true, topic: 'Every way to support Horizon: Sculk server hosting (affiliate link), GitHub Sponsors, and crypto (Bitcoin, Solana, Ethereum and EVM chains).' },
     ],
   },
   {
-    key: 'horizon', was: 'mine', category: '🌅 horizon',
+    key: 'horizon', was: 'mine', category: 'HORIZON-GENERAL', aka: ['🌅 horizon'],
     channels: [
       {
         key: 'horizonbugs', name: 'horizon-bugs', type: 'forum',
@@ -178,7 +180,7 @@ export const LAYOUT = [
         template: '**The idea:**\n**Why:** what it makes better\n**How it could work:** (optional)',
         check: { min: 40, needs: [['The idea', /the idea|idea/i], ['Why', /why/i]] },
       },
-      { key: 'horizonchat', name: 'horizon-chat', type: 'text', topic: 'Talk about Horizon. Need help (it won\'t start, it\'s slow, sign-in)? #horizon-support. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' + CLEARED },
+      { key: 'horizonchat', name: '💬│horizon-chat', type: 'text', topic: 'Talk about Horizon. Need help (it won\'t start, it\'s slow, sign-in)? #horizon-support. Bugs go in #horizon-bugs and ideas in #horizon-ideas, so they don\'t get lost here.' + CLEARED },
       {
         key: 'showcase', was: 'videofeedback', name: 'showcase', type: 'forum', gallery: true, reaction: '🔥', react: ['🔥'],
         topic: 'Your Horizon creations: YouTube videos, clips, screenshots, builds, worlds, redstone, benchmarks. One post each, with the template.',
@@ -187,14 +189,22 @@ export const LAYOUT = [
         template: '**What it is:**\n**Horizon version:** release or commit (optional)\n+ a screenshot, a video or a link',
         check: { media: true, needs: [['What it is', /what it is|\bwhat\b|\bthis\b/i]] },
       },
-      { key: 'releases', name: 'releases', type: 'text', readonly: true, topic: 'Every new Horizon version and launcher, posted by Kira. Pick the 📦 Releases role to get pinged.' },
-      { key: 'updates', name: 'updates', type: 'text', readonly: true, topic: 'What changed in Horizon: merged work grouped by roadmap item, releases, the weekly summary, and the board at a glance. The full kanban and roadmap: playhorizon.dev/hub. Talk about it in #horizon-chat.' },
+      { key: 'releases', name: '📰│releases', type: 'text', readonly: true, topic: 'Every new Horizon version and launcher, posted by Kira. Pick the 📦 Releases role to get pinged.' },
+      { key: 'updates', name: '📰│updates', type: 'text', readonly: true, topic: 'What changed in Horizon: merged work grouped by roadmap item, releases, the weekly summary, and the board at a glance. The full kanban and roadmap: playhorizon.dev/hub. Talk about it in #horizon-chat.' },
+    ],
+  },
+  {
+    // The official server's chat bridge (Anthony S. via Ludovic, 2026-10-31): posted by its horizon-server through a webhook
+    // ([discord] in server.toml). `id` pins the channel that exists, so setup never makes a second one.
+    key: 'smp', category: 'HORIZONSMP',
+    channels: [
+      { key: 'serverchat', id: '1566146381931094148', name: '🌐│server-chat', aka: ['server-chat'], type: 'text', readonly: true, staffPost: true, topic: 'Live chat of the official server (play.playhorizon.dev), drawn as in game. Read-only: talk in game.' },
     ],
   },
   {
     // Ludovic, 2026-10-28 ("rethink the architecture"): the contributors and the Team get a place of their own, apart
     // from the players' channels (horizon-parity agent-state/discord-arch-1.md).
-    key: 'contributing', category: '🛠️ contributing',
+    key: 'contributing', category: '🛠️ CONTRIBUTORS', aka: ['🛠️ contributing'],
     channels: [
       // writers: everyone reads; only the mods and these roles write, open threads and write in them (src/permissions.js).
       { key: 'contributors', name: 'contributors', type: 'text', writers: ['contributor', 'team'], topic: "Where Horizon's contributors talk. Everyone can read. To write: have a merged PR, then `/link-github` + `/verify-github`." },
@@ -203,10 +213,10 @@ export const LAYOUT = [
     ],
   },
   {
-    key: 'general', category: '💬 general',
+    key: 'general', category: 'GENERAL', aka: ['💬 general'],
     channels: [
       // Ludovic, 2026-10-30: #off-topic merged into #general (REPLACED): one chat for anything.
-      { key: 'general', name: 'general', type: 'text', topic: 'Talk about anything: other games, music, AI coding, life. Horizon talk is welcome too, though #horizon-chat is its home; problems with Horizon go in #horizon-support. English please, so everyone can follow; other languages have their own channels in 🌍 languages.' + CLEARED },
+      { key: 'general', name: 'general-chat', aka: ['general'], type: 'text', topic: 'Talk about anything: other games, music, AI coding, life. Horizon talk is welcome too, though #horizon-chat is its home; problems with Horizon go in #horizon-support. English please, so everyone can follow; other languages have their own channels in 🌍 languages.' + CLEARED },
       { key: 'introductions', name: 'introductions', type: 'text', pin: 'intro', topic: 'Say hi once, with the template in the pinned message. One introduction per person.' },
       { key: 'halloffame', name: 'hall-of-fame', type: 'text', readonly: true, topic: 'Messages that got 5 ⭐. React ⭐ to a message you love to send it here.' },
       { key: 'memes', name: 'memes', type: 'text', topic: 'Memes and funny stuff (Minecraft ones welcome). SFW only. No XP here.' },
@@ -235,11 +245,11 @@ export const LAYOUT = [
   {
     key: 'voice', category: '🔊 voice',
     channels: [
-      { key: 'lounge', name: 'Lounge', type: 'voice' },
-      { key: 'gaming', name: 'Gaming', type: 'voice' },
-      { key: 'waiting', name: '⏳ waiting room', type: 'voice' },
-      { key: 'ludovic', name: '🎙️ ludovic', type: 'voice', locked: true },
-      { key: 'lobby', name: '➕ create your room', type: 'voice', lobby: true },
+      { key: 'lounge', name: 'Lounge', type: 'voice', bitrate: 256000 },
+      { key: 'gaming', name: 'Gaming', type: 'voice', bitrate: 256000 },
+      { key: 'waiting', name: '⏳ waiting room', type: 'voice', bitrate: 256000 },
+      { key: 'ludovic', name: '🎙️ ludovic', type: 'voice', bitrate: 256000, locked: true },
+      { key: 'lobby', name: '➕ create your room', type: 'voice', bitrate: 256000, lobby: true },
     ],
   },
   {
