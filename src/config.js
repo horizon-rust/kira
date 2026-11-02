@@ -732,7 +732,7 @@ export const HORIZON = {
 export const OFFICIAL_SERVER = {
   name: 'Horizon Official',
   address: 'play.playhorizon.dev',
-  description: 'The **Official Horizon SMP**, hosted by **Sculk**: survival with an economy (/balance, /sell, /baltop), land claims and homes, and an anticheat. It runs horizon-server, Horizon\'s own server, updated from Horizon\'s builds. Ops: luzW and bunchy7s.',
+  description: 'The **Official Horizon SMP**, hosted by **Sculk**: survival with an economy (/balance, /sell, /baltop), land claims and homes, and an anticheat. It runs horizon-server, Horizon\'s own server, updated from Horizon\'s builds. Ops: luzW, rdbtclient, azetech_ and levzzz.',
   join: 'You need Horizon to join (other clients are turned away). In Horizon: Multiplayer → Add Server, then the address.',
   problems: 'Try the same thing in single player first: if it happens there too, post it in #horizon-bugs; if it only happens on the server, say so in your #horizon-bugs post.',
 };

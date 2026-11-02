@@ -139,7 +139,7 @@ test('Minecraft appeals: their own case, decided by the ops only', () => {
   assert.equal(c.ign, 'Steve_1');
   assert.equal(c.banText, 'xray');
   assert.match(kit.decideRefusal(c, 'mod1', { isMod: true }), /ops/);
-  assert.equal(kit.decideRefusal(c, kit.MC_OPS[1], { isMod: false }), null);
+  assert.equal(kit.decideRefusal(c, kit.MC_OPS[0], { isMod: false }), null);
   assert.throws(() => kit.submitAppeal(mc, { userId: 'u', kind: 'minecraft', ign: 'steve_1', answers: { what: 'a', why: 'b' } }, T0), /appeal open already/, 'the same name: the same case');
   assert.match(kit.caseView(c).fields.find((x) => x.name.startsWith('Ban reason')).value, /xray/);
 });
