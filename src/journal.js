@@ -18,7 +18,8 @@ export function isJournal(j) {
 // The entries not seen yet, oldest first; unknown kinds are skipped (and remembered, so never shown later).
 export function newEntries(journal, seen = []) {
   const known = new Set(seen);
-  const fresh = journal.entries.filter((e) => !known.has(e.id));
+  // An id twice in one journal (it once listed #7154 twice while being regenerated) is shown once.
+  const fresh = journal.entries.filter((e) => !known.has(e.id) && (known.add(e.id), true));
   const ids = [...fresh.map((e) => e.id), ...seen].slice(0, KEEP);
   const entries = fresh.filter((e) => KINDS.includes(e.kind)).sort((a, b) => (Date.parse(a.date) || 0) - (Date.parse(b.date) || 0));
   return { entries, seen: ids };
