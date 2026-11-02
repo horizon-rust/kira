@@ -474,6 +474,24 @@ export const WORK = {
   },
 };
 
+// The hub's org chart (src/org-chart.js, GET /staff.json). `roles`: the tiers' role ids as of 2026-11-02 (setup's ids
+// win). `github`: Discord id → GitHub login for staff whose accounts are confirmed but who haven't run `/link-github
+// credit:True` (Ludovic, 2026-11-02; levzzz5154 and pointofpressure: the same handle on both, and the same name).
+// `jobs`: a short, factual job beside the role, when there is one.
+export const ORG = {
+  roles: { owner: '1559251767860920370', team: '1564768999655481485', chiefmod: '1566825954792181864', mod: '1559242168864997537', support: '1565697648269205699' },
+  github: {
+    '663689837483655188': 'dezer-x', // Anthony S.
+    '777346923232886784': 'rdbtCVS', // rdbt
+    '821858512975953993': 'levzzz5154', // levzzz
+    '1130639426033295370': 'PointOfPressure', // pressure
+  },
+  jobs: {
+    '663689837483655188': 'Design',
+    '777346923232886784': 'Official server economy',
+  },
+};
+
 // /apply (src/features/apply.js): Discord's way into the application form on the website (docs/staff-api.md). The
 // staff side (the dashboards) owns the form, who may apply and the decisions; Kira DMs the form's link, and when a
 // decision comes back she gives the role and DMs the member. `intro`: where a newly accepted member starts.

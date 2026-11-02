@@ -474,6 +474,9 @@ export function creditedPairs() {
     .filter((p) => p.discord).sort((a, b) => a.github.localeCompare(b.github));
 }
 
+// Discord id → GitHub login for the members who agreed to show both (/link-github credit:True): the hub's org chart.
+export const creditedLogins = () => Object.fromEntries(Object.keys(work.credit ?? {}).filter((id) => work.links[id]).map((id) => [id, work.links[id]]));
+
 // For end-to-end checks (scratch scripts): the GitHub client can be swapped.
 export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render, notices, setRaw: (r) => { raw = r; }, openPulls };
 
