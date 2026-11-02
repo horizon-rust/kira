@@ -30,8 +30,9 @@ export const QUESTIONS = [
   { id: 'more', label: 'Anything else the mods should know?', max: APPEAL.max.more, required: false },
 ];
 export const MODMAIL = { staleMs: 12 * HOUR };
-// The official Minecraft server's ops decide its appeals (Ludovic, 2026-10-30: luzW, his own account, and bunchy7s).
-export const MC_OPS = ['622720516779802630', '1372615310946992188'];
+// The official Minecraft server's ops decide its appeals (Ludovic, 2026-10-30: luzW, his own account, and bunchy7s;
+// bunchy7s stepped down as mod on 2026-11-02).
+export const MC_OPS = ['622720516779802630'];
 
 // Audit log action types (Discord's AuditLogEvent).
 const AUDIT = { kick: 20, ban: 22, unban: 23, memberUpdate: 24, roleUpdate: 25 };

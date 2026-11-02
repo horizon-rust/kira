@@ -130,7 +130,7 @@ everything lives in `state.modcases`.
   after the action at most.
 - **Where it goes.** Each appeal is a thread in `#mod-mail` (a text channel: it has no forum tags, so the name carries the
   status: `⚖️ 🟢 Appeal · case #12 · name`, then `⚖️ ⚪` once decided), with the case (action, evidence) and the answers,
-  pinging 🛡️ Mod (Minecraft cases: the ops, luzW and bunchy7s, `MC_OPS`). **Waiting** marks it 🟡 (waiting on evidence, a
+  pinging 🛡️ Mod (Minecraft cases: the ops in `MC_OPS`: luzW). **Waiting** marks it 🟡 (waiting on evidence, a
   second opinion) and back. An appeal not decided after 24 hours pings again in its thread, then every day, and appeals
   not decided after 12 hours are on #mod-chat's daily list with the mod-mail threads.
 - **Deciding.** Buttons **Uphold**, **Shorten** (a new total length from the action), **Lift**, and on a quarantine **Uphold +
