@@ -31,6 +31,10 @@ test('new entries: oldest first, each once, unknown kinds remembered and never s
   assert.ok(a.seen.includes('odd-1'));
   const b = journal.newEntries(J, a.seen);
   assert.deepEqual(b.entries, []);
+  // The same entry twice in one journal: one line, one remembered id.
+  const twice = journal.newEntries({ entries: [J.entries[3], J.entries[3]] }, []);
+  assert.deepEqual(twice.entries.map((e) => e.id), ['merge-1760']);
+  assert.deepEqual(twice.seen, ['merge-1760']);
   assert.equal(journal.isJournal({ entries: [{ id: 1 }] }), false);
 });
 
