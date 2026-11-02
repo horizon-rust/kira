@@ -87,6 +87,12 @@ export const ROLES = [
     about: 'the moderators: they time out members and delete messages (bans go through the Horizon Team). `/apply` for it.',
     permissions: ['ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps'],
   },
+  // Ludovic, 2026-11-02: pointofpressure leads the mods. The mods' permissions, shown above them, below the Team.
+  {
+    key: 'chiefmod', name: '🛡️ Chief of Mods', color: 0x1f8b4c, hoist: true,
+    about: 'leads the moderators: the same permissions as a mod, and the first person to reach for moderation questions.',
+    permissions: ['ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps'],
+  },
   // The core contributors who review and merge (GitHub team horizon-team). Ludovic, 2026-10-28: they moderate too, with
   // the mods' permissions and the staff channels, and show above the mods. Writes in #contributors; the only role in
   // #horizon-team.
