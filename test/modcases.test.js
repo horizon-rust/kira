@@ -178,7 +178,7 @@ test('mod-mail statuses: who spoke last, the name, the 12-hour list, renames spa
   assert.equal(kit.mailAfter('open', 'mod'), 'waiting');
   assert.equal(kit.mailName('joe', 'open'), '🟢 joe');
   assert.equal(kit.mailName('🟢 joe', 'waiting'), '🟡 joe');
-  assert.equal(kit.appealName({ n: 7 }, 'joe', 'decided'), '⚖️ ⚪ Appeal · case #7 · joe');
+  assert.equal(kit.appealName({ n: 7 }, 'joe', 'decided'), '⚖️ 🔒 Appeal · case #7 · joe');
   const mc = kit.blank({});
   kit.mailSet(mc, 't1', { status: 'open', userId: 'a' }, T0);
   kit.mailSet(mc, 't2', { status: 'waiting', userId: 'b' }, T0);
@@ -268,7 +268,7 @@ test('a mod\'s timeout from the audit log: one case in #mod-actions, a DM with t
   assert.deepEqual(timeouts, [null]);
   assert.match(dms.at(-1).content, /was accepted: it is lifted\.\nWhy: the wallpaper was not explicit/);
   assert.equal(a.outcome.told, 'dm');
-  assert.match(thread.name, /^⚖️ ⚪ Appeal/);
+  assert.match(thread.name, /^⚖️ 🔒 Appeal/);
   assert.equal(thread.locked, true);
   assert.match(posted.at(-1).embeds[0].toJSON().title, /^⚖️ Case #\d+ · appeal lifted$/);
 });

@@ -388,8 +388,8 @@ export function staffView(mc, { limit = 200 } = {}) {
 // ── Mod-mail statuses ────────────────────────────────────────────────────────
 // Open: the member wrote last (the mods owe an answer). Waiting: a mod answered. Closed: //close or /close.
 
-export const MAIL = { open: { label: 'Open', mark: '🟢' }, waiting: { label: 'Waiting', mark: '🟡' }, closed: { label: 'Closed', mark: '⚪' } };
-export const MAIL_MARK = /^(🟢|🟡|⚪)\s*/u;
+export const MAIL = { open: { label: 'Open', mark: '🟢' }, waiting: { label: 'Waiting', mark: '🟡' }, closed: { label: 'Closed', mark: '🔒' } };
+export const MAIL_MARK = /^(🟢|🟡|🔒|⚪)\s*/u; // ⚪: threads closed before the lock mark
 
 // The status after a message: 'member' → open, 'mod' → waiting.
 export const mailAfter = (current, speaker) => (speaker === 'member' ? 'open' : speaker === 'mod' ? 'waiting' : current ?? 'open');
@@ -399,8 +399,8 @@ export function markedName(name, mark) {
   return `${mark} ${String(name ?? '').replace(MAIL_MARK, '').replace(/^⚖️\s*/u, '')}`.slice(0, 100);
 }
 export const mailName = (name, status) => markedName(name, MAIL[status]?.mark ?? MAIL.open.mark);
-// Appeals live in #mod-mail too: "⚖️ 🟢 Appeal · case #12 · name" while open, 🟡 waiting, ⚪ once decided.
-export const appealName = (c, name, status) => `⚖️ ${status === 'decided' ? '⚪' : status === 'waiting' ? '🟡' : '🟢'} Appeal · case #${c.n} · ${String(name ?? '').slice(0, 60)}`.slice(0, 100);
+// Appeals live in #mod-mail too: "⚖️ 🟢 Appeal · case #12 · name" while open, 🟡 waiting, 🔒 once decided.
+export const appealName = (c, name, status) => `⚖️ ${status === 'decided' ? '🔒' : status === 'waiting' ? '🟡' : '🟢'} Appeal · case #${c.n} · ${String(name ?? '').slice(0, 60)}`.slice(0, 100);
 
 export function mailSet(mc, threadId, { status, userId = null }, now = Date.now()) {
   blank(mc);
