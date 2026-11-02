@@ -10,7 +10,7 @@
 // - Appeals: a form (a Discord modal with fixed questions; the website's /hub/appeal for banned users), one thread per
 //   appeal in #mod-mail, decided with buttons by a mod who didn't act. The person hears the outcome by DM (or in
 //   #appeal, or on the website).
-// - Mod-mail statuses: 🟢 Open / 🟡 Waiting / ⚪ Closed in each thread's name; a daily list in #mod-chat of the
+// - Mod-mail statuses: 🟢 Open / 🟡 Waiting / 🔒 Closed in each thread's name; a daily list in #mod-chat of the
 //   threads Open for more than 12 hours.
 import {
   SlashCommandBuilder, PermissionFlagsBits as P, MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
@@ -477,7 +477,7 @@ export function mailStatus(thread, status, userId = null) {
 export const mailRow = () => new ActionRowBuilder().addComponents(
   new ButtonBuilder().setCustomId('mail:waiting').setLabel('Waiting on them').setStyle(ButtonStyle.Secondary).setEmoji('🟡'),
   new ButtonBuilder().setCustomId('mail:open').setLabel('Open').setStyle(ButtonStyle.Secondary).setEmoji('🟢'),
-  new ButtonBuilder().setCustomId('mail:close').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('⚪'),
+  new ButtonBuilder().setCustomId('mail:close').setLabel('Close').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
 );
 
 const mailUser = (threadId) => Object.keys(state.modmail).find((k) => state.modmail[k] === threadId) ?? null;

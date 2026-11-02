@@ -107,7 +107,7 @@ async function fromMember(msg) {
     thread = await box.threads.create({ name: `${msg.author.username}`.slice(0, 90), autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek, reason: 'mod-mail' });
     state.modmail[msg.author.id] = thread.id;
     save();
-    await thread.send({ content: `<@&${state.roles.mod}> new mod-mail from <@${msg.author.id}> (${msg.author.tag}). Write here to answer; start with \`//\` for a note they don't see; \`//close\` or \`/close\` to close. The status leads the thread's name: 🟢 Open (they wrote last), 🟡 Waiting (a mod answered), ⚪ Closed.`, components: [mailRow()], allowedMentions: { roles: [state.roles.mod] } });
+    await thread.send({ content: `<@&${state.roles.mod}> new mod-mail from <@${msg.author.id}> (${msg.author.tag}). Write here to answer; start with \`//\` for a note they don't see; \`//close\` or \`/close\` to close. The status leads the thread's name: 🟢 Open (they wrote last), 🟡 Waiting (a mod answered), 🔒 Closed.`, components: [mailRow()], allowedMentions: { roles: [state.roles.mod] } });
   }
   if (thread.archived) await thread.setArchived(false).catch(() => {});
   const files = msg.attachments.map((a) => a.url);
