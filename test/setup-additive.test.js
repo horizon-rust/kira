@@ -21,7 +21,7 @@ const specs = LAYOUT.flatMap((g) => g.channels);
 const spec = (key) => specs.find((c) => c.key === key);
 const group = (key) => LAYOUT.find((g) => g.key === key);
 // Added after the 2026-11-01 snapshot (mod cases, src/features/modcases.js): Kira makes them at start when missing.
-const NEW_CHANNELS = ['create #mod-actions in 🛡️ staff', 'create #join-leave in 🛡️ staff', 'create #kira-handoffs in 🛡️ staff', 'create #appeal in 🛡️ staff'];
+const NEW_CHANNELS = ['create #🧩│modding in HORIZON-GENERAL', 'create #mod-actions in 🛡️ staff', 'create #join-leave in 🛡️ staff', 'create #kira-handoffs in 🛡️ staff', 'create #appeal in 🛡️ staff'];
 const structure = (lines) => lines.filter((l) => /^(rename|retype|move|bitrate)/.test(l) || / category /.test(l));
 
 test('arguments: nothing is additive; --apply-layout prints the diff; it only acts with --yes too', () => {
