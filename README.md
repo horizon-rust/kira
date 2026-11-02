@@ -225,6 +225,11 @@ review), and when.
   cached 5 minutes): `{ "contributors": [{ "github", "discord" }] }`, the GitHub login and the Discord display name of
   each member who said yes and is still on the server, nothing else. `credit:False` hides it; a mod linking someone
   else never shows them (they choose by running it themselves).
+- **Org chart**: `GET /staff.json` (same host, public, CORS open, rebuilt at most every 5 minutes) is the hub's
+  People tab: `{ "updated", "tiers": [{ "key", "role", "post", "people": [{ "name", "username", "avatar", "github",
+  "job" }] }] }`, top to bottom 👑 ludovic, 🌌 Horizon Team, 🛡️ Chief of Mods, 🛡️ Mod, 🤝 Support; each person once,
+  in their highest tier ([src/org-chart.js](src/org-chart.js)). `github` is set only when it is confirmed: the
+  member's own `credit:True` link, or `WORK.github` / `ORG.github` in config.js; `job` comes from `ORG.jobs`.
 - **CI**: a pull request's author hears about CI starting to fail on its commit through `/notify` (see
   [Notifications](#notifications-notify)). Nothing for what was already failing at Kira's first look.
 - **Good first tasks**: open, unclaimed issues in To do labelled `good first issue` or `help wanted`

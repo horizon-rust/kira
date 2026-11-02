@@ -2,7 +2,7 @@
 // KIRA_DISCORD=off: no Discord connection at all, only the board (from GitHub) and the MCP server, to test a
 // new host. PORT (Railway) or KIRA_HTTP_PORT: where the MCP server listens; none, no server.
 import { MessageFlags, MessageType } from 'discord.js';
-import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_SLOW_MS, VIDEOS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS, GITHUB } from './config.js';
+import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_SLOW_MS, VIDEOS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS, GITHUB, ORG, OWNER_ID } from './config.js';
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
 import { releaseMessage, remember, announced, pingDecision } from './releases.js';
@@ -38,6 +38,7 @@ import * as modcases from './features/modcases.js';
 import { startServer } from './mcp.js';
 import { adminRoutes } from './admin.js';
 import * as launcherGithub from './launcher-github.js';
+import * as orgChart from './org-chart.js';
 import { rateLimiter } from './agents.js';
 import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
@@ -127,6 +128,20 @@ else { // the board alone, from GitHub
   setInterval(() => workboard.refresh(), WORK.refreshMs);
 }
 
+// The holders of the org chart's roles, from the member cache (filled at start by the work board), or null before it.
+function staffMembers() {
+  const guild = DISCORD ? client.guilds.cache.get(GUILD_ID) : null;
+  if (!guild?.members.cache.size) return null;
+  const ids = Object.fromEntries(Object.entries(ORG.roles).map(([key, id]) => [key, state.roles?.[key] || id]));
+  const out = [];
+  for (const m of guild.members.cache.values()) {
+    if (m.user.bot) continue;
+    const roles = Object.keys(ids).filter((key) => m.roles.cache.has(ids[key]) || (key === 'owner' && m.id === OWNER_ID));
+    if (roles.length) out.push({ id: m.id, username: m.user.username, name: m.user.globalName || m.user.username, avatar: m.user.displayAvatarURL({ extension: 'png', size: 128, forceStatic: true }), roles });
+  }
+  return out;
+}
+
 const port = process.env.PORT || process.env.KIRA_HTTP_PORT;
 if (port) {
   const limiter = rateLimiter();
@@ -138,6 +153,8 @@ if (port) {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300', 'Access-Control-Allow-Origin': '*' });
       res.end(JSON.stringify({ contributors: workboard.creditedPairs() }));
     },
+    // The hub's org chart: the staff roles' holders, names and confirmed GitHub logins only (public, read-only, 5 minutes).
+    '/staff.json': orgChart.route({ read: staffMembers, github: () => ({ ...WORK.github, ...ORG.github, ...workboard.creditedLogins() }), jobs: ORG.jobs }),
     ...kiraAi.usageRoutes({ limiter }),
     ...smp.routes({ limiter }), // POST /smp/ingest/*, GET /smp/*.json: the official server's market for the hub, with KIRA_SMP_INGEST_TOKEN
     ...launcherGithub.routes({ limiter }), // GET /github/public/…: the launcher's release reads when GitHub rate-limits it (public, read-only)
