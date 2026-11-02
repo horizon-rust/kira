@@ -192,6 +192,7 @@ export const LAYOUT = [
         template: '**What it is:**\n**Horizon version:** release or commit (optional)\n+ a screenshot, a video or a link',
         check: { media: true, needs: [['What it is', /what it is|\bwhat\b|\bthis\b/i]] },
       },
+      { key: 'modding', name: '🧩│modding', type: 'text', topic: 'Making Horizon mods: content mods (.hmod), native mods, porting Java mods, the registry. Ask for help, share work in progress, compare notes. Finished mods go in #showcase; published ones on playhorizon.dev/mods. Guides: docs/mods.md and docs/native-mods.md.' },
       { key: 'releases', name: '📰│releases', type: 'text', readonly: true, topic: 'Every new Horizon version and launcher, posted by Kira. Pick the 📦 Releases role to get pinged.' },
       { key: 'updates', name: '📰│updates', type: 'text', readonly: true, topic: 'What changed in Horizon: merged work grouped by roadmap item, releases, the weekly summary, and the board at a glance. The full kanban and roadmap: playhorizon.dev/hub. Talk about it in #horizon-chat.' },
     ],
