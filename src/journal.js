@@ -15,13 +15,19 @@ export function isJournal(j) {
   return !!j && Array.isArray(j.entries) && j.entries.every((e) => e && typeof e.id === 'string' && typeof e.kind === 'string');
 }
 
-// The entries not seen yet, oldest first; unknown kinds are skipped (and remembered, so never shown later).
-export function newEntries(journal, seen = []) {
+// How old an entry may be and still be posted. The journal once grew backwards through the release history and every
+// old release came out in #updates as if new (2026-11-02): an entry older than this is remembered, never posted.
+export const MAX_AGE_MS = 48 * 3600 * 1000;
+
+// The entries not seen yet, oldest first; unknown kinds and entries older than MAX_AGE_MS are skipped (and remembered,
+// so never shown later). `now`: for tests.
+export function newEntries(journal, seen = [], now = Date.now()) {
   const known = new Set(seen);
   // An id twice in one journal (it once listed #7154 twice while being regenerated) is shown once.
   const fresh = journal.entries.filter((e) => !known.has(e.id) && (known.add(e.id), true));
   const ids = [...fresh.map((e) => e.id), ...seen].slice(0, KEEP);
-  const entries = fresh.filter((e) => KINDS.includes(e.kind)).sort((a, b) => (Date.parse(a.date) || 0) - (Date.parse(b.date) || 0));
+  const recent = (e) => now - (Date.parse(e.date) || 0) <= MAX_AGE_MS;
+  const entries = fresh.filter((e) => KINDS.includes(e.kind) && recent(e)).sort((a, b) => (Date.parse(a.date) || 0) - (Date.parse(b.date) || 0));
   return { entries, seen: ids };
 }
 
