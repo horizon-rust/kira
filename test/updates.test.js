@@ -15,27 +15,36 @@ const updates = await import('../src/features/updates.js');
 const hubFeature = await import('../src/features/hub.js');
 
 const HUB = 'https://playhorizon.dev/hub';
+// Minutes before now, as the journal would date them: the feature posts only entries under 48 h old.
+const ago = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString();
 const J = { entries: [
-  { id: 'weekly-2026-43', kind: 'weekly', date: '2026-10-26T09:00:00Z', title: 'The week of 19 October', plain: 'Faster frames, server dialogs.', url: 'https://playhorizon.dev/hub#journal' },
-  { id: 'release-v0.2.61', kind: 'release', date: '2026-10-25T20:00:00Z', tag: 'v0.2.61', title: 'v0.2.61', plain: 'Smoother frames.', url: 'https://github.com/horizon-rust/horizon/releases/tag/v0.2.61' },
-  { id: 'shipped-smooth', kind: 'shipped', date: '2026-10-25T20:01:00Z', item: 'smooth-frames', title: 'Steady frames', plain: 'Smooth at 32 chunks.', post: 'Horizon now keeps steady frames at 32 chunks.', shipped_in: 'v0.2.61', announce: true },
-  { id: 'merge-1760', kind: 'merge', date: '2026-10-25T10:00:00Z', item: 'smooth-frames', number: 1760, title: 'Free structure starts', plain: 'Worlds generate without queueing.', url: 'https://github.com/horizon-rust/horizon/pull/1760' },
-  { id: 'merge-1778', kind: 'merge', date: '2026-10-25T11:00:00Z', item: 'smooth-frames', number: 1778, title: 'Leave one core', url: 'https://github.com/horizon-rust/horizon/pull/1778' },
-  { id: 'merge-1800', kind: 'merge', date: '2026-10-25T12:00:00Z', number: 1800, title: 'Fix a typo', url: 'https://evil.example/x' },
-  { id: 'odd-1', kind: 'tweet', date: '2026-10-25T12:00:00Z', title: '?' },
+  { id: 'weekly-2026-43', kind: 'weekly', date: ago(180), title: 'The week of 19 October', plain: 'Faster frames, server dialogs.', url: 'https://playhorizon.dev/hub#journal' },
+  { id: 'release-v0.2.61', kind: 'release', date: ago(960), tag: 'v0.2.61', title: 'v0.2.61', plain: 'Smoother frames.', url: 'https://github.com/horizon-rust/horizon/releases/tag/v0.2.61' },
+  { id: 'shipped-smooth', kind: 'shipped', date: ago(959), item: 'smooth-frames', title: 'Steady frames', plain: 'Smooth at 32 chunks.', post: 'Horizon now keeps steady frames at 32 chunks.', shipped_in: 'v0.2.61', announce: true },
+  { id: 'merge-1760', kind: 'merge', date: ago(1560), item: 'smooth-frames', number: 1760, title: 'Free structure starts', plain: 'Worlds generate without queueing.', url: 'https://github.com/horizon-rust/horizon/pull/1760' },
+  { id: 'merge-1778', kind: 'merge', date: ago(1500), item: 'smooth-frames', number: 1778, title: 'Leave one core', url: 'https://github.com/horizon-rust/horizon/pull/1778' },
+  { id: 'merge-1800', kind: 'merge', date: ago(1440), number: 1800, title: 'Fix a typo', url: 'https://evil.example/x' },
+  { id: 'odd-1', kind: 'tweet', date: ago(1440), title: '?' },
 ] };
 
+const NOW = Date.now();
+
 test('new entries: oldest first, each once, unknown kinds remembered and never shown', () => {
-  const a = journal.newEntries(J, []);
+  const a = journal.newEntries(J, [], NOW);
   assert.deepEqual(a.entries.map((e) => e.id), ['merge-1760', 'merge-1778', 'merge-1800', 'release-v0.2.61', 'shipped-smooth', 'weekly-2026-43']);
   assert.ok(a.seen.includes('odd-1'));
-  const b = journal.newEntries(J, a.seen);
+  const b = journal.newEntries(J, a.seen, NOW);
   assert.deepEqual(b.entries, []);
   // The same entry twice in one journal: one line, one remembered id.
-  const twice = journal.newEntries({ entries: [J.entries[3], J.entries[3]] }, []);
+  const twice = journal.newEntries({ entries: [J.entries[3], J.entries[3]] }, [], NOW);
   assert.deepEqual(twice.entries.map((e) => e.id), ['merge-1760']);
   assert.deepEqual(twice.seen, ['merge-1760']);
   assert.equal(journal.isJournal({ entries: [{ id: 1 }] }), false);
+  // An old release the journal only now lists (it once grew back through the history): remembered, not posted.
+  const old = { id: 'release-v0.2.49', kind: 'release', date: ago(6 * 24 * 60), tag: 'v0.2.49', title: 'v0.2.49' };
+  const late = journal.newEntries({ entries: [old, ...J.entries] }, a.seen, NOW);
+  assert.deepEqual(late.entries, []);
+  assert.ok(late.seen.includes('release-v0.2.49'));
 });
 
 test('the feed: merges grouped by roadmap item, a release points to #releases, shipped and the week; silent, no pings', () => {
