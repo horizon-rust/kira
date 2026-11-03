@@ -572,6 +572,19 @@ export const SPONSORS = {
   paceMs: 1_000,                  // between two GitHub checks in the daily recheck
 };
 
+// Team roles (src/features/teamroles.js, src/team-roles-kit.js): a team's leader gives and takes back their team's
+// role with `/team add|remove member:`, and only that role. Ludovic, 2026-11-03: Discord's Manage Roles would also
+// let them edit every channel's overwrites, so it goes through Kira. `managers`: member ids. The mods, the Chief of
+// Mods and 👑 ludovic run it on any team role. A role that carries a permission (`DANGEROUS` in the kit) is refused.
+export const TEAMS = {
+  list: [
+    { key: 'hexforge', name: 'hexforge-horizons', role: '1567230973094002818', managers: ['1308764088444260455'] }, // azetech
+  ],
+  staffRoles: [ORG.roles.mod, ORG.roles.chiefmod, ORG.roles.owner],
+  quarantinedRole: '1566489487654002763', // 🔒 Quarantined, when state.roles doesn't have it
+  perHour: 30,                            // changes per member an hour
+};
+
 // Triage through Kira (src/features/triage.js): GitHub has no Triage role on a personal account's repo, and write
 // access would let a branch push run workflows with the repo's secrets. So Ludovic's trusted reviewers label, close,
 // reopen and mark duplicates in GITHUB.owner/WORK.repo with `/gh`, using Kira's token. Ludovic edits this list: a
