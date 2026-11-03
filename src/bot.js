@@ -35,6 +35,7 @@ import * as staff from './features/staff.js';
 import * as support from './features/support.js';
 import * as apply from './features/apply.js';
 import * as modcases from './features/modcases.js';
+import * as teamroles from './features/teamroles.js';
 import { startServer } from './mcp.js';
 import { adminRoutes } from './admin.js';
 import * as launcherGithub from './launcher-github.js';
@@ -44,7 +45,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [modcases, moderation, levels, rooms, community, forums, github, workboard, contributors, notify, site, smp, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply];
+const FEATURES = [modcases, moderation, levels, rooms, community, forums, github, workboard, contributors, notify, site, smp, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply, teamroles];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
