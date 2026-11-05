@@ -167,7 +167,26 @@ const ANGLES = /[<>\uFF1C\uFF1E\u2039\u203A\u27E8\u27E9\u2329\u232A\u3008\u3009\
 const ENTITY = { '<': '&lt;', '>': '&gt;' };
 export function untrusted(text, source = 'user') {
   const clean = String(text ?? '').replace(/&/g, '&amp;').replace(ANGLES, (c) => ENTITY[c] ?? `&#x${c.codePointAt(0).toString(16)};`);
-  return `<untrusted source="${source}">${clean}</untrusted>`;
+  const flags = suspicious(text);
+  const mark = flags.length ? ` suspicious="${flags.join(', ')}"` : '';
+  return `<untrusted source="${source}"${mark}>${clean}</untrusted>`;
+}
+
+// Text that looks aimed at an AI agent rather than at people: talking to an AI ("ignore previous instructions"),
+// asking for commands, credentials or scripts, or hiding characters. Such text is marked suspicious="<reasons>" on
+// its untrusted wrapper (and on issues Kira files), so the orchestrator sees it; it stays data either way. The same
+// patterns as horizon-parity's tools/discord_scan.py.
+const SUSPICIOUS = [
+  ['talks to an AI', /\b(ignore|disregard|forget|override)\b[\s\S]{0,40}\b(previous|prior|above|earlier|all|your)\b[\s\S]{0,30}\b(instructions?|prompts?|rules?|messages?|context)\b|\bsystem prompt\b|\byou are (now|an? (ai|assistant|agent|llm))\b|\b(as|dear|hey|attention) (an? )?(ai|assistant|agent|llm|claude|codex|gpt|kira)\b|\bjailbreak|\bdeveloper mode\b|<\/?(system|untrusted|instructions?|tool_?\w*)>/i],
+  ['asks to run commands', /\b(run|execute|exec|eval|type|paste)\b[\s\S]{0,40}\b(command|script|bash|shell|terminal|powershell|cmd|sudo)\b|\b(curl|wget|iwr|irm)\b[^\n]{0,200}\|\s*(sh|bash|zsh|iex|python)|\brm\s+-rf\b|\bsudo\b|\bgh (pr merge|secret|auth|api)\b|\bgit push\b|\bchmod \+x\b/i],
+  ['asks for credentials', /\b(api[ _-]?keys?|tokens?|passwords?|secrets?|private keys?|ssh keys?|credentials?|\.env|cookies?)\b[\s\S]{0,60}\b(send|share|give|post|paste|show|print|dm|leak)\b|\b(send|share|give|post|paste|show|print|dm)\b[\s\S]{0,60}\b(api[ _-]?keys?|tokens?|passwords?|secrets?|private keys?|ssh keys?|credentials?)\b/i],
+  ['links to a script or binary', /https?:\/\/\S+\.(sh|ps1|bat|cmd|py|js|exe|msi|jar|scr|vbs|dmg|pkg|appimage)(\?\S*)?(\s|$)|https?:\/\/(gist\.github(usercontent)?\.com|pastebin\.com|hastebin\.\w+|paste\.\w+)\//i],
+  ['hidden characters', /[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/],
+];
+
+export function suspicious(text) {
+  const s = String(text ?? '');
+  return SUSPICIOUS.filter(([, re]) => re.test(s)).map(([reason]) => reason);
 }
 
 // An error whose message is meant for the agent or the member (a refusal), unlike a bug's (L3).
