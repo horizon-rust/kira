@@ -196,7 +196,8 @@ export const LAYOUT = [
         tags: [['🎬', 'video'], ['📸', 'screenshot'], ['🏰', 'build'], ['🎞️', 'clip'], ['🔴', 'redstone'], ['🌍', 'world'], ['⚡', 'benchmark'], ['🧩', 'mod'], ['⭐', 'featured', true]],
         guide: 'Show what you made **in Horizon**: a video, a clip, screenshots, a build, a benchmark. One post per creation (updates go in your own post), one new post every hour at most. Your own YouTube videos about Horizon are welcome here: this is the place for them. A screenshot, a video or a link is required. Content that isn\'t about Horizon goes in #general.',
         template: '**What it is:**\n**Horizon version:** release or commit (optional)\n+ a screenshot, a video or a link',
-        check: { media: true, needs: [['What it is', /what it is|\bwhat\b|\bthis\b/i]] },
+        // The title and a line of text say what it is; matching the words "what"/"this" closed complete posts.
+        check: { media: true, min: 20 },
       },
       { key: 'modding', name: '🧩│modding', type: 'text', topic: 'Making Horizon mods: content mods (.hmod), native mods, porting Java mods, the registry. Ask for help, share work in progress, compare notes. Finished mods go in #showcase; published ones on playhorizon.dev/mods. Guides: docs/mods.md and docs/native-mods.md.' },
       { key: 'releases', name: '📰│releases', type: 'text', readonly: true, topic: 'Every new Horizon version and launcher, posted by Kira. Pick the 📦 Releases role to get pinged.' },
