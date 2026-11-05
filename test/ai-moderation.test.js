@@ -11,7 +11,7 @@ process.env.KIRA_STATE = join(mkdtempSync(join(tmpdir(), 'kira-ai-mod-')), 'stat
 process.env.KIRA_AI = 'mentions';
 process.env.ANTHROPIC_API_KEY = 'test-key-not-used';
 const { Collection } = await import('discord.js');
-const { AI, GUILD_ID, LAYOUT, RULES } = await import('../src/config.js');
+const { AI, GUILD_ID, LAYOUT, MOD, RULES } = await import('../src/config.js');
 const core = await import('../src/core.js');
 const f = await import('../src/features/ai.js');
 const mod = await import('../src/features/moderation.js');
@@ -201,7 +201,7 @@ test('a batch: messages of one channel within a few seconds are read in one call
   assert.equal(calls.flat().filter((m) => m.text.startsWith('spam')).length, 0, 'the flooded messages were deleted by the filter, not read');
   assert.equal(deleted.length, MOD_FLOOD);
 });
-const MOD_FLOOD = 6;
+const MOD_FLOOD = MOD.floodMessages;
 
 test('a removal: deleted, the short note in the member\'s language, #mod-log gets the original, the English, the rule and why; a second one is a timeout', async () => {
   verdicts = (batch) => batch.map(() => ({ verdict: 'remove', category: 'hate', rule: 1, reason: 'Hate against a nationality.', english: 'All [nationality] are vermin', language: 'fr' }));

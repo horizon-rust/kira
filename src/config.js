@@ -599,8 +599,11 @@ export const TRIAGE = {
 
 // Moderation knobs.
 export const MOD = {
-  floodMessages: 6, floodWindowMs: 8_000,        // 6 messages in 8 s
+  // 8 messages in 10 s: 6 in 8 s caught people typing one sentence over several lines (cases #44, #51, 2026-11-04/05).
+  floodMessages: 8, floodWindowMs: 10_000,
   repeatCount: 3, repeatWindowMs: 60_000,        // the same message 3 times in a minute (any channels)
+  // …but short talk ("no", "omfg", a ping: under 20 characters, no link, no heading) only at 5 (src/spam-kit.js).
+  shortRepeatCount: 5, shortChars: 20,
   // Spam timeouts get longer each time within a day: 10 min, 1 h, 1 day.
   spamTimeoutsMs: [10 * 60_000, 60 * 60_000, 24 * 60 * 60_000],
   newAccountDays: 3,                             // accounts younger than this can't post links
