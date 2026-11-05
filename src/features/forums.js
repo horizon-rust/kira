@@ -20,7 +20,7 @@ export const onTemplateOk = (fn) => okHooks.push(fn);
 const passed = (thread, starter) => { for (const fn of okHooks) Promise.resolve().then(() => fn(thread, starter)).catch(console.error); };
 
 // What a post is missing, as the template's labels.
-function missing(spec, msg) {
+export function missing(spec, msg) {
   const check = spec.check;
   if (!check) return [];
   const text = `${msg.channel.name ?? ''}\n${msg.content ?? ''}`;
