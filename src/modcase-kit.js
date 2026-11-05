@@ -32,8 +32,8 @@ export const QUESTIONS = [
 export const MODMAIL = { staleMs: 12 * HOUR };
 // The official Minecraft server's ops decide its appeals (Ludovic, 2026-10-30: luzW, his own account, and bunchy7s;
 // bunchy7s stepped down as mod on 2026-11-02). Ops on 2026-11-04: Ludovic (ludovic1), rdbt (in game rdbtclient) and
-// levzzz5154; luzW and azetech_ join once their Discord ids are confirmed.
-export const MC_OPS = ['622720516779802630', '777346923232886784', '821858512975953993'];
+// levzzz5154; luzW (Discord luzgardinho) and azetech_ (Discord yn4p) added on 2026-11-05, ids confirmed by Ludovic.
+export const MC_OPS = ['622720516779802630', '777346923232886784', '821858512975953993', '287576669139763201', '1308764088444260455'];
 
 // Audit log action types (Discord's AuditLogEvent).
 const AUDIT = { kick: 20, ban: 22, unban: 23, memberUpdate: 24, roleUpdate: 25 };
