@@ -602,7 +602,11 @@ export const TRIAGE = {
 export const MOD = {
   // 8 messages in 10 s: 6 in 8 s caught people typing one sentence over several lines (cases #44, #51, 2026-11-04/05).
   floodMessages: 8, floodWindowMs: 10_000,
-  repeatCount: 3, repeatWindowMs: 60_000,        // the same message 3 times in a minute (any channels)
+  repeatCount: 3, repeatWindowMs: 60_000,        // the same message 3 times in a minute in ONE channel…
+  // …but an announcement cross-posted to several channels is sharing, not spam: only at 5 distinct channels
+  // (cases #61 and #63, 2026-11-05: one Fabric beta announcement in 3 channels timed out twice; the mods lifted both).
+  // Below that the copies are left alone. The link flood below still catches scam bots that spray every channel.
+  crossPostChannels: 5,
   // …but short talk ("no", "omfg", a ping: under 20 characters, no link, no heading) only at 5 (src/spam-kit.js).
   shortRepeatCount: 5, shortChars: 20,
   // Spam timeouts get longer each time within a day: 10 min, 1 h, 1 day.

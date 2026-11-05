@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const { MOD } = await import('../src/config.js');
-const { spamVerdict } = await import('../src/spam-kit.js');
+const { spamVerdict, liftStrike } = await import('../src/spam-kit.js');
 
 const T0 = 1_000_000;
 // `texts` sent `gap` ms apart; returns the verdict at the last one.
@@ -49,4 +49,40 @@ test('a real burst is a flood', () => {
 test('repeats more than a minute apart do not add up', () => {
   const q = 'where can i report crash reports';
   assert.deepEqual(verdict([q, q, q], 31_000), []);
+});
+
+// Case #61/#63 (2026-11-05): one announcement posted in a few channels within a minute was a false spam timeout.
+const announcement = 'Fabric mods in Horizon: beta download is out https://github.com/horizon-rust/horizon/releases';
+function posted(channels, gap = 5_000) {
+  const list = channels.map((ch, i) => ({ id: String(i), channelId: ch, at: T0 + i * gap, content: announcement.toLowerCase(), links: true }));
+  return spamVerdict(list, list.at(-1).at, MOD);
+}
+
+test('an announcement cross-posted to three channels is sharing, not spam: the copies are left alone', () => {
+  assert.deepEqual(posted(['news', 'chat', 'mods']), []);
+  assert.deepEqual(posted(['news', 'chat', 'mods', 'help']), []);
+});
+
+test('the same long message three times in one channel is still a copy-paste', () => {
+  const [why, offending] = posted(['chat', 'chat', 'chat']);
+  assert.equal(why, 'the same message 3 times');
+  assert.equal(offending.length, 3);
+});
+
+test('five channels with the same message is a spray', () => {
+  const [why, offending] = posted(['a', 'b', 'c', 'd', 'e']);
+  assert.equal(why, 'the same message in 5 channels');
+  assert.equal(offending.length, 5);
+});
+
+test('the link flood still catches a bot that sends different links to many channels', () => {
+  const list = Array.from({ length: 5 }, (_, i) => ({ id: String(i), channelId: `c${i}`, at: T0 + i * 3_000, content: `free nitro ${i} https://x.test/${i}`, links: true }));
+  assert.equal(spamVerdict(list, list.at(-1).at, MOD)[0], '5 messages with links in 30 s');
+});
+
+test('a lifted timeout no longer counts as a strike: only that timeout\'s strike goes', () => {
+  assert.deepEqual(liftStrike([T0, T0 + 3_600_000], T0 + 2_000), [T0 + 3_600_000]);
+  assert.deepEqual(liftStrike([T0, T0 + 3_600_000], T0 + 3_600_000 + 2_000), [T0]);
+  assert.deepEqual(liftStrike([T0], T0 + 3_600_000), [T0], 'no strike near that timeout: nothing dropped');
+  assert.deepEqual(liftStrike([], T0), []);
 });

@@ -23,6 +23,7 @@ import { findChannel } from '../layout-diff.js';
 import { overwrites } from '../permissions.js';
 import { failures } from '../staff-http.js';
 import * as kit from '../modcase-kit.js';
+import { liftStrike } from '../spam-kit.js';
 
 state.modcases = kit.blank(state.modcases ?? {});
 state.ownChannels ??= {};
@@ -70,6 +71,15 @@ async function refreshCase(c) {
 
 const cleanReason = (r) => (r ? r.replace(/^Kira:\s*/, '').replace(/ \(strike \d+\)$/, '') : null);
 
+// A mod lifted a timeout while it was still running: if Kira's spam ladder gave it, its strike goes too, so the next
+// timeout is not longer for one that was wrong (case #63). Kira's own Undo button takes its strike back itself.
+function dropLiftedStrike(userId, at) {
+  const lifted = Object.values(mc.cases).filter((x) => x.userId === userId && x.action === 'timeout').sort((a, b) => b.n - a.n)[0]; // the one running
+  if (lifted?.by !== kit.KIRA || !(lifted.until > at)) return;
+  const strikes = state.spamStrikes?.[userId];
+  if (strikes) state.spamStrikes[userId] = liftStrike(strikes, lifted.at);
+}
+
 async function onAudit(entry, g) {
   if (g.id !== GUILD_ID) return;
   const act = kit.auditAction(entry, { quarantineRole: quarantineRole() });
@@ -84,6 +94,7 @@ async function onAudit(entry, g) {
   const until = meta?.until ?? act.until ?? null;
   const c = kit.openCase(mc, { action: act.action, userId: act.userId, tag: tagOf(user), by, reason, ms: act.ms ?? null, until, evidence: meta?.evidence ?? null, about: meta?.about ?? null });
   if (act.action === 'quarantine') kit.quarantineSet(mc, act.userId, { until, caseNo: c.n });
+  if (act.action === 'untimeout' && (!byKira || meta)) dropLiftedStrike(act.userId, entry.createdTimestamp ?? Date.now());
   save();
   await postCase(c, meta?.components?.(c) ?? []);
   if (act.action === 'quarantine' && !meta) await stripRoles(act.userId).catch((e) => console.error('quarantine strip', e.message)); // a mod gave the role by hand
