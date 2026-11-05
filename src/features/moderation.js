@@ -9,6 +9,7 @@ import { client, state, save, channel, isStaff, clip, ago, modlog, parseDuration
 import { linkify } from '../texts.js';
 import * as kiraAi from './ai.js';
 import { honeypotExempt, honeypotAction, makeHandled, honeypotLog } from '../honeypot-kit.js';
+import { spamVerdict } from '../spam-kit.js';
 import { expect, banNotice } from './modcases.js';
 import { KIRA } from '../modcase-kit.js';
 
@@ -351,12 +352,7 @@ async function moderate(msg) {
   const list = (recent.get(msg.author.id) ?? []).filter((x) => now - x.at < Math.max(MOD.floodWindowMs, MOD.repeatWindowMs, MOD.linkWindowMs));
   list.push({ id: msg.id, channelId: msg.channel.id, at: now, content: msg.content.trim().toLowerCase(), links });
   recent.set(msg.author.id, list);
-  const burst = list.filter((x) => now - x.at < MOD.floodWindowMs);
-  const same = msg.content.trim() ? list.filter((x) => x.content === list.at(-1).content) : [];
-  const linked = list.filter((x) => x.links && now - x.at < MOD.linkWindowMs);
-  const [why, offending] = burst.length >= MOD.floodMessages ? [`${burst.length} messages in ${MOD.floodWindowMs / 1000} s`, burst]
-    : same.length >= MOD.repeatCount ? [`the same message ${same.length} times`, same]
-    : linked.length >= MOD.linkFloodMessages ? [`${linked.length} messages with links in ${MOD.linkWindowMs / 1000} s`, linked] : [];
+  const [why, offending] = spamVerdict(list, now, MOD);
   if (!why) { queueAi(msg); return false; }
   recent.delete(msg.author.id);
   for (const x of offending) dropAi(x.id); // deleted below: not worth reading
