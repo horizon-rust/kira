@@ -293,3 +293,35 @@ test('the website\'s routes: a link to see one\'s bans, the form, the Moderation
   assert.equal(route('mod/cases').role, 'mod');
   assert.deepEqual((await route('appeal/config').handler()).body.signIn, false, 'no client secret: no sign-in button');
 });
+
+test('a mod lifting Kira\'s spam timeout takes its strike back; Kira\'s own Undo and a mod\'s own timeout leave strikes alone', async () => {
+  Object.assign(core.state.channels, { modactions: 'ma', modlog: 'ml' });
+  const posted = [];
+  const chan = { send: async (m) => { const msg = { ...m, id: `s${posted.length}`, url: 'https://discord.com/channels/g/c/m', channelId: 'ma', edit: async () => {} }; posted.push(msg); return msg; }, messages: { fetch: async () => null } };
+  core.client.channels.cache.set('ma', chan);
+  core.client.channels.cache.set('ml', chan);
+  core.client.users.fetch = async (id) => ({ id, tag: id, username: id, send: async () => {} });
+  core.client.user = { id: 'KIRA' };
+  const now = Date.now();
+  const entry = (executorId, change) => ({ action: 24, targetId: 'u7', executorId, reason: null, changes: [change], createdTimestamp: Date.now() });
+  const set = { key: 'communication_disabled_until', new: new Date(now + H).toISOString() };
+  const cleared = { key: 'communication_disabled_until', old: new Date(now + H).toISOString() };
+
+  // Kira's automatic timeout (the ladder gave strike 1 a moment ago) …
+  core.state.spamStrikes = { u7: [now - 1_000] };
+  f.expect('u7', 'timeout', { by: kit.KIRA, reason: 'spam (the same message 3 times)', noDm: true });
+  await f._test.onAudit(entry('KIRA', set), { id: GUILD_ID });
+  // … Kira's Undo lifts it itself and took the strike back already: the audit entry must not drop another.
+  core.state.spamStrikes.u7 = [now - 1_000];
+  await f._test.onAudit(entry('KIRA', cleared), { id: GUILD_ID });
+  assert.deepEqual(core.state.spamStrikes.u7, [now - 1_000], 'Undo handles its own strike');
+  // A mod lifts it in Discord: its strike goes.
+  await f._test.onAudit(entry('mod1', cleared), { id: GUILD_ID });
+  assert.deepEqual(core.state.spamStrikes.u7, []);
+
+  // A mod's own timeout is not a Kira strike: lifting it leaves the strikes alone.
+  core.state.spamStrikes = { u7: [now - 5_000] };
+  await f._test.onAudit(entry('mod1', set), { id: GUILD_ID });
+  await f._test.onAudit(entry('mod1', cleared), { id: GUILD_ID });
+  assert.equal(core.state.spamStrikes.u7.length, 1);
+});
