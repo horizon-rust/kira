@@ -82,7 +82,7 @@ test('claim then unclaim within 10 minutes is refused; names go to GitHub in a c
   assert.match(await wb.claim(again, null, 77), /a moment ago/); // and no instant re-claim either
 });
 
-test('a member holds at most 3 claims, and waits between claims across issues; maintainers don\'t (N1)', async () => {
+test('a member holds at most 8 claims, and waits between claims across issues; maintainers don\'t (N1)', async () => {
   const wb = await import('../src/features/workboard.js');
   wb._test.setGitHub({
     get: async (path) => (path.includes('/labels/') ? {} : { number: Number(path.split('/').pop()), title: 'Issue', html_url: 'https://github.com/x/y/issues/1', state: 'open', labels: [] }),
@@ -92,9 +92,12 @@ test('a member holds at most 3 claims, and waits between claims across issues; m
   const later = () => { wb._test.work.memberGithubAt[u.id] -= 3 * 60_000; };
   assert.match(await wb.claim(u, null, 101), /is yours/);
   assert.match(await wb.claim(u, null, 102), /a moment ago: try again in \d+ s/); // per-member pause, another issue
-  later(); assert.match(await wb.claim(u, null, 102), /is yours/);
-  later(); assert.match(await wb.claim(u, null, 103), /is yours/);
-  later(); assert.match(await wb.claim(u, null, 104), /already have 3 claimed issues/);
+  for (const n of [102, 103, 104, 105, 106, 107, 108]) { later(); assert.match(await wb.claim(u, null, n), /is yours/); }
+  later(); assert.match(await wb.claim(u, null, 109), /already have 8 claimed issues/);
+  // An issue an open pull request already fixes no longer counts: #101's PR frees a slot.
+  wb._test.setRaw({ pulls: [{ state: 'open', title: 'Fix it', body: 'Fixes #101' }], issues: [], branches: [] });
+  later(); assert.match(await wb.claim(u, null, 109), /is yours/);
+  wb._test.setRaw(null);
   const mod = { id: '666666666666666666', displayName: 'Mod', permissions: { has: () => true } };
   for (const n of [111, 112, 113, 114]) assert.match(await wb.claim({ id: mod.id, globalName: 'Mod' }, mod, n), /is yours/);
 });
@@ -110,21 +113,6 @@ test('an agent without maintain unclaims only its owner\'s claims (N6)', async (
 test('pending members (rules screening not passed) are not active (N6)', async () => {
   core.client.rest.get = async () => ({ user: { id: '9' }, pending: true });
   assert.equal(await feat.isActiveMember('999999999999999999', Date.now() + 60_000), false);
-});
-
-test('#dev-log from agents: 10 lines an hour per member; notes on one card merge into one line (N2)', async () => {
-  const posted = [];
-  feat._test.setPoster(async (line) => { const msg = { content: line, edits: [], edit: async ({ content }) => { msg.content = content; msg.edits.push(content); } }; posted.push(msg); return msg; });
-  const p = { user: '121212121212121212', name: 'Busy', scope: 'write' };
-  const card = { id: 'card#9', number: 9, url: null };
-  for (let i = 0; i < 5; i++) await feat._test.noteLine(p, card, `step ${i}\n# not a heading`);
-  assert.equal(posted.length, 1);
-  assert.equal(posted[0].edits.length, 4);
-  assert.match(posted[0].content, /step 0.*step 4/);
-  for (let i = 0; i < 15; i++) await feat._test.agentLine(p, `move ${i}`);
-  assert.equal(posted.length, 10); // 1 note line + 9 more: the hour's 10
-  const other = { ...p, user: '131313131313131313' };
-  assert.ok(await feat._test.agentLine(other, 'someone else'));
 });
 
 test('one-line text: newlines can\'t start headings or fake lines (and the rest is escaped)', async () => {

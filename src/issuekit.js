@@ -4,7 +4,7 @@
 import { suspicious } from './agents.js';
 
 export const MINUTE = 60_000;
-const MARK = '<!-- kira -->'; // on every comment Kira writes, so they're never relayed back to Discord
+export const MARK = '<!-- kira -->'; // on every comment Kira writes, so they're never relayed back to Discord
 const VOTES = '<!-- kira:votes -->';
 
 // Discord text made safe to put in an issue: no HTML, no @mentions, no #refs or issue links (no
@@ -45,13 +45,17 @@ export function withVotes(body, n) {
 
 // The body of a new issue: the post quoted, who posted it (display name only), the thread, the
 // attachments as links.
-export function issueBody({ text, author, forum, threadUrl, tags = [], attachments = [], votes = null }) {
+// `notes`: the version and OS Kira copied word for word from the report (src/ai-kit.js checkBugDraft), shown above
+// it; `related`: an open issue that may be the same bug (the reporter didn't say).
+export function issueBody({ text, author, forum, threadUrl, tags = [], attachments = [], votes = null, notes = null, related = null }) {
   const lines = [
+    ...(notes?.version || notes?.os ? [`**Version:** ${neutralise(notes.version, 120) || 'not given'} · **OS:** ${neutralise(notes.os, 120) || 'not given'} <sub>(copied from the report)</sub>`, ''] : []),
     quote(neutralise(text, 6000) || '(no text)'),
     '',
     `Reported on Discord by **${neutralise(author, 64).replace(/[*_~|]/g, '') || 'a member'}** in #${forum} · [Discord thread](${threadUrl})`,
   ];
   if (tags.length) lines.push(`Tags: ${tags.map((t) => neutralise(t, 40)).join(', ')}`);
+  if (related) lines.push(`Kira's search found an open issue that might be related: #${Number(related)} (the reporter didn't say).`);
   if (attachments.length) {
     lines.push('', '**Attachments** (Discord links expire after a while; the thread keeps them)');
     for (const a of attachments.slice(0, 10)) lines.push(`- [${neutralise(a.name, 100).replace(/[[\]]/g, '')}](${a.url})`);
@@ -70,6 +74,12 @@ export function followupComment(author, items) {
     return [quote(neutralise(i.text, 3000) || '(no text)'), ...(files.length ? ['', ...files] : [])].join('\n');
   });
   return [`**${neutralise(author, 64).replace(/[*_~|]/g, '')}** added on Discord:`, '', parts.join('\n\n'), '', MARK].join('\n');
+}
+
+// A report added to an existing issue (the same bug): the post quoted, with its attachments.
+export function reportComment({ author, threadUrl, text, attachments = [] }) {
+  const files = attachments.slice(0, 10).map((a) => `- [${neutralise(a.name, 100).replace(/[[\]]/g, '')}](${a.url})`);
+  return [`Also reported on Discord by **${neutralise(author, 64).replace(/[*_~|]/g, '')}**: [Discord thread](${threadUrl})`, '', quote(neutralise(text, 4000) || '(no text)'), ...(files.length ? ['', ...files] : []), '', MARK].join('\n');
 }
 
 export const linkComment = (author, threadUrl) =>
@@ -201,3 +211,31 @@ export function answerText(items, issueRef) {
   out.push(`-# ${issueRef}`);
   return out.join('\n');
 }
+
+// ── Help requests posted as bugs (Ludovic, 2026-10-30: #horizon-bugs is for reproducible bugs only) ─────────────────
+
+// "Can't launch", "won't start", "how do I…", sign-in trouble, low FPS: a request for help, which belongs in
+// #horizon-support. A post with a tag about the game itself (crash, rendering, gameplay…), or that names a crash, a
+// panic or a wrong result in the game, is a bug. Kira only points the post to #horizon-support; the poster can still
+// say it's a bug.
+const HELP = [
+  /\b(horizon|the game|game|launcher|it|minecraft)\s+(can'?t|cannot|won'?t|doesn'?t|does not|isn'?t|is not)\s+(even\s+)?(launch|start|open|run|install|update)/i,
+  /\bi\s+(can'?t|cannot|can not|am unable to|am not able to)\s+(even\s+)?(launch|start|run|play|install|download|update|log ?in|sign ?in|login|join|connect)\b/i,
+  /\b(horizon|the game|game|launcher|it)\s+(is\s+)?not (launching|starting|opening|working)\b/i,
+  /^\s*(how|why|where|what|can|is|does|do)\b[^\n]*\?\s*$/im,
+  /\b(how do i|how can i|how to|need help|please help|help me)\b/i,
+  /\b(low|bad|poor|terrible)\s+(fps|frame ?rate|performance)\b/i,
+  /\b(sign[- ]?in|log[- ]?in|login|microsoft account|account)\b[^\n]{0,40}\b(error|fail\w*|problem|issue|not work\w*|broken)\b/i,
+];
+const GAME_BUG = /\b(crash\w*|panic\w*|stack ?trace|exception|segfault|glitch\w*|desync\w*|duplicat\w*|renders?|rendering|flicker\w*|instead of)\b/i;
+const HELP_TAGS = new Set(['install / launch', 'performance']); // a game tag (crash, rendering…) means a bug
+
+export function looksLikeHelp(title, text, tags = []) {
+  if (tags.some((t) => !HELP_TAGS.has(t) && t !== 'via /report')) return false;
+  const all = `${title ?? ''}\n${text ?? ''}`;
+  if (GAME_BUG.test(all)) return false;
+  return HELP.some((re) => re.test(all));
+}
+
+export const helpPointer = (supportId, userId) =>
+  `🤝 This looks like a request for help rather than a bug in the game, so I haven't sent it to GitHub. Ask in ${supportId ? `<#${supportId}>` : '#horizon-support'}: Kira gives a first answer there and 🤝 Support helps. <@${userId}>, if it is a bug you can make happen again (with the steps), reply **bug** here and I'll send it to GitHub.`;

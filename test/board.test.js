@@ -109,7 +109,7 @@ test('writes count only claims and owned Kira cards, never linked GitHub logins 
 });
 
 test('card links: https on github.com or playhorizon.dev only, nothing that breaks a Markdown link (M3)', () => {
-  for (const ok of ['https://github.com/ludovic111/horizon/issues/40', 'https://playhorizon.dev/', 'https://www.github.com/x', 'https://docs.playhorizon.dev/a?b=c#d']) assert.ok(board.safeCardUrl(ok), ok);
+  for (const ok of ['https://github.com/horizon-rust/horizon/issues/40', 'https://playhorizon.dev/', 'https://www.github.com/x', 'https://docs.playhorizon.dev/a?b=c#d']) assert.ok(board.safeCardUrl(ok), ok);
   for (const bad of [
     'https://a.com/x>)[free nitro](https://evil.example)', 'https://github.com/x>)[free nitro](https://evil.example)',
     'https://github.com/a b', 'https://github.com/x)', 'https://github.com/<x>', 'http://github.com/x', 'javascript:alert(1)',

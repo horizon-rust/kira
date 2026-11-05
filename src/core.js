@@ -25,7 +25,11 @@ export const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User, Partials.GuildMember],
 });
 
-export const channel = (key) => client.channels.cache.get(state.channels[key]);
+// Message ids Kira deletes on purpose in bulk (src/features/chatclear.js): no "Message deleted" line each in #mod-log.
+export const quietDeletes = new Set();
+
+// Setup's channels (state.channels), else the ones Kira made herself because setup hadn't yet (state.ownChannels).
+export const channel = (key) => client.channels.cache.get(state.channels[key] ?? state.ownChannels?.[key]);
 export const isStaff = (member) => !!member?.permissions?.has(P.ManageMessages);
 export const clip = (s, n = 1000) => ((s ?? '').length > n ? s.slice(0, n - 1) + '…' : s) || '*(no text)*';
 export const ago = (date) => {
@@ -33,10 +37,10 @@ export const ago = (date) => {
   return d < 1 ? 'less than a day' : d === 1 ? '1 day' : `${d} days`;
 };
 
-export async function modlog(title, description, color = 0x888888, fields = [], key = 'modlog') {
-  const ch = channel(key);
+export async function modlog(title, description, color = 0x888888, fields = [], key = 'modlog', components = []) {
+  const ch = channel(key) ?? channel('modlog'); // a split-off channel (#mod-actions, #join-leave…) not made yet: #mod-log
   if (!ch) return null;
-  return ch.send({ embeds: [new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).addFields(fields).setTimestamp()], allowedMentions: { parse: [] } }).catch((e) => { console.error(e); return null; });
+  return ch.send({ embeds: [new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).addFields(fields).setTimestamp()], components, allowedMentions: { parse: [] } }).catch((e) => { console.error(e); return null; });
 }
 
 // "10m", "2h", "3d", "1h30m" → milliseconds (null if it can't be read).

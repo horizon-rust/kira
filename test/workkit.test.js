@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as wk from '../src/workkit.js';
 import { announced } from '../src/releases.js';
-import { LAYOUT, DEFAULT_CHANNELS, ROLES, RETIRED_ROLES, RETIRED, WORK, SERVER } from '../src/config.js';
+import { LAYOUT, DEFAULT_CHANNELS, ROLES, RETIRED_ROLES, RETIRED, REPLACED, WORK, SERVER } from '../src/config.js';
 
 test('fixesIn: the closing keywords GitHub knows, several issues, no false positives', () => {
   assert.deepEqual(wk.fixesIn('Fixes #12'), [12]);
@@ -73,35 +73,27 @@ test('a column: one line per card with link, people, labels, pull requests; cut 
   assert.equal(empty.title, '📥 To do (0)');
 });
 
-test('dev-log lines never ping and name the PR', () => {
-  const line = wk.logLine.opened({ number: 56, title: 'Fix creative tab', url: 'https://github.com/x/y/pull/56', who: 'Cosmic', fixes: [12] });
-  assert.equal(line, '🟢 **Cosmic** opened [#56 Fix creative tab](<https://github.com/x/y/pull/56>) (fixes #12)');
-  assert.doesNotMatch(Object.values(wk.logLine).map((f) => f({ number: 1, title: 't', url: 'u', who: 'w' }, 14)).join(), /<@/);
-  assert.match(wk.claimComment('Cosmic', 'Online5277', 12, 14), /Claimed by `Cosmic` on Discord \(GitHub: `Online5277`\)/);
-  // Display names can't mention, link or format on GitHub (L5).
-  assert.equal(wk.githubName('@ludovic111 **[x](https://evil.example)**'), '`@ludovic111 **[x](https://evil.example)*`'); // cut at 40
-  assert.equal(wk.githubName('a`b`\n@team'), "`a'b''@team`");
-  assert.equal(wk.githubName(''), '`someone`');
-  assert.match(wk.unclaimComment('@here', 'expired'), /^The claim by `@here` lapsed/);
-  // Claim/unclaim cooldown per issue (H1).
-  assert.equal(wk.cooldownLeft(undefined, 1000, 600_000), 0);
-  assert.equal(wk.cooldownLeft(1000, 1000 + 60_000, 600_000), 540_000);
-  assert.equal(wk.cooldownLeft(1000, 1000 + 600_000, 600_000), 0);
-  assert.ok(wk.unclaimComment('Cosmic', 'expired').includes(wk.MARK));
-});
-
 test('#releases: only the Horizon game and launcher', () => {
   assert.equal(announced('horizon', { tag_name: 'v2026.10.13.1' }), true);
   assert.equal(announced('horizon', { tag_name: 'launcher-v0.1.4' }), true);
-  assert.equal(announced('horizon', { tag_name: 'nightly' }), false);
+  assert.equal(announced('horizon', { tag_name: 'nightly' }), true); // the game's release since 2026-10-28
+  assert.equal(announced('horizon', { tag_name: 'nightly-2026-10-27' }), false); // posted when it was `nightly`
   assert.equal(announced('lsuite', { tag_name: 'v1.0.0' }), false);
 });
 
-test('the Horizon-only layout: the board channels exist, the old scope is gone, retired roles are gone', () => {
+test('the Horizon-only layout: #updates replaces the board channels, the old scope is gone, retired roles are gone', () => {
   const horizon = LAYOUT.find((g) => g.key === 'horizon');
   const keys = horizon.channels.map((c) => c.key);
-  for (const k of ['horizoninfo', 'horizonchat', 'horizonbugs', 'horizonideas', 'showcase', 'releases', 'workboard', 'devlog']) assert.ok(keys.includes(k), k);
-  for (const k of ['workboard', 'devlog']) assert.equal(horizon.channels.find((c) => c.key === k).readonly, true);
+  for (const k of ['horizonbugs', 'horizonideas', 'horizonchat', 'showcase', 'releases', 'updates']) assert.ok(keys.includes(k), k);
+  assert.ok(LAYOUT.find((g) => g.key === 'start').channels.some((c) => c.key === 'horizoninfo'), 'the download is in start here');
+  const official = LAYOUT.find((g) => g.key === 'start').channels.find((c) => c.key === 'officialserver');
+  assert.ok(official?.readonly, 'the official server has a read-only channel in start here');
+  assert.equal(horizon.channels.find((c) => c.key === 'updates').readonly, true);
+  for (const r of REPLACED) {
+    assert.ok(!LAYOUT.some((g) => g.channels.some((c) => c.key === r.key)), `${r.key} is replaced but in the layout`);
+    assert.ok(LAYOUT.some((g) => g.channels.some((c) => c.key === r.by)), `${r.key} is replaced by ${r.by}, which is not in the layout`);
+  }
+  assert.deepEqual(REPLACED.map((r) => r.name), ['work-board', 'dev-log', 'off-topic']);
   assert.ok(!LAYOUT.some((g) => g.archive), 'no archive category: the old channels were deleted');
   const live = LAYOUT.flatMap((g) => g.channels.map((c) => c.key));
   for (const k of ['projects', 'resources', 'feedback', 'communityprojects', 'help', 'hire', 'beats', 'collabs', 'trackposts']) assert.ok(!live.includes(k), `${k} is back in the layout`);
@@ -130,37 +122,13 @@ test('CI failures: reported once per failing commit, not at the first look (step
   assert.deepEqual(r.report.map((p) => p.number), [1]); // a new commit, still failing
   r = wk.ciChanges([pr(1, 'passing', 'a3')], r.seen);
   assert.deepEqual(r.seen, {});
-  assert.doesNotMatch(wk.noticeLine.ciFailing(pr(3, 'failing', 'c')), /<@/);
 });
 
-test('review reminders: ready, no review, 2 days, then every 2 days (step 4)', () => {
-  const D = wk.DAY;
-  const now = 100 * D;
-  const pr = (number, extra) => ({ number, draft: false, reviews: 0, createdAt: now - 3 * D, title: 't', url: 'u', who: 'w', ...extra });
-  let r = wk.reviewsDue([pr(1)], undefined, now, 2 * D);
-  assert.deepEqual(r.due, []); // seeded
-  r = wk.reviewsDue([pr(1), pr(2, { draft: true }), pr(3, { reviews: 1 }), pr(4, { createdAt: now + D })], r.pinged, now + 2 * D, 2 * D);
-  assert.deepEqual(r.due.map((p) => p.number), [1]);
-  assert.deepEqual(wk.reviewsDue([pr(1)], r.pinged, now + 3 * D, 2 * D).due, []); // not again for 2 days
-  assert.deepEqual(wk.reviewsDue([pr(1)], r.pinged, now + 4 * D, 2 * D).due.map((p) => p.number), [1]);
-});
 
-test('the weekly digest: its slot, parity from the README badge, the text (step 4)', () => {
-  const mon9 = Date.UTC(2026, 9, 12, 9); // Monday 12 October 2026, 09:00 UTC
-  assert.equal(wk.digestSlot(mon9 + 1000, { weekday: 1, hour: 9 }), mon9);
-  assert.equal(wk.digestSlot(mon9 - 1000, { weekday: 1, hour: 9 }), mon9 - 7 * wk.DAY);
-  assert.equal(wk.digestSlot(Date.UTC(2026, 9, 14, 2), { weekday: 1, hour: 9 }), mon9); // Wednesday
-  const readme = '<img src="https://img.shields.io/badge/vanilla%20parity-100%25-F0795A"> … all 281 parity harnesses, on Linux';
-  assert.deepEqual(wk.parityFrom(readme), { percent: 100, harnesses: 281 });
-  assert.deepEqual(wk.parityFrom('nothing'), { percent: null, harnesses: null });
-  const t = wk.digestText({
-    merged: [{ number: 55, title: 'Worldgen', url: 'https://github.com/x/y/pull/55', who: 'ludovic' }],
-    opened: [], releases: [{ name: 'Horizon 2026.10.14', tag: 'v2026.10.14', url: 'https://github.com/x/y/releases/tag/v2026.10.14' }],
-    parity: { percent: 100, harnesses: 281 }, goodFirst: [{ number: 60, title: 'Easy one', url: 'https://github.com/x/y/issues/60' }],
-  });
-  assert.match(t.description, /^\*\*Vanilla parity: 100%\*\* of 281 harnesses/);
-  assert.match(t.description, /Merged \(1\)\*\*\n• \[#55 Worldgen\]/);
-  assert.match(t.description, /New issues \(0\)\*\*\nNone\./);
-  assert.match(t.description, /Good first tasks\*\*\n• \[#60 Easy one\]/);
-  assert.doesNotMatch(t.description, /<@|@everyone/);
+test('an issue assigned on GitHub is taken, except by its own assignee', () => {
+  const issue = { assignees: [{ login: 'Dev' }, { login: 'other' }] };
+  assert.deepEqual(wk.heldOnGitHub(issue, null), ['Dev', 'other']);
+  assert.deepEqual(wk.heldOnGitHub(issue, 'dev'), ['other']);
+  assert.deepEqual(wk.heldOnGitHub({ assignees: [] }, 'dev'), []);
+  assert.deepEqual(wk.heldOnGitHub({}, 'dev'), []);
 });

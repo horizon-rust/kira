@@ -4,8 +4,9 @@ import { SlashCommandBuilder, EmbedBuilder, ChannelType, MessageFlags, ThreadAut
 import { GUILD_ID, LINKS, COLOR, LAYOUT, HORIZON, ROLES, STARBOARD } from '../config.js';
 import { client, state, save, channel, clip, modlog, parseDuration, human } from '../core.js';
 import { levelOf } from './levels.js';
-import { WELCOME_CHANNEL, welcomeMessage } from '../texts.js';
+import { WELCOME_CHANNEL, welcomeMessage, HELP_TITLE, helpText } from '../texts.js';
 import { isOwnPost } from '../adopt.js';
+import { mailStatus, mailRow, closeMail, isAppealThread } from './modcases.js';
 
 const specs = LAYOUT.flatMap((g) => g.channels);
 const reactFor = (channelId) => specs.find((c) => state.channels[c.key] === channelId)?.react;
@@ -28,21 +29,13 @@ export const commands = [
 ];
 
 const linksEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle('🌅 Horizon').setDescription([
-  `🌐 Website: ${LINKS.horizonSite}`, `⬇️ Launcher: ${LINKS.horizonLauncher}`, `💻 Code: ${LINKS.horizon}`,
+  `🌐 Website: ${LINKS.horizonSite}`, `🧭 The hub (roadmap, kanban, journal, how to help): ${LINKS.hub}`, `⬇️ Launcher: ${LINKS.horizonLauncher}`, `💻 Code: ${LINKS.horizon}`,
   `🐛 Issues: ${LINKS.horizonIssues}`, `🔀 Pull requests: ${LINKS.horizonPulls}`,
   state.invite ? `💬 This server: https://discord.gg/${state.invite}` : null,
 ].filter(Boolean).join('\n'));
 
-// /help: what Kira does, by topic (only the asker sees it).
-const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle("👋 I'm Kira, Horizon's helper").setDescription([
-  `**Horizon**: \`/horizon\` what it is and where to get it · \`/links\``,
-  `**Bugs and ideas**: post in <#${state.channels.horizonbugs}> or <#${state.channels.horizonideas}> with the template; I send each post to GitHub and tell you here when it's answered or fixed.`,
-  `**Contributing**: <#${state.channels.workboard}> is the board. \`/claim <issue>\` before you start, \`/unclaim\`, \`/working\`, \`/board\`, \`/link-github\`. Maintainers: \`/move\`.`,
-  '**Your work**: `/mytasks` your cards · `/goodfirst` good first tasks · `/notify` DMs when CI fails on your pull requests · `/status` say what you are on · `/agent connect` lets your AI coding agent read the board and work on your cards (personal token, `/agent tokens`, `/agent revoke`; setup in #horizon-info).',
-  `**Releases**: every new Horizon version and launcher in <#${state.channels.releases}>.`,
-  '**You**: `/rank`, `/leaderboard`, `/remind`, `/userinfo`, `/avatar`, `/room` (your own voice channel: join ➕ create your room).',
-  '**The mods**: DM me to reach them privately, `/report` or right-click a message → Apps → Report to mods. `/modmail`.',
-].join('\n\n'));
+// /help: a short tour of the server, then what Kira does, by topic (only the asker sees it; texts.js).
+const helpEmbed = () => new EmbedBuilder().setColor(COLOR).setTitle(HELP_TITLE).setDescription(helpText(state));
 
 export const handlers = {
   help: (i) => i.reply({ embeds: [helpEmbed()], flags: MessageFlags.Ephemeral }),
@@ -114,27 +107,24 @@ async function fromMember(msg) {
     thread = await box.threads.create({ name: `${msg.author.username}`.slice(0, 90), autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek, reason: 'mod-mail' });
     state.modmail[msg.author.id] = thread.id;
     save();
-    await thread.send({ content: `<@&${state.roles.mod}> new mod-mail from <@${msg.author.id}> (${msg.author.tag}). Write here to answer; start with \`//\` for a note they don't see; \`//close\` to close.`, allowedMentions: { roles: [state.roles.mod] } });
+    await thread.send({ content: `<@&${state.roles.mod}> new mod-mail from <@${msg.author.id}> (${msg.author.tag}). Write here to answer; start with \`//\` for a note they don't see; \`//close\` or \`/close\` to close. The status leads the thread's name: 🟢 Open (they wrote last), 🟡 Waiting (a mod answered), 🔒 Closed.`, components: [mailRow()], allowedMentions: { roles: [state.roles.mod] } });
   }
   if (thread.archived) await thread.setArchived(false).catch(() => {});
   const files = msg.attachments.map((a) => a.url);
   await thread.send({ embeds: [new EmbedBuilder().setColor(0x5aa9ff).setAuthor({ name: msg.author.tag, iconURL: msg.author.displayAvatarURL() }).setDescription(clip(msg.content, 3900)).setTimestamp()], files: files.slice(0, 10) });
   await msg.react('📨').catch(() => {});
+  mailStatus(thread, 'open', msg.author.id);
   if (first) await msg.reply('📨 Sent to the mods of the Horizon server. They answer here, through me.').catch(() => {});
 }
 
 async function fromMods(msg) {
   const userId = Object.keys(state.modmail).find((k) => state.modmail[k] === msg.channelId);
-  if (!userId || msg.content.startsWith('//') && msg.content.trim() !== '//close') return;
+  if (!userId || isAppealThread(msg.channel) || msg.content.startsWith('//') && msg.content.trim() !== '//close') return;
+  if (msg.content.trim() === '//close') return closeMail(msg.channel, msg.author.id);
   const user = await client.users.fetch(userId);
-  if (msg.content.trim() === '//close') {
-    await user.send('✅ The mods closed this conversation. DM me again anytime.').catch(() => {});
-    delete state.modmail[userId]; save();
-    await msg.channel.send('Closed.');
-    return msg.channel.setArchived(true).catch(() => {});
-  }
   const ok = await user.send({ content: `**🛡️ Horizon mods:** ${msg.content}`.slice(0, 2000), files: msg.attachments.map((a) => a.url).slice(0, 10) }).then(() => true).catch(() => false);
   await msg.react(ok ? '✅' : '❌').catch(() => {});
+  if (ok) mailStatus(msg.channel, 'waiting', userId);
 }
 
 // ── Hall of fame ─────────────────────────────────────────────────────────────

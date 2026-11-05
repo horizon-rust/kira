@@ -1,21 +1,23 @@
-// The work board: Horizon's kanban in #work-board. One pinned message per column (Backlog, To do, In
-// progress, Review, Done), each card an issue or pull request with who, labels and status; Kira edits
-// them after each refresh from GitHub (every 10 minutes, after each command, and when a GitHub link is
-// posted). The board itself is data, in src/board.js; its JSON snapshot is also written to data/board.json
-// for whatever reads it next. #dev-log gets one line per pull request opened or merged, per claim and per
-// move, with no pings. /claim marks an issue as taken (the "in progress" label and a comment on GitHub); a
-// claim lapses after 14 days without activity, with a DM a few days before. /move: maintainers place a card.
-import { SlashCommandBuilder, EmbedBuilder, MessageFlags, MessageType } from 'discord.js';
-import { rateLimiter } from '../agents.js';
-import { WORK, GITHUB, COLOR } from '../config.js';
+// The work board: Horizon's kanban, built from GitHub (every 10 minutes, after each command, and when a GitHub
+// link is posted). The board itself is data, in src/board.js, written to data/board.json; the kanban people see is
+// on the hub (playhorizon.dev/hub), and Discord gets its summary, one message at the top of #updates edited after
+// each refresh. /claim marks an issue as taken (the "in progress" label and a comment on GitHub); a claim lapses
+// after 14 days without activity, with a DM a few days before. /move: maintainers place a card.
+import { SlashCommandBuilder, MessageFlags, MessageType } from 'discord.js';
+import { WORK, GITHUB, HUB } from '../config.js';
 import { client, state, save, channel, isStaff } from '../core.js';
 import { dataFile } from '../store.js';
 import { makeGitHub } from '../github.js';
+import { githubToken } from '../github-app.js';
 import * as board from '../board.js';
 import * as wk from '../workkit.js';
+import { summaryText } from '../journal.js';
+import * as contributors from './contributors.js';
+import * as notify from './notify.js';
+import * as webhook from '../webhook.js';
 import { writeFileSync, renameSync, readFileSync } from 'node:fs';
 
-const TOKEN = process.env.GITHUB_TOKEN?.trim();
+const TOKEN = githubToken();
 export const enabled = !!TOKEN; // claims write labels and comments: no token, no board
 // KIRA_GITHUB_DRY_RUN=1: GitHub writes (labels, comments) are only logged, for a test deployment.
 let gh = makeGitHub({ token: TOKEN, dryRun: process.env.KIRA_GITHUB_DRY_RUN === '1' });
@@ -24,15 +26,13 @@ const LABEL = encodeURIComponent(WORK.label);
 export const BOARD_FILE = dataFile('board.json');
 
 // claims: issue number → { user, who, title, url, since, activity, reminded }; links: Discord id → GitHub login;
-// moves: card id → { column, by, at, auto } (src/board.js); columns: column key → its message in #work-board;
-// logged: PR numbers already in #dev-log; seeded: false until the first look.
+// moves: card id → { column, by, at, auto } (src/board.js); summary: the board's message in #updates.
 const work = (state.work ??= {});
 work.claims ??= {};
 work.links ??= {};
 work.moves ??= {};
-work.columns ??= {};
-work.logged ??= { opened: [], merged: [] };
-work.seeded ??= false;
+// Gone with #work-board and #dev-log (2026-10-25): the column messages, the logged pull requests, the digest.
+for (const key of ['columns', 'board', 'logged', 'seeded', 'digestAt', 'reviewPinged']) delete work[key];
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
 
 // Discord ↔ GitHub: links set with /link-github, then the known ones from config.js.
@@ -51,12 +51,6 @@ const person = (login) => {
 const whoIs = (login) => person(login).name;
 const nameOf = (member, user) => member?.displayName ?? user.globalName ?? user.username;
 
-export async function log(line) {
-  const ch = channel('devlog');
-  if (!ch) return null;
-  return ch.send({ content: line, allowedMentions: { parse: [] } }).catch((e) => { console.error('dev-log', e.message); return null; });
-}
-
 let labelReady = false;
 async function ensureLabel() {
   if (labelReady) return;
@@ -70,7 +64,7 @@ async function ensureLabel() {
 
 // Claims issue `n` for a Discord user. Returns the text of the answer.
 export async function claim(user, member, n) {
-  const issue = await gh.get(`${REPO}/issues/${n}`);
+  const issue = await gh.get(`${REPO}/issues/${n}`, { person: true });
   if (!issue) return `There's no issue #${n} in ${WORK.repo}.`;
   if (issue.pull_request) return `#${n} is a pull request. Claim the issue it fixes instead.`;
   if (issue.state !== 'open') return `#${n} is closed: nothing to claim.`;
@@ -82,12 +76,16 @@ export async function claim(user, member, n) {
     refreshSoon();
     return `#${n} is still yours: the ${WORK.expireDays} days start again.`;
   }
+  const holders = wk.heldOnGitHub(issue, loginOf(user.id));
+  if (holders.length && !isStaff(member)) return `#${n} is assigned to **${holders.join(', ')}** on GitHub: someone is on it. Pick another, or ask in the issue.`;
   if (issue.labels.some((l) => l.name === WORK.label) && !isStaff(member)) return `#${n} already has the **${WORK.label}** label on GitHub: someone is on it. Ask in #horizon-chat.`;
   const wait = wk.cooldownLeft(work.githubAt?.[n], Date.now(), WORK.claimCooldownMs);
   if (wait) return `#${n} was claimed or unclaimed a moment ago: try again in ${Math.ceil(wait / 60_000)} min.`;
   // Per member, across issues (N1): a few claims at once, and a pause between two claims or unclaims.
   if (!isStaff(member)) {
-    const held = Object.values(work.claims).filter((c) => c.user === user.id).length;
+    // An issue an open pull request already fixes doesn't count: a review can take days (rdbtCVS, 2026-10-30).
+    const fixed = new Set((raw?.pulls ?? []).filter((p) => p.state === 'open').flatMap((p) => board.fixesIn(`${p.title}\n${p.body ?? ''}`)));
+    const held = Object.entries(work.claims).filter(([k, c]) => c.user === user.id && !fixed.has(Number(k))).length;
     if (held >= WORK.maxClaims) return `You already have ${held} claimed issues: finish or \`/unclaim\` one before claiming another.`;
     const pause = wk.cooldownLeft(work.memberGithubAt?.[user.id], Date.now(), WORK.memberCooldownMs);
     if (pause) return `You claimed or unclaimed an issue a moment ago: try again in ${Math.ceil(pause / 1000)} s.`;
@@ -111,9 +109,8 @@ export async function claim(user, member, n) {
     throw e;
   }
   save();
-  await log(wk.logLine.claimed({ ...work.claims[n], number: n }));
   refreshSoon();
-  return `🔨 #${n} **${issue.title}** is yours: it's in **In progress** on <#${state.channels.workboard}>, with the **${WORK.label}** label and a comment on GitHub. Open your pull request with "Fixes #${n}" in its description so it shows on your card. \`/unclaim ${n}\` if you stop; it lapses after ${WORK.expireDays} days without activity.`;
+  return `🔨 #${n} **${issue.title}** is yours: it's in **In progress** on the board (\`/board\`, and the kanban on <${HUB.url}>), with the **${WORK.label}** label and a comment on GitHub. Open your pull request with "Fixes #${n}" in its description so it shows on your card. \`/unclaim ${n}\` if you stop; it lapses after ${WORK.expireDays} days without activity.`;
 }
 
 // Releases a claim (`why`: 'unclaimed', 'expired' or 'closed'). Removes the label; comments unless the issue closed.
@@ -124,8 +121,6 @@ async function release(n, why) {
   if (why !== 'closed') await gh.write('POST', `${REPO}/issues/${n}/comments`, { body: wk.unclaimComment(entry.who, why) }).catch((e) => console.error('unclaim comment', n, e.message));
   board.unassign(work, n);
   save();
-  if (why === 'unclaimed') await log(wk.logLine.unclaimed({ ...entry, number: n }));
-  if (why === 'expired') await log(wk.logLine.expired({ ...entry, number: n }, WORK.expireDays));
 }
 
 export async function unclaim(user, member, n) {
@@ -158,22 +153,42 @@ async function pages(path, max = 3) {
 }
 
 // Open pull requests, each with a short status (draft, CI, review).
+// With ~270 open pull requests, three reads each every refresh spent the GitHub App's whole hour (2026-10-30): a
+// head whose CI has finished is read again only after CI_RECHECK_MS (a rerun is rare), and the reviews only when
+// the pull request changed (a review bumps its updated_at).
+const CI_RECHECK_MS = 60 * 60 * 1000;
+const ciOf = new Map(); // head sha → { ci, at }
+const reviewsOf = new Map(); // pull number → { updated, reviews }
 async function openPulls() {
   const pulls = await pages(`${REPO}/pulls?state=open`);
-  return Promise.all(pulls.map(async (p) => {
+  const now = Date.now();
+  const out = await Promise.all(pulls.map(async (p) => {
+    const known = ciOf.get(p.head.sha);
+    const fresh = known && (known.ci === 'passing' || known.ci === 'failing') && now - known.at < CI_RECHECK_MS;
+    const seen = reviewsOf.get(p.number);
     const [runs, status, reviews] = await Promise.all([
-      gh.get(`${REPO}/commits/${p.head.sha}/check-runs?per_page=100`).catch(() => null),
-      gh.get(`${REPO}/commits/${p.head.sha}/status`).catch(() => null),
-      p.draft ? [] : gh.get(`${REPO}/pulls/${p.number}/reviews?per_page=100`).catch(() => []),
+      fresh ? null : gh.get(`${REPO}/commits/${p.head.sha}/check-runs?per_page=100`).catch(() => null),
+      fresh ? null : gh.get(`${REPO}/commits/${p.head.sha}/status`).catch(() => null),
+      p.draft ? [] : seen?.updated === p.updated_at ? seen.reviews
+        : gh.get(`${REPO}/pulls/${p.number}/reviews?per_page=100`).catch(() => null),
     ]);
-    const ci = wk.ciState(runs?.check_runs, status?.statuses);
+    const ci = fresh ? known.ci : wk.ciState(runs?.check_runs, status?.statuses);
+    if (!fresh) ciOf.set(p.head.sha, { ci, at: now });
+    if (!p.draft && reviews) reviewsOf.set(p.number, { updated: p.updated_at, reviews });
     return { ...p, ci, reviews: (reviews ?? []).length, status: wk.prStatus({ draft: p.draft, ci, review: wk.reviewState(reviews ?? []) }) };
   }));
+  // Closed pull requests and old heads drop out of the memos.
+  const open = new Set(pulls.map((p) => p.head.sha));
+  for (const sha of ciOf.keys()) if (!open.has(sha)) ciOf.delete(sha);
+  const numbers = new Set(pulls.map((p) => p.number));
+  for (const n of reviewsOf.keys()) if (!numbers.has(n)) reviewsOf.delete(n);
+  return out;
 }
 
 // Everything the board needs, in one go.
 async function fetchAll() {
-  const since = new Date(Date.now() - WORK.mergedDays * wk.DAY).toISOString();
+  // Rounded to the day: a since that changes on every refresh would never get a free 304.
+  const since = new Date(Math.floor((Date.now() - WORK.mergedDays * wk.DAY) / wk.DAY) * wk.DAY).toISOString();
   const [open, closed, pulls, closedPulls, branches] = await Promise.all([
     pages(`${REPO}/issues?state=open`),
     pages(`${REPO}/issues?state=closed&since=${since}`),
@@ -190,7 +205,7 @@ async function fetchAll() {
   };
 }
 
-// The pull requests as #dev-log and the claims see them.
+// The pull requests as the claims see them.
 const brief = (p) => ({ number: p.number, title: p.title, url: p.html_url, login: p.user?.login, fixes: board.fixesIn(`${p.title}\n${p.body ?? ''}`), updated: Date.parse(p.updated_at) });
 
 // Each claim: closed issues release it; activity (comments, commits, linked PRs) pushes the deadline;
@@ -225,30 +240,6 @@ async function checkClaims(prs) {
   save();
 }
 
-// Opened and merged pull requests → #dev-log, each once. The first look only records what's there.
-async function logPulls(open, merged) {
-  const L = work.logged;
-  if (!work.seeded) {
-    for (const p of [...open, ...merged]) L.opened = wk.remember(L.opened, p.number);
-    for (const p of merged) L.merged = wk.remember(L.merged, p.number);
-    work.seeded = true;
-    return save();
-  }
-  for (const p of [...open].sort((a, b) => a.number - b.number)) {
-    if (L.opened.includes(p.number)) continue;
-    L.opened = wk.remember(L.opened, p.number);
-    save();
-    await log(wk.logLine.opened({ ...p, who: whoIs(p.login) }));
-  }
-  for (const p of [...merged].sort((a, b) => a.number - b.number)) {
-    if (L.merged.includes(p.number)) continue;
-    L.merged = wk.remember(L.merged, p.number);
-    L.opened = wk.remember(L.opened, p.number);
-    save();
-    await log(wk.logLine.merged({ ...p, who: whoIs(p.login) }));
-  }
-}
-
 // ── The board ────────────────────────────────────────────────────────────────
 
 let raw = null; // the last fetch, so commands can rebuild without asking GitHub again
@@ -269,8 +260,9 @@ export const current = () => snapshot;
 export const openPullsNow = () => (raw?.pulls ?? []).filter((p) => p.state === 'open')
   .map((p) => ({ number: p.number, title: p.title, url: p.html_url, author: p.user?.login, draft: !!p.draft, status: p.status ?? null, updatedAt: p.updated_at }));
 export const branchesNow = () => raw?.branches ?? [];
-// A read of Horizon's repo on GitHub (issues, pulls, comments of ludovic111/horizon only).
-export const repoGet = (path) => gh.get(`${REPO}${path}`);
+// A read of Horizon's repo on GitHub (issues, pulls, comments of horizon-rust/horizon only).
+// An agent waits on it: it goes even inside the board's reserve.
+export const repoGet = (path) => gh.get(`${REPO}${path}`, { person: true });
 export const workState = () => work;
 // After a change made outside the commands (agents): save, rebuild the board, repaint it.
 export async function changed() {
@@ -290,108 +282,49 @@ function rebuild() {
   return s;
 }
 
-function columnPayload(column) {
-  const t = wk.columnText(column);
-  const embed = new EmbedBuilder().setColor(t.color).setTitle(t.title).setDescription(t.description).setTimestamp(Date.parse(snapshot.generatedAt));
-  if (t.footer) embed.setFooter({ text: t.footer });
-  return { embeds: [embed], allowedMentions: { parse: [] } };
-}
-
-// One pinned message per column, in order. Edited in place; if one is gone, all five are posted again
-// (so the order stays right) and the old ones are deleted.
+// The board's summary: one message at the top of #updates, pinned, edited in place after each refresh (posted
+// again if it was deleted).
 async function render() {
-  const ch = channel('workboard');
+  const ch = channel('updates');
   if (!ch || !snapshot) return;
-  if (work.board) { // the single message of the first version of the board
-    await ch.messages.fetch(work.board).then((m) => m.delete()).catch(() => {});
-    delete work.board;
-    save();
-  }
-  const found = {};
-  for (const col of board.COLUMNS) found[col.key] = work.columns[col.key] && await ch.messages.fetch(work.columns[col.key]).catch(() => null);
-  if (board.COLUMNS.every((c) => found[c.key])) {
-    for (const column of snapshot.columns) await found[column.key].edit(columnPayload(column));
-    return;
-  }
-  for (const msg of Object.values(found)) await msg?.delete().catch(() => {});
-  for (const column of snapshot.columns) {
-    const msg = await ch.send(columnPayload(column));
-    work.columns[column.key] = msg.id;
-    save();
-    await msg.pin().catch((e) => console.error('pin column', e.message));
-  }
-  // Discord's "Kira pinned a message" lines: not needed in a read-only channel.
-  const notices = (await ch.messages.fetch({ limit: 20 })).filter((m) => m.type === MessageType.ChannelPinnedMessage && m.author.id === client.user.id);
+  const payload = summaryText(snapshot, board.goodFirst(snapshot, 3), HUB.url);
+  const old = work.summary && await ch.messages.fetch(work.summary).catch(() => null);
+  if (old) return void await old.edit(payload);
+  const msg = await ch.send(payload);
+  work.summary = msg.id;
+  save();
+  await msg.pin().catch((e) => console.error('pin summary', e.message));
+  // Discord's "Kira pinned a message" line: not needed in a read-only channel.
+  const notices = (await ch.messages.fetch({ limit: 5 })).filter((m) => m.type === MessageType.ChannelPinnedMessage && m.author.id === client.user.id);
   for (const m of notices.values()) await m.delete().catch(() => {});
-  console.log('work board columns posted');
 }
 
-// ── Notices: CI failures, reviews waiting, the weekly digest ──────────────────
-// Lines in #dev-log (no pings). A pull request's author also gets a DM about a failing CI if their GitHub
-// login is linked and they turned it on with /notify (at most 5 DMs an hour each). Nothing is reported for
-// what was already there when Kira first looked (ciChanges/reviewsDue seed themselves).
-const dms = rateLimiter({ dm: [5, 3_600_000] });
-async function dmAuthor(login, text) {
-  const id = userOf(login);
-  if (!id || !work.notify?.[id] || !dms.take(id, 'dm')) return;
-  const u = await client.users.fetch(id).catch(() => null);
-  await u?.send({ content: text, allowedMentions: { parse: [] } }).catch(() => {});
-}
-
-async function notices(now = Date.now()) {
-  const open = raw.pulls.filter((p) => p.state === 'open').map((p) => ({
-    number: p.number, title: p.title, url: p.html_url, login: p.user?.login, who: whoIs(p.user?.login),
-    sha: p.head?.sha, ci: p.ci, reviews: p.reviews ?? 0, draft: !!p.draft, createdAt: Date.parse(p.created_at ?? p.updated_at),
-  }));
+// ── CI failures ──────────────────────────────────────────────────────────────
+// A pull request's author hears about CI starting to fail on its commit through /notify (src/features/notify.js),
+// which uses the webhook's check runs when it is on. Nothing for what was already failing at the first look.
+async function notices() {
+  const open = raw.pulls.filter((p) => p.state === 'open').map((p) => ({ number: p.number, title: p.title, url: p.html_url, login: p.user?.login, sha: p.head?.sha, ci: p.ci }));
   const ci = wk.ciChanges(open, work.ciSeen);
   work.ciSeen = ci.seen;
-  const rv = wk.reviewsDue(open, work.reviewPinged, now, WORK.reviewWaitMs);
-  work.reviewPinged = rv.pinged;
   save();
-  for (const p of ci.report) {
-    await log(wk.noticeLine.ciFailing(p));
-    await dmAuthor(p.login, `❌ CI is failing on your Horizon pull request #${p.number} (${p.title}): ${p.url}
--# You get these because you turned them on with /notify. /notify off stops them.`);
-  }
-  for (const p of rv.due) await log(wk.noticeLine.reviewWaiting(p, Math.floor((now - p.createdAt) / wk.DAY)));
-  await digest(now);
-}
-
-// The weekly digest in #dev-log (WORK.digest: the day and hour, UTC). Marked as sent before it's posted,
-// so a crash can never post it twice; the first time, only the current week is marked.
-async function digest(now) {
-  const slot = wk.digestSlot(now, WORK.digest);
-  if (work.digestAt === undefined) { work.digestAt = slot; return save(); }
-  if (work.digestAt >= slot) return;
-  work.digestAt = slot;
-  save();
-  const since = slot - 7 * wk.DAY;
-  const ch = channel('devlog');
-  if (!ch) return;
-  const [releases, readme] = await Promise.all([gh.get(`${REPO}/releases?per_page=20`).catch(() => []), gh.get(`${REPO}/readme`).catch(() => null)]);
-  const text = wk.digestText({
-    merged: raw.pulls.filter((p) => p.merged_at && Date.parse(p.merged_at) >= since).map((p) => ({ number: p.number, title: p.title, url: p.html_url, who: whoIs(p.user?.login) })),
-    opened: raw.issues.filter((i) => Date.parse(i.created_at) >= since).map((i) => ({ number: i.number, title: i.title, url: i.html_url })),
-    releases: (releases ?? []).filter((r) => !r.draft && Date.parse(r.published_at) >= since).map((r) => ({ name: r.name, tag: r.tag_name, url: r.html_url })),
-    parity: wk.parityFrom(readme?.content ? Buffer.from(readme.content, 'base64').toString('utf8') : ''),
-    goodFirst: snapshot ? board.goodFirst(snapshot) : [],
-  });
-  await ch.send({ embeds: [new EmbedBuilder().setColor(COLOR).setTitle(text.title).setDescription(text.description)], allowedMentions: { parse: [] } });
-  console.log('weekly digest posted');
+  for (const p of ci.report) notify.fromBoardCi(p);
 }
 
 let running = null;
+let lastRefresh = 0;
 export function refresh() {
   running ??= (async () => {
+    lastRefresh = Date.now();
     try {
       raw = await fetchAll();
       const open = raw.pulls.filter((p) => p.state === 'open').map(brief);
       const merged = raw.pulls.filter((p) => p.merged_at).map(brief);
       await checkClaims([...open, ...merged]);
-      await logPulls(open, merged);
       rebuild();
       await render();
       await notices().catch((e) => console.error('notices', e.message));
+      await contributors.afterRefresh(raw).catch((e) => console.error('contributors', e.message));
+      await notify.checkConflicts();
     } catch (e) {
       console.error('work board', e.message);
       refreshSoon(60_000); // GitHub failed (a 5xx, a timeout): try again in a minute, not in 10
@@ -408,6 +341,18 @@ export function refreshSoon(ms = 3000) {
   soon.unref?.(); // never what keeps the process alive (the Discord client does)
 }
 
+// GitHub's webhook: a change on Horizon's issues, pull requests, reviews, checks or main refreshes the board within a
+// minute (at most one refresh every WORK.webhookGapMs); the 10-minute refresh then only runs hourly as a fallback.
+const BOARD_EVENTS = new Set(['issues', 'issue_comment', 'pull_request', 'pull_request_review', 'check_suite', 'check_run', 'status', 'create', 'delete']);
+export function boardEvent(name, p) {
+  if (webhook.repoOf(p) !== WORK.repo) return false;
+  if (webhook.pushToMain(name, p)) return true;
+  if (name === 'check_run' || name === 'check_suite') return p.action === 'completed';
+  return BOARD_EVENTS.has(name);
+}
+const fromWebhook = webhook.throttle(() => refresh(), WORK.webhookGapMs, { delayMs: 5_000 });
+if (enabled) webhook.on((name, p) => { if (boardEvent(name, p)) fromWebhook(); });
+
 // A GitHub link to Horizon's pull requests or issues posted in the server: something probably changed.
 export function onMessage(msg) {
   if (enabled && new RegExp(`github\\.com/${GITHUB.owner}/${WORK.repo}/(pull|issues)/\\d+`, 'i').test(msg.content)) refreshSoon(30_000);
@@ -423,7 +368,7 @@ function workingText() {
   }
   if (!people.size) return 'Nobody is working on an issue or has a pull request open right now. Pick one on GitHub and `/claim` it.';
   const lines = [...people].map(([who, items]) => `**${who}**\n${items.map((l) => `• ${l}`).join('\n')}`);
-  return `${lines.join('\n\n')}\n\nThe live board is in <#${state.channels.workboard}>.`.slice(0, 1990);
+  return `${lines.join('\n\n')}\n\nThe kanban: <${HUB.url}>`.slice(0, 1990);
 }
 
 function boardText(column, member) {
@@ -438,7 +383,7 @@ const COLUMN_CHOICES = board.COLUMNS.map((c) => ({ name: `${c.emoji} ${c.name}`,
 
 export const commands = enabled ? [
   new SlashCommandBuilder().setName('claim').setDescription('Tell everyone you are working on a Horizon issue (GitHub label + comment)')
-    .addIntegerOption((o) => o.setName('issue').setDescription('The issue number on GitHub (ludovic111/horizon)').setRequired(true).setMinValue(1)),
+    .addIntegerOption((o) => o.setName('issue').setDescription('The issue number on GitHub (horizon-rust/horizon)').setRequired(true).setMinValue(1)),
   new SlashCommandBuilder().setName('unclaim').setDescription('Stop working on an issue you claimed: it becomes free again')
     .addIntegerOption((o) => o.setName('issue').setDescription('The issue number').setRequired(true).setMinValue(1)),
   new SlashCommandBuilder().setName('working').setDescription("Who's working on what: claimed issues and open pull requests"),
@@ -450,26 +395,17 @@ export const commands = enabled ? [
     .addStringOption((o) => o.setName('column').setDescription('Where to').setRequired(true).addChoices(...COLUMN_CHOICES))
     .addStringOption((o) => o.setName('kind').setDescription('If an issue and a pull request share the number').addChoices({ name: 'issue', value: 'issue' }, { name: 'pull request', value: 'pr' })),
   new SlashCommandBuilder().setName('goodfirst').setDescription('Good first tasks for newcomers: open issues nobody claimed yet'),
-  new SlashCommandBuilder().setName('notify').setDescription('DMs from Kira when CI fails on your pull requests (needs /link-github)')
-    .addStringOption((o) => o.setName('dm').setDescription('On or off').setRequired(true).addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })),
   new SlashCommandBuilder().setName('link-github').setDescription('Link your GitHub account, so your pull requests show your Discord name')
     .addStringOption((o) => o.setName('username').setDescription('Your GitHub username').setRequired(true).setMaxLength(39))
+    .addBooleanOption((o) => o.setName('credit').setDescription("Show your Discord name and GitHub together on the hub's contributors page (default: no)"))
     .addUserOption((o) => o.setName('member').setDescription('Mods: link someone else')),
 ] : [];
 
 export const handlers = {
   goodfirst(i) {
     const picks = snapshot ? board.goodFirst(snapshot, 10) : [];
-    if (!picks.length) return i.reply(ephemeral(`No good first tasks labelled right now. Look at **To do** in <#${state.channels.workboard}>, or ask in #horizon-chat.`));
+    if (!picks.length) return i.reply(ephemeral(`No good first tasks labelled right now. See what is being built with \`/roadmap\`, or the kanban on <${HUB.url}>, or ask in #horizon-chat.`));
     return i.reply(ephemeral(`🌱 **Good first tasks** (open, nobody on them):\n${picks.map((c) => `• [#${c.number} ${c.title.replace(/[[\]]/g, '')}](<${c.url}>)`).join('\n')}\n\n\`/claim <number>\` before you start.`));
-  },
-  notify(i) {
-    const on = i.options.getString('dm') === 'on';
-    work.notify ??= {};
-    if (on) work.notify[i.user.id] = true; else delete work.notify[i.user.id];
-    save();
-    const linked = loginOf(i.user.id);
-    return i.reply(ephemeral(on ? `🔔 You'll get a DM when CI fails on your pull requests${linked ? ` (GitHub **${linked}**)` : '. Link your GitHub account first: `/link-github <username>`'}. \`/notify dm:off\` stops it.` : '🔕 No more CI DMs.'));
   },
   async claim(i) {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -499,7 +435,6 @@ export const handlers = {
     rebuild();
     await render().catch((e) => console.error('work board', e.message));
     const name = (key) => board.COLUMNS.find((c) => c.key === key).name;
-    if (result.from !== result.to) await log(wk.logLine.moved({ who: nameOf(i.member, i.user), number: card.number, title: card.title, url: card.url, to: name(result.to) }));
     const back = result.to === card.auto ? ' (where GitHub puts it, so no manual move is kept)' : `. It stays there until its state on GitHub changes (GitHub would put it in ${name(card.auto)}).`;
     return i.reply(ephemeral(`📌 #${card.number} → **${name(result.to)}**${back}`));
   },
@@ -509,20 +444,41 @@ export const handlers = {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const wanted = i.options.getString('username').trim().replace(/^@/, '');
     if (!/^[a-z\d](?:[a-z\d-]{0,38})$/i.test(wanted)) return i.editReply(ephemeral(`\`${wanted}\` isn't a GitHub username.`));
-    const ghUser = await gh.get(`/users/${encodeURIComponent(wanted)}`);
+    const ghUser = await gh.get(`/users/${encodeURIComponent(wanted)}`, { person: true });
     if (!ghUser) return i.editReply(ephemeral(`There's no GitHub user \`${wanted}\`.`));
     const taken = userOf(ghUser.login);
     if (taken && taken !== target.id && !isStaff(i.member)) return i.editReply(ephemeral(`\`${ghUser.login}\` is already linked to someone else. Ask a mod if that's wrong.`));
-    for (const [id, login] of Object.entries(work.links)) if (id !== target.id && login.toLowerCase() === ghUser.login.toLowerCase()) delete work.links[id];
+    // A changed login (or one taken from someone else, by a mod) loses its verification, and the role with it.
+    const dropped = Object.entries(work.links).filter(([id, login]) => id !== target.id && login.toLowerCase() === ghUser.login.toLowerCase()).map(([id]) => id);
+    for (const id of dropped) delete work.links[id];
+    const changed = work.links[target.id]?.toLowerCase() !== ghUser.login.toLowerCase();
     work.links[target.id] = ghUser.login;
+    // Only the member decides whether the pair is public (a mod linking someone else never turns it on).
+    const credit = target.id === i.user.id ? i.options.getBoolean('credit') : null;
+    work.credit ??= {};
+    if (credit === true) work.credit[target.id] = true;
+    else if (credit === false || target.id !== i.user.id) delete work.credit[target.id];
     save();
+    for (const id of changed ? [target.id, ...dropped] : dropped) await contributors.relinked(id);
     refreshSoon();
-    return i.editReply(ephemeral(`🔗 <@${target.id}> is GitHub **${ghUser.login}**: their pull requests show their Discord name on the board.`));
+    const shown = work.credit[target.id] ? ` It shows on the hub's contributors page (\`/link-github ${ghUser.login} credit:False\` hides it).` : target.id === i.user.id ? ` To be credited on the hub's contributors page with both names: \`/link-github ${ghUser.login} credit:True\`.` : '';
+    const more = target.id === i.user.id ? await contributors.linkNote(target.id).catch(() => '') : '';
+    return i.editReply(ephemeral(`🔗 <@${target.id}> is GitHub **${ghUser.login}**: their pull requests show their Discord name on the board.${shown}${more}`));
   },
 };
 
+// The Discord ↔ GitHub pairs members agreed to show (/link-github credit:True), for the hub's contributors page:
+// the GitHub login and the Discord name only, members still on the server only, sorted by login.
+export function creditedPairs() {
+  return Object.keys(work.credit ?? {}).filter((id) => work.links[id]).map((id) => ({ github: work.links[id], discord: displayName(id) }))
+    .filter((p) => p.discord).sort((a, b) => a.github.localeCompare(b.github));
+}
+
+// Discord id → GitHub login for the members who agreed to show both (/link-github credit:True): the hub's org chart.
+export const creditedLogins = () => Object.fromEntries(Object.keys(work.credit ?? {}).filter((id) => work.links[id]).map((id) => [id, work.links[id]]));
+
 // For end-to-end checks (scratch scripts): the GitHub client can be swapped.
-export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render, notices, setRaw: (r) => { raw = r; } };
+export const _test = { work, setGitHub: (g) => { gh = g; }, release, rebuild, render, notices, setRaw: (r) => { raw = r; }, openPulls };
 
 export function setup() {
   if (!enabled) return console.log('work board: off (GITHUB_TOKEN is not set)');
@@ -530,6 +486,6 @@ export function setup() {
   client.once('clientReady', async () => {
     await client.guilds.cache.first()?.members.fetch().catch(() => {}); // Discord names on the board from the first refresh
     refreshSoon(10_000);
-    setInterval(() => refresh(), WORK.refreshMs);
+    setInterval(() => { if (Date.now() - lastRefresh >= webhook.every(WORK.refreshMs, WORK.slowRefreshMs) - 5_000) refresh(); }, WORK.refreshMs);
   });
 }

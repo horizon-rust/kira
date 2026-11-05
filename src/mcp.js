@@ -37,7 +37,7 @@ const fail = (text) => ({ isError: true, content: [{ type: 'text', text }] });
 // The MCP server for one authenticated principal { id, user, name, scope }.
 export function buildServer(principal, api, limiter) {
   const server = new McpServer({ name: 'kira', title: "Kira: Horizon's work board", version: '1.0.0' }, {
-    instructions: "Horizon's work board (Minecraft Java Edition in Rust, github.com/ludovic111/horizon). Read the board, see what Ludovic works on, claim a task before you start, move your own card, post short progress notes. Every action is done in the name of the Discord member who owns this token and is logged. " + UNTRUSTED_NOTE,
+    instructions: "Horizon's work board (Minecraft Java Edition in Rust, github.com/horizon-rust/horizon). Read the board, see what Ludovic works on, claim a task before you start, move your own card, post short progress notes. Every action is done in the name of the Discord member who owns this token and is logged. " + UNTRUSTED_NOTE,
   });
 
   // Wraps a tool: still a member, scope, rate limit, audit, errors.
@@ -142,7 +142,7 @@ export function buildServer(principal, api, limiter) {
 
   tool('card_note', {
     scope: 'write', bucket: 'write',
-    description: "Post a short progress note on one of the token owner's own cards. It shows on the card and in Discord's #dev-log. Plain text, no mentions.",
+    description: "Post a short progress note on one of the token owner's own cards. It shows on the card (task_get, board_list). Plain text, no mentions.",
     input: { ref: REF, text: z.string().trim().min(3).max(500) },
   }, async ({ ref, text }) => {
     const c = await own(ref);
@@ -166,6 +166,12 @@ export function buildServer(principal, api, limiter) {
     description: 'Maintainers: claim an issue for another Discord member (by their Discord user id).',
     input: { issue: NUMBER, member: z.string().regex(/^\d{17,20}$/) },
   }, async ({ issue, member }) => json({ result: await api.assign(principal, issue, member) }));
+
+  tool('ai_handoffs', {
+    scope: 'maintain', bucket: 'write',
+    description: "Maintainers: the questions Kira's AI passed to the team (it told the member so), oldest first, with the Discord link to answer them. `close`: the message ids you have answered.",
+    input: { close: z.array(z.string().regex(/^\d{17,20}$/)).max(50).default([]) },
+  }, async ({ close }) => json(api.aiHandoffs(close)));
 
   tool('card_close', {
     scope: 'maintain', bucket: 'write',
@@ -201,13 +207,24 @@ const send = (res, status, body, headers = {}) => {
 };
 const rpcError = (res, status, code, message, headers) => send(res, status, { jsonrpc: '2.0', error: { code, message }, id: null }, headers);
 
+// A route declared as `GET /prefix/*` serves every path under /prefix/ (the longest prefix wins).
+function prefixRoute(routes, method, path) {
+  let best = null;
+  for (const key of Object.keys(routes)) {
+    if (!key.startsWith(`${method} `) || !key.endsWith('/*')) continue;
+    const prefix = key.slice(method.length + 1, -1);
+    if (path.startsWith(prefix) && (!best || prefix.length > best[0].length)) best = [prefix, routes[key]];
+  }
+  return best?.[1] ?? null;
+}
+
 // The HTTP handler. `store`: the token store; `api`: what the tools do; `routes`: extra GET routes.
 export function makeHandler({ store, api, limiter = rateLimiter(), routes = {}, now = () => Date.now() }) {
   return async (req, res) => {
     const path = new URL(req.url, 'http://x').pathname;
     try {
       if (req.method === 'GET' && path === '/health') return send(res, 200, { ok: true, board: !!api.snapshot() });
-      const route = routes[`${req.method} ${path}`] ?? (req.method === 'GET' ? routes[path] : null);
+      const route = routes[`${req.method} ${path}`] ?? (req.method === 'GET' ? routes[path] : null) ?? prefixRoute(routes, req.method, path);
       if (route) return route(req, res);
       if (path !== '/mcp' && path !== '/') return send(res, 404, { error: 'not found' });
       if (req.method !== 'POST') return rpcError(res, 405, -32000, 'Method not allowed: this server is stateless, POST only.', { Allow: 'POST' });

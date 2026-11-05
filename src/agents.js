@@ -111,6 +111,7 @@ export function revokeAll(store, user, now = Date.now()) {
 export const LIMITS = {
   request: [240, 60_000], read: [120, 60_000], write: [20, 60_000], ask: [5, 3_600_000],
   github: [6, 3_600_000], githubDay: [20, 86_400_000], auth: [30, 60_000],
+  launcherGithub: [60, 60_000], // GET /github/public/… per address (src/launcher-github.js)
 };
 
 // The caller's address for the failed-login limit (N5). Railway's edge sets X-Real-IP to the address it

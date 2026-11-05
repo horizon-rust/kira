@@ -1,0 +1,179 @@
+// Who counts as a Horizon contributor, with no Discord: the one-time code that proves a GitHub account is the
+// member's, who is verified, the 7-day grace of the role holders who haven't verified, and the merged-PR count.
+// src/features/contributors.js does the talking. The data lives in `work` (state.work, shared with the work board):
+//   links:      Discord id → GitHub login (/link-github)
+//   verified:   Discord id → login proved with /verify-github (or by a mod)
+//   challenges: Discord id → { login, code, expires }
+//   grace:      Discord id → { until, dmFailed } (holds the role until `until`, then loses it unless verified)
+import { randomInt } from 'node:crypto';
+
+const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'; // no 0/o/1/i/l: the code is typed and read by people
+export const GIST_FILE = 'kira.txt';
+const LOGIN = /^[a-z\d](?:[a-z\d-]{0,38})$/i;
+const same = (a, b) => !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();
+
+export const newCode = (rand = randomInt) => 'kira-' + Array.from({ length: 8 }, () => ALPHABET[rand(ALPHABET.length)]).join('');
+
+// ── Who is verified ──────────────────────────────────────────────────────────
+
+// `fixed`: the logins the maintainers set in config.js (WORK.github): trusted, no proof needed.
+export const loginOf = (work, id, fixed = {}) => work.links?.[id] ?? fixed[id] ?? null;
+// Verified: the login in use is the one proved, or the one the maintainers set.
+export function isVerified(work, id, fixed = {}) {
+  const login = loginOf(work, id, fixed);
+  return !!login && (same(work.verified?.[id], login) || same(fixed[id], login));
+}
+// Every member whose GitHub login is proved: [id, login].
+export function verifiedPairs(work, fixed = {}) {
+  const ids = new Set([...Object.keys(fixed), ...Object.keys(work.links ?? {})]);
+  return [...ids].filter((id) => isVerified(work, id, fixed)).map((id) => [id, loginOf(work, id, fixed)]);
+}
+// The member a login is verified to.
+export const holderOf = (work, login, fixed = {}) => verifiedPairs(work, fixed).find(([, l]) => same(l, login))?.[0] ?? null;
+
+// A login belongs to one member: verifying it takes it from anyone else who had linked it.
+export function markVerified(work, id, login) {
+  for (const [other, l] of Object.entries(work.links ?? {})) {
+    if (other !== id && same(l, login)) clearVerification(work, other, { link: true });
+  }
+  (work.links ??= {})[id] = login;
+  (work.verified ??= {})[id] = login;
+  delete work.challenges?.[id];
+}
+// A changed or removed link, or a removed verification.
+export function clearVerification(work, id, { link = false } = {}) {
+  delete work.verified?.[id];
+  delete work.challenges?.[id];
+  if (link) delete work.links?.[id];
+}
+
+// ── The code ─────────────────────────────────────────────────────────────────
+
+// The member's pending code for `login` (the same one until it expires, so a second /verify-github doesn't confuse).
+export function startChallenge(work, id, login, now, ttlMs, code = newCode()) {
+  const c = work.challenges?.[id];
+  if (c && same(c.login, login) && c.expires > now) return c;
+  return ((work.challenges ??= {})[id] = { login, code, expires: now + ttlMs });
+}
+export const expired = (challenge, now) => challenge.expires <= now;
+
+// Reads a public GitHub API path without a token (60 requests an hour per address).
+export async function publicGet(path) {
+  const r = await fetch(`https://api.github.com${path}`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'kira' } });
+  if (!r.ok) throw new Error(`GitHub GET ${path} without a token: HTTP ${r.status}`);
+  return r.json();
+}
+
+// Looks for the code where only the account's owner can write: the profile bio, then a public gist named kira.txt.
+// A GitHub App's token may not read gists (HTTP 403 "Resource not accessible by integration"), so public gists are
+// then read without it (`pub`).
+export async function codeIsPublished(gh, login, code, pub = publicGet) {
+  if (!LOGIN.test(login)) return false;
+  const who = encodeURIComponent(login);
+  const user = await gh.get(`/users/${who}`);
+  if (typeof user?.bio === 'string' && user.bio.includes(code)) return true;
+  const get = (path) => gh.get(path).catch((e) => (/HTTP 403/.test(e?.message ?? '') ? pub(path) : Promise.reject(e)));
+  const gists = (await get(`/users/${who}/gists?per_page=30`)) ?? [];
+  for (const g of gists.filter((x) => x.files?.[GIST_FILE]).slice(0, 3)) {
+    const full = await get(`/gists/${encodeURIComponent(g.id)}`);
+    if (typeof full?.files?.[GIST_FILE]?.content === 'string' && full.files[GIST_FILE].content.includes(code)) return true;
+  }
+  return false;
+}
+
+// ── Merged pull requests ─────────────────────────────────────────────────────
+
+// How many pull requests by `login` were merged in owner/repo (the search API: its own limit, 30 a minute).
+export async function mergedCount(gh, owner, repo, login) {
+  if (!LOGIN.test(login)) return 0;
+  const q = encodeURIComponent(`repo:${owner}/${repo} is:pr is:merged author:${login}`);
+  const found = await gh.get(`/search/issues?q=${q}&per_page=1`);
+  return Number(found?.total_count) || 0;
+}
+
+// Every distinct GitHub login that has a merged pull request in owner/repo, bots left out. The search API shows only
+// the first 1000 results of a query, so the merge dates are split into windows (halved while one holds more than 1000).
+export async function mergedAuthors(gh, owner, repo, { today = new Date(), sleep = async () => {}, paceMs = 0 } = {}) {
+  const day = (d) => d.toISOString().slice(0, 10);
+  const created = (await gh.get(`/repos/${owner}/${repo}`))?.created_at;
+  const first = new Date(Date.parse(created ?? '') || Date.parse('2026-01-01'));
+  const authors = new Map(); // lowercase login → login as GitHub writes it
+  const search = async (from, to, page) => {
+    const q = encodeURIComponent(`repo:${owner}/${repo} is:pr is:merged merged:${day(from)}..${day(to)}`);
+    await sleep(paceMs);
+    return (await gh.get(`/search/issues?q=${q}&per_page=100&page=${page}`, { cache: false })) ?? { total_count: 0, items: [] };
+  };
+  const window = async (from, to) => {
+    const head = await search(from, to, 1);
+    const total = Number(head.total_count) || 0;
+    if (total > 1000 && to - from >= 86_400_000) {
+      const mid = new Date(from.getTime() + Math.floor((to - from) / 2 / 86_400_000) * 86_400_000);
+      await window(from, mid);
+      return window(new Date(mid.getTime() + 86_400_000), to);
+    }
+    for (let page = 1; (page - 1) * 100 < Math.min(total, 1000); page++) {
+      const found = page === 1 ? head : await search(from, to, page);
+      for (const item of found.items ?? []) {
+        const login = item.user?.login;
+        if (login && LOGIN.test(login) && item.user?.type !== 'Bot') authors.set(login.toLowerCase(), login);
+      }
+    }
+  };
+  await window(first, today);
+  return authors;
+}
+
+// ── Who is who: Discord names against GitHub logins ──────────────────────────
+
+// "Ana_B.", "ana b" → "anab": lowercase, without spaces, dots and underscores.
+export const squash = (name) => String(name ?? '').toLowerCase().replace(/[\s._]+/g, '');
+// The same with look-alike digits read as letters (Excurs1ons ~ excursions): 0 o, 1 i, 3 e, 4 a, 5 s, 7 t.
+const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't' };
+export const squashLeet = (name) => squash(name).replace(/[013457]/g, (d) => LEET[d]);
+
+// The GitHub login a member's names point to, or null: a name equal to a login once squashed (digits as they are, or
+// read as letters), else one containing the other when both are at least 5 characters. The best match wins (equal
+// first, then the longest login).
+export function matchLogin(names, logins) {
+  const forms = [squash, squashLeet];
+  let best = null;
+  for (const login of logins) {
+    let rank = 0;
+    for (const form of forms) {
+      const l = form(login);
+      for (const n of names.map(form).filter(Boolean)) {
+        if (n === l) rank = Math.max(rank, 2);
+        else if (n.length >= 5 && l.length >= 5 && (n.includes(l) || l.includes(n))) rank = Math.max(rank, 1);
+      }
+    }
+    const length = squash(login).length;
+    if (rank && (!best || rank > best.rank || (rank === best.rank && length > best.length))) best = { login, rank, length };
+  }
+  return best?.login ?? null;
+}
+
+// ── Grace ────────────────────────────────────────────────────────────────────
+
+export function startGrace(work, id, now, days) {
+  work.grace ??= {};
+  return (work.grace[id] ??= { until: now + days * 86_400_000 });
+}
+export const graceOver = (work, now) => Object.entries(work.grace ?? {}).filter(([, g]) => g.until <= now).map(([id]) => id);
+
+// ── Texts ────────────────────────────────────────────────────────────────────
+
+export const MEANING = '🛠️ Contributor now means a merged PR in Horizon, verified with `/verify-github`; it opens #contributors.';
+
+export const removedDm = () => '🛠️ **Contributor** now means a merged pull request in Horizon, so Kira took the role away from you. If you have one, you get it back by running `/link-github <your GitHub username>` and then `/verify-github` in the server (a code in your GitHub bio, takes a minute).';
+
+export const graceDmUnlinked = (until) => `🛠️ **Contributor** now means a merged pull request in Horizon, verified with \`/verify-github\`. If you have one, keep the role: run \`/link-github <your GitHub username>\` in the server, then \`/verify-github\` (it gives you a code to put in your GitHub bio, takes a minute), before <t:${Math.floor(until / 1000)}:D>. After that date the role is removed if no verified GitHub account of yours has a merged pull request.`;
+
+export const graceDm = (login, until, hasPr = true) => `🛠️ **Contributor** now means a merged pull request in Horizon, verified with \`/verify-github\`. ${hasPr ? `Your GitHub account **${login}** has one, so you keep the role` : `Your GitHub account **${login}** is linked, so you keep the role`} if you run \`/verify-github\` in the server before <t:${Math.floor(until / 1000)}:D> (it gives you a code to put in your GitHub bio, takes a minute). After that date the role is removed${hasPr ? '' : ' unless an account of yours has a merged pull request'}.`;
+
+export const codeInstructions = (login, challenge) => [
+  `To prove **${login}** is yours, put this code in your GitHub profile bio (or in a public gist named \`${GIST_FILE}\`):`,
+  `\`${challenge.code}\``,
+  `It is valid until <t:${Math.floor(challenge.expires / 1000)}:t>. Then run \`/verify-github check:True\`. You can remove the code afterwards.`,
+].join('\n');
+
+export const welcomeLine = (id, login) => `🛠️ Welcome <@${id}>! A pull request by **${login}** is merged in Horizon: you are a contributor now.`;

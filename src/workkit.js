@@ -1,6 +1,6 @@
 // The work board's texts and claim rules, with no Discord and no network, so they can be tested: a pull
 // request's status (draft, CI, review), when a claim is due for a reminder or lapses, the text of each
-// column of the board and of the #dev-log lines. The board itself (cards, columns, moves) is src/board.js;
+// column of the board (/board, /mytasks). The board itself (cards, columns, moves) is src/board.js;
 // src/features/workboard.js does the talking.
 import { COLUMNS } from './board.js';
 export { fixesIn } from './board.js';
@@ -46,6 +46,13 @@ export function claimDue(claim, now, { expireDays, remindDays }) {
   if (idle >= expireDays * DAY) return 'expire';
   if (idle >= (expireDays - remindDays) * DAY && !(claim.reminded >= Math.max(claim.since, claim.activity ?? 0))) return 'remind';
   return null;
+}
+
+// GitHub's assignees of an issue other than `login` (the member's linked GitHub account, or null): an issue assigned
+// on GitHub (its `/claim` comment, horizon-rust/horizon#3862) is taken, as one with Kira's label is there.
+export function heldOnGitHub(issue, login) {
+  const own = String(login ?? '').toLowerCase();
+  return (issue?.assignees ?? []).map((a) => a.login).filter((l) => l && l.toLowerCase() !== own);
 }
 
 // When a claim lapses (ms), from its last activity.
@@ -113,16 +120,6 @@ Nothing here right now.`;
   };
 }
 
-// The #dev-log lines (plain names: nobody is pinged).
-export const logLine = {
-  opened: (p) => `🟢 **${esc(p.who)}** opened ${link(`#${p.number} ${esc(short(p.title, 90))}`, p.url)}${p.fixes?.length ? ` (fixes ${p.fixes.map((n) => `#${n}`).join(', ')})` : ''}`,
-  merged: (p) => `🟣 ${link(`#${p.number} ${esc(short(p.title, 90))}`, p.url)} by **${esc(p.who)}** was merged`,
-  claimed: (c) => `🔨 **${esc(c.who)}** claimed ${link(`#${c.number} ${esc(short(c.title, 90))}`, c.url)}`,
-  moved: (c) => `📌 **${esc(c.who)}** moved ${link(`#${c.number} ${esc(short(c.title, 90))}`, c.url)} to ${c.to}`,
-  unclaimed: (c) => `↩️ **${esc(c.who)}** unclaimed ${link(`#${c.number} ${esc(short(c.title, 90))}`, c.url)}: it's free again`,
-  expired: (c, days) => `⌛ **${esc(c.who)}**'s claim on ${link(`#${c.number} ${esc(short(c.title, 90))}`, c.url)} lapsed after ${days} days without activity: it's free again`,
-};
-
 // A Discord name in a GitHub comment: in a code span, so no @mention, link or Markdown in it works (L5).
 export const githubName = (who) => `\`${String(who).replace(/[`\r\n]/g, "'").slice(0, 40).trim() || 'someone'}\``;
 
@@ -135,10 +132,7 @@ export const unclaimComment = (who, why) => `${why === 'expired' ? `The claim by
 // comment on GitHub in Kira's name, so they can't be toggled in a loop (H1).
 export const cooldownLeft = (lastAt, now, ms) => (lastAt ? Math.max(0, lastAt + ms - now) : 0);
 
-// Remembers numbers already announced, newest first, at most `keep`.
-export const remember = (list = [], n, keep = 300) => [n, ...list.filter((x) => x !== n)].slice(0, keep);
-
-// ── Notices: CI failures, reviews waiting, the weekly digest ────────────────────
+// ── CI failures (a DM to the author who asked for it) ─────────────────────────────
 
 // Open pull requests whose CI now fails on a head commit not reported yet. `seen`: number → the failing
 // sha last reported. Returns { report, seen } (a new `seen`: passing or closed pull requests are forgotten,
@@ -153,53 +147,3 @@ export function ciChanges(open, seen) {
   }
   return { report, seen: next };
 }
-
-// Ready (not draft) pull requests with no review at all, open for `waitMs`, not reminded in `waitMs`.
-// `pinged`: number → last reminder (ms). The first time, every open one counts as just reminded.
-export function reviewsDue(open, pinged, now, waitMs) {
-  const next = {};
-  const due = [];
-  for (const p of open) {
-    if (p.draft || p.reviews > 0) continue;
-    const last = pinged ? pinged[p.number] ?? 0 : now;
-    next[p.number] = last;
-    if (now - p.createdAt >= waitMs && now - last >= waitMs) { due.push(p); next[p.number] = now; }
-  }
-  return { due, pinged: next };
-}
-
-// The start of the week's digest slot at or before `now` (UTC): `weekday` 0 = Sunday, at `hour`.
-export function digestSlot(now, { weekday, hour }) {
-  const d = new Date(now);
-  const slot = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() - weekday + 7) % 7), hour);
-  return slot > now ? slot - 7 * DAY : slot;
-}
-
-// Parity from Horizon's README: the "vanilla parity" badge and the number of harnesses.
-export function parityFrom(readme) {
-  const pct = String(readme ?? '').match(/vanilla(?:%20|\s|-|_)parity-(\d+(?:\.\d+)?)%25/i);
-  const harnesses = String(readme ?? '').match(/(\d+)\s+(?:differential\s+)?parity harnesses/i);
-  return { percent: pct ? Number(pct[1]) : null, harnesses: harnesses ? Number(harnesses[1]) : null };
-}
-
-// The weekly digest: { title, description } for an embed. Lists cut to fit.
-export function digestText({ merged, opened, releases, parity, goodFirst, days = 7 }) {
-  const list = (items, line, empty, max = 8) => (items.length
-    ? [...items.slice(0, max).map(line), ...(items.length > max ? [`…and ${items.length - max} more`] : [])].join('\n')
-    : empty);
-  const parityLine = parity?.percent != null ? `**Vanilla parity: ${parity.percent}%**${parity.harnesses ? ` of ${parity.harnesses} harnesses` : ''}` : null;
-  const description = [
-    parityLine,
-    `**✅ Merged (${merged.length})**\n${list(merged, (p) => `• ${link(`#${p.number} ${esc(short(p.title))}`, p.url)} by **${esc(p.who)}**`, 'Nothing merged this week.')}`,
-    `**🆕 New issues (${opened.length})**\n${list(opened, (i) => `• ${link(`#${i.number} ${esc(short(i.title))}`, i.url)}`, 'None.')}`,
-    `**📦 Releases (${releases.length})**\n${list(releases, (r) => `• ${link(esc(r.name || r.tag), r.url)}`, 'None this week.', 5)}`,
-    `**🌱 Good first tasks**\n${list(goodFirst, (c) => `• ${link(`#${c.number} ${esc(short(c.title))}`, c.url)}`, 'None labelled right now.', 5)}${goodFirst.length ? '\nNew here? `/claim` one, or `/goodfirst` any time.' : ''}`,
-  ].filter(Boolean).join('\n\n');
-  return { title: `🗓️ Horizon this week (last ${days} days)`, description: description.slice(0, 4000) };
-}
-
-// The #dev-log lines for those notices (no pings).
-export const noticeLine = {
-  ciFailing: (p) => `❌ CI is failing on ${link(`#${p.number} ${esc(short(p.title, 90))}`, p.url)} by **${esc(p.who)}**`,
-  reviewWaiting: (p, days) => `👀 ${link(`#${p.number} ${esc(short(p.title, 90))}`, p.url)} by **${esc(p.who)}** has waited ${days} days for a review`,
-};

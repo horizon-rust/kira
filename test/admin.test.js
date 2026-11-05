@@ -60,3 +60,26 @@ test('backup and restore need the admin token; restore replaces the files and re
   server.closeAllConnections();
   server.close();
 });
+
+test('the contributor clean-up: a dry run unless told otherwise, one at a time, counts back; the token is needed', async () => {
+  const calls = [];
+  let release;
+  const cleanup = ({ dry }) => { calls.push(dry); return new Promise((ok) => { release = () => ok({ dry, holders: 3 }); }); };
+  const limiter = rateLimiter({ auth: [50, 60_000] });
+  const { server, url } = await serve(adminRoutes({ hash, files: {}, limiter, save: () => {}, freeze: () => {}, cleanup }), limiter);
+  const auth = { Authorization: `Bearer ${SECRET}` };
+  assert.equal((await fetch(`${url}/admin/contributors-cleanup`, { method: 'POST', body: '{"dry":false}' })).status, 401);
+  assert.equal((await fetch(`${url}/admin/contributors-cleanup`)).status, 401);
+  assert.equal((await fetch(`${url}/admin/contributors-cleanup`, { method: 'POST', headers: auth, body: 'not json' })).status, 202);
+  assert.deepEqual(calls, [true], 'anything but dry:false is a dry run');
+  assert.equal((await fetch(`${url}/admin/contributors-cleanup`, { method: 'POST', headers: auth, body: '{"dry":false}' })).status, 409);
+  assert.deepEqual(await (await fetch(`${url}/admin/contributors-cleanup`, { headers: auth })).json(), { dry: true, running: true });
+  release();
+  await new Promise((ok) => setTimeout(ok, 20));
+  assert.deepEqual(await (await fetch(`${url}/admin/contributors-cleanup`, { headers: auth })).json(), { dry: true, holders: 3, running: false });
+  assert.equal((await fetch(`${url}/admin/contributors-cleanup`, { method: 'POST', headers: auth, body: '{"dry":false}' })).status, 202);
+  assert.deepEqual(calls, [true, false]);
+  release();
+  server.closeAllConnections();
+  server.close();
+});

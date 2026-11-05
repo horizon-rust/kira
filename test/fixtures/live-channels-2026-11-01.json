@@ -1,0 +1,399 @@
+[
+ {
+  "id": "1559227979559731353",
+  "name": "general-chat",
+  "type": 0,
+  "parent_id": "1559242380631351466",
+  "position": 0
+ },
+ {
+  "id": "1559227979559731354",
+  "name": "Lounge",
+  "type": 2,
+  "parent_id": "1559251818654076968",
+  "position": 0,
+  "bitrate": 256000
+ },
+ {
+  "id": "1559242374948061214",
+  "name": "PLAYHORIZON.DEV",
+  "type": 4,
+  "position": 0
+ },
+ {
+  "id": "1559242376747286549",
+  "name": "ping-roles",
+  "type": 5,
+  "parent_id": "1559242374948061214",
+  "position": 0
+ },
+ {
+  "id": "1559242378085146704",
+  "name": "rules",
+  "type": 0,
+  "parent_id": "1559242374948061214",
+  "position": 6
+ },
+ {
+  "id": "1559242379163209909",
+  "name": "📢│announcements",
+  "type": 5,
+  "parent_id": "1559242374948061214",
+  "position": 8
+ },
+ {
+  "id": "1559242380631351466",
+  "name": "GENERAL",
+  "type": 4,
+  "position": 3
+ },
+ {
+  "id": "1559242386897375326",
+  "name": "introductions",
+  "type": 0,
+  "parent_id": "1559242380631351466",
+  "position": 1
+ },
+ {
+  "id": "1559242389841772694",
+  "name": "memes",
+  "type": 0,
+  "parent_id": "1559242380631351466",
+  "position": 3
+ },
+ {
+  "id": "1559242405603967016",
+  "name": "horizon-info",
+  "type": 0,
+  "parent_id": "1559242374948061214",
+  "position": 2
+ },
+ {
+  "id": "1559242412121919620",
+  "name": "💬│horizon-chat",
+  "type": 0,
+  "parent_id": "1559242413732536381",
+  "position": 3
+ },
+ {
+  "id": "1559242413732536381",
+  "name": "HORIZON-GENERAL",
+  "type": 4,
+  "position": 1
+ },
+ {
+  "id": "1559242415188213790",
+  "name": "📰│releases",
+  "type": 0,
+  "parent_id": "1559242413732536381",
+  "position": 5
+ },
+ {
+  "id": "1559242416345718784",
+  "name": "🛡️ staff",
+  "type": 4,
+  "position": 6
+ },
+ {
+  "id": "1559242417796947988",
+  "name": "mod-chat",
+  "type": 0,
+  "parent_id": "1559242416345718784",
+  "position": 0
+ },
+ {
+  "id": "1559242418988253184",
+  "name": "mod-log",
+  "type": 0,
+  "parent_id": "1559242416345718784",
+  "position": 1
+ },
+ {
+  "id": "1559242420682498138",
+  "name": "discord-updates",
+  "type": 0,
+  "parent_id": "1559242416345718784",
+  "position": 4
+ },
+ {
+  "id": "1559242571929354364",
+  "name": "horizon-ideas",
+  "type": 15,
+  "parent_id": "1559242413732536381",
+  "position": 2
+ },
+ {
+  "id": "1559242573552558210",
+  "name": "horizon-bugs",
+  "type": 15,
+  "parent_id": "1559242413732536381",
+  "position": 0
+ },
+ {
+  "id": "1559251784395001866",
+  "name": "hall-of-fame",
+  "type": 0,
+  "parent_id": "1559242380631351466",
+  "position": 2
+ },
+ {
+  "id": "1559251785598763228",
+  "name": "bot-commands",
+  "type": 0,
+  "parent_id": "1559242380631351466",
+  "position": 4
+ },
+ {
+  "id": "1559251818654076968",
+  "name": "🔊 voice",
+  "type": 4,
+  "position": 5
+ },
+ {
+  "id": "1559251822814699664",
+  "name": "Gaming",
+  "type": 2,
+  "parent_id": "1559251818654076968",
+  "position": 1,
+  "bitrate": 256000
+ },
+ {
+  "id": "1559251824362397780",
+  "name": "⏳ waiting room",
+  "type": 2,
+  "parent_id": "1559251818654076968",
+  "position": 2,
+  "bitrate": 256000
+ },
+ {
+  "id": "1559251825683730614",
+  "name": "🎙️ ludovic",
+  "type": 2,
+  "parent_id": "1559251818654076968",
+  "position": 3,
+  "bitrate": 256000
+ },
+ {
+  "id": "1559251827285954706",
+  "name": "➕ create your room",
+  "type": 2,
+  "parent_id": "1559251818654076968",
+  "position": 4,
+  "bitrate": 256000
+ },
+ {
+  "id": "1559251833548054548",
+  "name": "reports",
+  "type": 0,
+  "parent_id": "1559242416345718784",
+  "position": 2
+ },
+ {
+  "id": "1559251834785374279",
+  "name": "mod-mail",
+  "type": 0,
+  "parent_id": "1559242416345718784",
+  "position": 3
+ },
+ {
+  "id": "1559258801692090481",
+  "name": "faq",
+  "type": 0,
+  "parent_id": "1559242374948061214",
+  "position": 5
+ },
+ {
+  "id": "1559258835439452181",
+  "name": "showcase",
+  "type": 15,
+  "parent_id": "1559242413732536381",
+  "position": 4
+ },
+ {
+  "id": "1559617302155108412",
+  "name": "new-members",
+  "type": 0,
+  "parent_id": "1559242374948061214",
+  "position": 1
+ },
+ {
+  "id": "1559731610461540543",
+  "name": "agent-log",
+  "type": 0,
+  "parent_id": "1559242416345718784",
+  "position": 6
+ },
+ {
+  "id": "1563700249724461168",
+  "name": "ludovic-videos",
+  "type": 5,
+  "parent_id": "1559242374948061214",
+  "position": 9
+ },
+ {
+  "id": "1563944017610408096",
+  "name": "📰│updates",
+  "type": 0,
+  "parent_id": "1559242413732536381",
+  "position": 6
+ },
+ {
+  "id": "1563944047708602368",
+  "name": "roadmap-suggestions",
+  "type": 0,
+  "parent_id": "1559242416345718784",
+  "position": 5
+ },
+ {
+  "id": "1564660461574557816",
+  "name": "contributors",
+  "type": 0,
+  "parent_id": "1564999871042166906",
+  "position": 0
+ },
+ {
+  "id": "1564769057880940574",
+  "name": "horizon-team",
+  "type": 0,
+  "parent_id": "1564999871042166906",
+  "position": 1
+ },
+ {
+  "id": "1564985066130505861",
+  "name": "🌍 languages",
+  "type": 4,
+  "position": 4
+ },
+ {
+  "id": "1564985067825135780",
+  "name": "русский",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 0
+ },
+ {
+  "id": "1564985071516254308",
+  "name": "português",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 1
+ },
+ {
+  "id": "1564985073273675787",
+  "name": "español",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 2
+ },
+ {
+  "id": "1564991842863419537",
+  "name": "sponsors",
+  "type": 0,
+  "parent_id": "1559242374948061214",
+  "position": 10
+ },
+ {
+  "id": "1564999871042166906",
+  "name": "🛠️ CONTRIBUTORS",
+  "type": 4,
+  "position": 2
+ },
+ {
+  "id": "1564999884296167434",
+  "name": "français",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 3
+ },
+ {
+  "id": "1564999885437141002",
+  "name": "deutsch",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 4
+ },
+ {
+  "id": "1564999889010688105",
+  "name": "polski",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 7
+ },
+ {
+  "id": "1564999891904766012",
+  "name": "türkçe",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 8
+ },
+ {
+  "id": "1564999893129371700",
+  "name": "中文",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 9
+ },
+ {
+  "id": "1564999894526206042",
+  "name": "日本語",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 10
+ },
+ {
+  "id": "1565382416787312804",
+  "name": "🗝️│join-server",
+  "type": 0,
+  "parent_id": "1559242374948061214",
+  "position": 3
+ },
+ {
+  "id": "1565697670901800980",
+  "name": "horizon-support",
+  "type": 15,
+  "parent_id": "1559242413732536381",
+  "position": 1
+ },
+ {
+  "id": "1565731391675703388",
+  "name": "italiano",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 5
+ },
+ {
+  "id": "1565746624263618710",
+  "name": "nederlands",
+  "type": 0,
+  "parent_id": "1564985066130505861",
+  "position": 6
+ },
+ {
+  "id": "1566146381931094148",
+  "name": "🌐│server-chat",
+  "type": 0,
+  "parent_id": "1566158354420736030",
+  "position": 9
+ },
+ {
+  "id": "1566158354420736030",
+  "name": "HORIZONSMP",
+  "type": 4,
+  "position": 1
+ },
+ {
+  "id": "1566224277286555698",
+  "name": "🔊 Gooning",
+  "type": 2,
+  "parent_id": "1559251818654076968",
+  "position": 7,
+  "bitrate": 384000
+ },
+ {
+  "id": "1566413848678895626",
+  "name": "🚫│no-text",
+  "type": 0,
+  "parent_id": "1559242374948061214",
+  "position": 7
+ }
+]

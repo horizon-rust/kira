@@ -1,4 +1,5 @@
-// The notices wired end to end (src/features/workboard.js): CI lines in #dev-log and the weekly digest.
+// CI failures wired end to end (src/features/workboard.js → src/features/notify.js, no webhook): a DM to a verified
+// author who turned /notify on, once per failing commit, and nothing posted in any channel.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
@@ -7,34 +8,32 @@ import { join } from 'node:path';
 
 process.env.KIRA_STATE = join(mkdtempSync(join(tmpdir(), 'kira-notices-')), 'state.json');
 process.env.GITHUB_TOKEN = 'test-token-not-used';
+delete process.env.KIRA_GITHUB_WEBHOOK_SECRET;
 const core = await import('../src/core.js');
 const wb = await import('../src/features/workboard.js');
+const notify = await import('../src/features/notify.js');
 
-const sent = [];
-core.state.channels.devlog = '1000';
-core.client.channels.cache.set('1000', { send: async (m) => { sent.push(m); return m; } });
-const pull = (number, ci, sha, extra = {}) => ({ number, title: `PR ${number}`, html_url: `https://github.com/x/y/pull/${number}`, state: 'open', draft: false, user: { login: 'someone' }, head: { sha }, ci, reviews: 1, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-13T00:00:00Z', ...extra });
-const readme = Buffer.from('<img src="https://img.shields.io/badge/vanilla%20parity-97.5%25-F0795A"> 281 parity harnesses').toString('base64');
-wb._test.setGitHub({ get: async (p) => (p.endsWith('/readme') ? { content: readme } : p.includes('/releases') ? [] : null), write: async () => ({}) });
+const dms = [];
+const posted = [];
+core.client.users.fetch = async (id) => ({ id, send: async (m) => { dms.push({ id, m }); } });
+core.client.channels.cache.set('1000', { send: async (m) => { posted.push(m); return m; } });
+core.state.channels.updates = '1000';
+const pull = (number, ci, sha, login) => ({ number, title: `PR ${number}`, html_url: `https://github.com/x/y/pull/${number}`, state: 'open', draft: false, user: { login }, head: { sha }, ci });
 
-test('CI failures and the digest reach #dev-log, once', async () => {
-  const mon = Date.UTC(2026, 9, 12, 9);
-  wb._test.setRaw({ repo: 'x/y', issues: [], pulls: [pull(1, 'failing', 'a')], branches: [] });
-  await wb._test.notices(mon - 3_600_000); // first look: seeds, nothing posted
-  assert.equal(sent.length, 0);
-  wb._test.setRaw({ repo: 'x/y', issues: [{ number: 9, title: 'New issue', html_url: 'https://github.com/x/y/issues/9', state: 'open', created_at: new Date(mon - 86_400_000).toISOString(), labels: [], assignees: [] }],
-    pulls: [pull(1, 'failing', 'a'), pull(2, 'failing', 'b'), pull(3, 'passing', 'c', { state: 'closed', merged_at: new Date(mon - 86_400_000).toISOString() })], branches: [] });
-  await wb._test.notices(mon + 60_000); // after Monday 09:00: #2 fails, and the week's digest
-  assert.equal(sent.filter((m) => typeof m.content === 'string' && /CI is failing on \[#2/.test(m.content)).length, 1);
-  const digest = sent.find((m) => m.embeds);
-  assert.ok(digest, 'digest posted');
-  const e = digest.embeds[0].data;
-  assert.match(e.title, /Horizon this week/);
-  assert.match(e.description, /Vanilla parity: 97\.5%\*\* of 281 harnesses/);
-  assert.match(e.description, /\[#3 PR 3\]/);
-  assert.match(e.description, /\[#9 New issue\]/);
-  assert.equal(typeof e.color, 'number');
-  const n = sent.length;
-  await wb._test.notices(mon + 120_000); // nothing new: nothing posted
-  assert.equal(sent.length, n);
+test('CI failing: one batched DM per failing commit to a verified author who asked, nothing in a channel', async () => {
+  wb._test.work.links['55'] = 'alice';
+  (wb._test.work.verified ??= {})['55'] = 'alice';
+  notify._test.box.users['55'] = { since: 1 };
+  wb._test.setRaw({ repo: 'x/y', issues: [], pulls: [pull(1, 'failing', 'a', 'alice')], branches: [] });
+  await wb._test.notices(); // first look: seeds
+  assert.equal(notify._test.batch.pending('55').length, 0);
+  wb._test.setRaw({ repo: 'x/y', issues: [], pulls: [pull(1, 'failing', 'a', 'alice'), pull(2, 'failing', 'b', 'alice'), pull(3, 'failing', 'c', 'bob')], branches: [] });
+  await wb._test.notices();
+  await wb._test.notices();
+  await notify._test.batch.flush('55');
+  assert.deepEqual(dms.map((d) => d.id), ['55']);
+  assert.match(dms[0].m.content, /CI is failing on PR #2 PR 2/);
+  assert.doesNotMatch(dms[0].m.content, /#3/);
+  assert.deepEqual(dms[0].m.allowedMentions, { parse: [] });
+  assert.equal(posted.length, 0);
 });
