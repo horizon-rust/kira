@@ -9,7 +9,7 @@ import { client, state, save, channel, isStaff, clip, ago, modlog, parseDuration
 import { linkify } from '../texts.js';
 import * as kiraAi from './ai.js';
 import { honeypotExempt, honeypotAction, makeHandled, honeypotLog } from '../honeypot-kit.js';
-import { spamVerdict } from '../spam-kit.js';
+import { spamVerdict, warnFirst } from '../spam-kit.js';
 import { expect, banNotice } from './modcases.js';
 import { KIRA } from '../modcase-kit.js';
 
@@ -20,6 +20,7 @@ const youngJoins = [];    // timestamps of recent joins by young accounts, for r
 const traffic = new Map(); // channelId → messages in the current minute
 const joinQueue = [];      // join / leave lines waiting to be logged together
 state.spamStrikes ??= {};  // userId → timestamps of automatic spam timeouts
+state.spamWarned ??= {};   // userId → time of the last copy-paste warning (src/spam-kit.js warnFirst)
 state.aiRemovals ??= {};   // userId → timestamps of messages the AI check removed
 state.automodUndo ??= {};  // undo id → what an automatic action did, so a mod can undo it from #mod-log
 const invites = new Map(); // code → uses
@@ -355,6 +356,17 @@ async function moderate(msg) {
   const [why, offending] = spamVerdict(list, now, MOD);
   if (!why) { queueAi(msg); return false; }
   recent.delete(msg.author.id);
+  if (warnFirst(offending, { accountAgeMs: now - msg.author.createdTimestamp, warnedToday: now - (state.spamWarned[m.id] ?? 0) < 864e5 }, MOD)) {
+    // The first time today: delete only the repeated copies (a fast typist's different lines stay), warn. No timeout,
+    // no strike.
+    state.spamWarned[m.id] = now; save();
+    const seen = new Set();
+    const copies = offending.filter((x) => seen.has(x.content) || !seen.add(x.content));
+    for (const x of copies) { dropAi(x.id); await client.channels.cache.get(x.channelId)?.messages.delete(x.id).catch(() => {}); }
+    await msg.channel.send({ content: `<@${msg.author.id}> please don't ${copies.length ? 'repeat messages' : 'flood the chat'} (${why}): next time today it's a timeout.`, allowedMentions: { parse: [] } });
+    await modlog('⚠️ Spam warning', `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>: ${why}. Warned, ${copies.length} copies deleted, no timeout (first time today).`, 0xf1c40f);
+    return true;
+  }
   for (const x of offending) dropAi(x.id); // deleted below: not worth reading
   for (const x of offending) await client.channels.cache.get(x.channelId)?.messages.delete(x.id).catch(() => {});
   // One case in #mod-actions: the deleted messages are its evidence, its Undo button lifts it all.
