@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const { MOD } = await import('../src/config.js');
-const { spamVerdict, liftStrike } = await import('../src/spam-kit.js');
+const MOD_KIT = await import('../src/spam-kit.js');
+const { spamVerdict, liftStrike } = MOD_KIT;
 
 const T0 = 1_000_000;
 // `texts` sent `gap` ms apart; returns the verdict at the last one.
@@ -85,4 +86,25 @@ test('a lifted timeout no longer counts as a strike: only that timeout\'s strike
   assert.deepEqual(liftStrike([T0, T0 + 3_600_000], T0 + 3_600_000 + 2_000), [T0]);
   assert.deepEqual(liftStrike([T0], T0 + 3_600_000), [T0], 'no strike near that timeout: nothing dropped');
   assert.deepEqual(liftStrike([], T0), []);
+});
+
+test('a first copy-paste from an established member is a warning, the second a timeout', () => {
+  const { warnFirst } = MOD_KIT;
+  const day = 86_400_000;
+  const said = [1, 2, 3, 4, 5].map((i) => ({ content: 'false ban btw', links: 0, channelId: 'c', at: i }));
+  assert.equal(warnFirst(said, { accountAgeMs: 400 * day, warnedToday: false }, MOD), true);
+  assert.equal(warnFirst(said, { accountAgeMs: 400 * day, warnedToday: true }, MOD), false);
+});
+
+test('ads, pings and new accounts still time out on the first copy-paste', () => {
+  const { warnFirst } = MOD_KIT;
+  const day = 86_400_000;
+  const old = { accountAgeMs: 400 * day, warnedToday: false };
+  const ad = [{ content: 'free nitro https://x.y', links: 1 }];
+  const ping = [{ content: '<@123> dm me for free ai', links: 0 }];
+  assert.equal(warnFirst(ad, old, MOD), false);
+  assert.equal(warnFirst(ping, old, MOD), false);
+  assert.equal(warnFirst([{ content: 'dm me for free ai', links: 0 }], { accountAgeMs: day, warnedToday: false }, MOD), false);
+  const sprayed = ['a', 'b', 'c', 'd', 'e'].map((channelId) => ({ content: 'dm me for free ai', links: 0, channelId }));
+  assert.equal(warnFirst(sprayed, old, MOD), false);
 });

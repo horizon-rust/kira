@@ -195,11 +195,19 @@ test('a batch: messages of one channel within a few seconds are read in one call
   assert.deepEqual(calls.map((b) => b.map((m) => m.text)).sort(), [['hello'], ['salut tout le monde', 'ça va ?']]);
   assert.deepEqual(calls.flat()[0], { author: 'Joueur', channel: 'français', text: 'salut tout le monde' });
 
+  // A first flood of the day is a warning: nothing deleted (different lines), still read.
   calls.length = 0;
   for (let i = 0; i < MOD_FLOOD; i++) await mod.moderate(message(`spam numéro ${i} pour tous`, { user: 'f' }));
   await mod._test.flushAll();
-  assert.equal(calls.flat().filter((m) => m.text.startsWith('spam')).length, 0, 'the flooded messages were deleted by the filter, not read');
+  assert.equal(deleted.length, 0, 'a first flood is only a warning');
+  assert.match(sent.at(-1).content, /please don't flood the chat/);
+  // The second one the same day is deleted, not read.
+  calls.length = 0; sent.length = 0;
+  for (let i = 0; i < MOD_FLOOD; i++) await mod.moderate(message(`encore ${i} pour tous`, { user: 'f' }));
+  await mod._test.flushAll();
+  assert.equal(calls.flat().filter((m) => m.text.startsWith('encore')).length, 0, 'the flooded messages were deleted by the filter, not read');
   assert.equal(deleted.length, MOD_FLOOD);
+  deleted.length = 0; sent.length = 0; timeouts.length = 0;
 });
 const MOD_FLOOD = MOD.floodMessages;
 

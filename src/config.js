@@ -707,7 +707,7 @@ export const RULES = [
   ['No drama with the mods in public', 'Disagree with a decision? DM Kira: it reaches the mods privately.'],
   ["Discord's rules apply", 'Follow the Discord Terms of Service and Community Guidelines (13+).'],
 ];
-export const RULES_FOOTER = 'Kira enforces these day and night: spam gets a timeout (10 min, then 1 h, then a day), then the mods warn, time out or ban. 3 warnings in 30 days = a 1-hour timeout.';
+export const RULES_FOOTER = 'Kira enforces these day and night: spam gets a warning, then a timeout (10 min, then 1 h, then a day), then the mods warn, time out or ban. 3 warnings in 30 days = a 1-hour timeout.';
 
 export const FAQ = [
   ['What is Horizon?', 'Minecraft: Java Edition rewritten from scratch in Rust, with AI agents, and checked against the real game with differential tests so it behaves exactly like vanilla. It uses the textures and sounds of your own copy of the game. More in #horizon-info.'],

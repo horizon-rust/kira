@@ -46,3 +46,15 @@ export function liftStrike(strikes, timeoutAt, windowMs = 5 * 60_000) {
   }
   return at < 0 ? strikes : strikes.filter((_, i) => i !== at);
 }
+
+/**
+ * A first copy-paste or flood of the day from an established member gets a warning, not a timeout: the mods lifted
+ * those timeouts by hand (case of 2026-11-06: "false ban btw" said 5 times in #general, lifted within a minute, and a
+ * mod asking for the fifth time). Scams and ads still time out at once: anything with a link or a mention, the same
+ * message sprayed over several channels ("dm me for free ai" in 5), and accounts younger than MOD.newAccountDays. `warnedToday`: a warning already given in the last day.
+ */
+export function warnFirst(offending, { accountAgeMs, warnedToday }, MOD) {
+  if (warnedToday || accountAgeMs < MOD.newAccountDays * 86_400_000) return false;
+  if (new Set(offending.map((x) => x.channelId)).size > 1) return false;
+  return !offending.some((x) => x.links || /<@[!&]?\d+>|@everyone|@here/.test(x.content));
+}
