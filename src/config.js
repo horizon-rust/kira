@@ -230,6 +230,7 @@ export const LAYOUT = [
       { key: 'general', name: 'general-chat', aka: ['general'], type: 'text', topic: 'Talk about anything: other games, music, AI coding, life. Horizon talk is welcome too, though #horizon-chat is its home; problems with Horizon go in #horizon-support. English please, so everyone can follow; other languages have their own channels in 🌍 languages.' + CLEARED },
       { key: 'introductions', name: 'introductions', type: 'text', pin: 'intro', topic: 'Say hi once, with the template in the pinned message. One introduction per person.' },
       { key: 'halloffame', name: 'hall-of-fame', type: 'text', readonly: true, topic: 'Messages that got 5 ⭐. React ⭐ to a message you love to send it here.' },
+      { key: 'serverpartners', id: '1568653249031045307', name: '🤝│server-partners', type: 'text', readonly: true, staffPost: true, topic: "Minecraft servers that partner with Horizon's community (not sponsors: those are in #sponsors). Want your server listed? DM Kira with its address, Discord invite and a short description; the staff will get back to you. Premium (online-mode) servers only." },
       { key: 'memes', name: 'memes', type: 'text', topic: 'Memes and funny stuff (Minecraft ones welcome). SFW only. No XP here.' },
       { key: 'botcommands', name: 'bot-commands', type: 'text', topic: 'Use Kira here: /rank, /leaderboard, /working, /remind, /userinfo… Level-ups are announced here. No XP here.' },
     ],
