@@ -43,6 +43,9 @@ let modPausedUntil = 0; // after an API error
 // (/kira-ai off, /kira-ai mod off), pause after an API error and daily budget as the per-message check.
 export const batchEnabled = !!AI.mode && KEY && BATCH.mode !== 'off';
 let batchModerator = batchEnabled ? ai.makeBatchModerator({ client: anthropic, cfg: BATCH }) : null;
+// The image lane of batch moderation: the same switches, pause and budget reserve as the windows.
+export const imagesEnabled = batchEnabled && BATCH.images;
+let imageClassifier = imagesEnabled ? ai.makeImageClassifier({ client: anthropic }) : null;
 const limits = rateLimiter({ ask: [AI.perMemberHour, 3_600_000], notice: [1, 3_600_000] });
 const seen = new Set(); // messages answered or being answered: one answer each
 
@@ -55,6 +58,7 @@ export function record(r, now = Date.now()) {
   d.cost_usd += r.cost ?? 0;
   if (r.kind === 'bug') d.bug_reviews = (d.bug_reviews ?? 0) + 1;
   else if (r.kind === 'mod') d.moderated = (d.moderated ?? 0) + (r.count ?? 0);
+  else if (r.kind === 'image') { d.image_calls = (d.image_calls ?? 0) + 1; d.image_cost_usd = (d.image_cost_usd ?? 0) + (r.cost ?? 0); }
   else if (r.kind === 'batch') { d.batch_windows = (d.batch_windows ?? 0) + 1; d.batch_messages = (d.batch_messages ?? 0) + (r.count ?? 0); d.batch_cost_usd = (d.batch_cost_usd ?? 0) + (r.cost ?? 0); }
   else if (r.status === 'ignore') d.ignored = (d.ignored ?? 0) + 1;
   else if (r.status === 'answer') d.answers++;
@@ -269,6 +273,7 @@ const statusText = () => {
     `Bug reports read before filing: ${bugsEnabled ? `on, ${d.bug_reviews ?? 0} today` : 'off (KIRA_AI_BUGS)'}`,
     `Moderation in every language: ${!modEnabled ? 'off (KIRA_AI_MOD)' : store.modOn ? `on, ${d.moderated ?? 0} messages read today` : 'off (/kira-ai mod on)'}`,
     `Batch moderation: ${!batchEnabled ? 'off (KIRA_BATCH)' : !store.modOn ? 'off (/kira-ai mod on)' : BATCH.mode === 'dry' ? 'dry run (read and logged, nothing posted)' : `on, flags only${BATCH.auto ? ' + auto actions' : ''}`}${d.batch_windows ? `, ${d.batch_windows} windows (${d.batch_messages ?? 0} messages, $${(d.batch_cost_usd ?? 0).toFixed(3)}) today` : ''}`,
+    `Image lane: ${!imagesEnabled ? 'off (KIRA_BATCH, KIRA_BATCH_IMAGES)' : !store.modOn ? 'off (/kira-ai mod on)' : `on, CSAM ${BATCH.imageCsamAuto ? `acted on at ≥ ${BATCH.imageCsamAutoFrom}` : 'flagged only'}, the rest flagged`}${d.image_calls ? `, ${d.image_calls} images ($${(d.image_cost_usd ?? 0).toFixed(3)}) today` : ''}`,
     `Waiting for the team: ${openHandoffs().length} · sources ${sources.ready() ? 'loaded' : 'not loaded yet'}`,
   ].join('\n');
 };
@@ -381,10 +386,33 @@ export async function moderateWindow(win, { exempt } = {}) {
   return r;
 }
 
+// The image lane: true when an image would be read now. Like the windows, it leaves the last BATCH.reserveUsd of the
+// day to Kira's answers.
+export const imageActive = (now = Date.now()) => !!imageClassifier && store.on && store.modOn && now >= modPausedUntil && spentToday(now) < AI.dailyUsd - BATCH.reserveUsd;
+
+// One image read (src/features/batchmod.js): the checked verdict with what the call cost, or null when the check doesn't
+// run or can't be trusted (then nothing happens). Logs never describe the image.
+export async function classifyImage(img) {
+  if (!imageActive()) return null;
+  let r;
+  try {
+    r = await imageClassifier(img);
+  } catch (e) {
+    // A picture the API refuses (format, size) is that picture's problem, not a reason to pause everything.
+    if (e.status !== 400) modPausedUntil = Date.now() + AI.modPauseMs;
+    console.error('kira image moderation', e.status ?? '', clip(e.message, 200));
+    return null;
+  }
+  record({ kind: 'image', cost: r.cost, models: [r.model] });
+  save();
+  if (!r.verdict) { console.error('kira image moderation: output not used,', r.reason); return null; }
+  return r;
+}
+
 export const _test = {
   store, limits, seen,
   set: (o) => {
     if (o.sources) sources = o.sources; if (o.answer) answer = o.answer; if (o.gameAnswer) gameAnswer = o.gameAnswer; if (o.reviewer !== undefined) reviewer = o.reviewer;
-    if (o.moderator !== undefined) moderator = o.moderator; if (o.batchModerator !== undefined) batchModerator = o.batchModerator; if (o.modPausedUntil !== undefined) modPausedUntil = o.modPausedUntil;
+    if (o.moderator !== undefined) moderator = o.moderator; if (o.batchModerator !== undefined) batchModerator = o.batchModerator; if (o.imageClassifier !== undefined) imageClassifier = o.imageClassifier; if (o.modPausedUntil !== undefined) modPausedUntil = o.modPausedUntil;
   },
 };

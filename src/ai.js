@@ -15,6 +15,7 @@ import { FAQ, FAQ_MORE, GITHUB, WORK, RULES } from './config.js';
 import { serverGuideText } from './texts.js';
 import * as kit from './ai-kit.js';
 import * as batchKit from './batch-kit.js';
+import * as imageKit from './image-kit.js';
 
 const REPO = `${GITHUB.owner}/${WORK.repo}`;
 export const DOCS_EVERY_MS = 24 * 60 * 60_000;
@@ -314,6 +315,41 @@ export function makeBatchModerator({ client, model = kit.MODELS.fast, rules = RU
       return checked.ok ? { ...spent, incidents: checked.incidents, dropped: checked.dropped } : { ...spent, incidents: null, reason: checked.reason };
     } catch (e) {
       return { ...spent, incidents: null, reason: `unreadable answer: ${e.message}` };
+    }
+  };
+}
+
+// The image lane of batch moderation (src/features/batchmod.js, rules in src/image-kit.js): one call to the fast model
+// per image, the picture already downscaled (Discord's media proxy) and sent as base64, then the message's text as data.
+// The instructions are the first block with an explicit 1-hour breakpoint, so every call reads them from the cache:
+// this account caches each prompt for an hour on its own, and without the marker the whole prompt, unique image
+// included, was written at 2x every time and never read (measured 2026-11-08: $0.00034 → $0.00014 a typical image).
+// `img`: { data (base64), mediaType, name, text, channel }. Returns { verdict, cost, model, input, output, cacheRead,
+// cacheWrite, reason? }: verdict is checkVerdict's (null when the output can't be trusted, and then nothing happens).
+// Throws only for an API error. Nothing of the image is kept here.
+export function makeImageClassifier({ client, model = kit.MODELS.fast }) {
+  const block = { type: 'text', text: imageKit.INSTRUCTIONS, cache_control: { type: 'ephemeral', ttl: '1h' } };
+  return async function classify(img) {
+    const r = await client.messages.create({
+      model, max_tokens: 1500, system: imageKit.SYSTEM, // ~90 tokens out; 300 cut 2% of answers mid-thought
+      messages: [{ role: 'user', content: [
+        block,
+        { type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } },
+        { type: 'text', text: imageKit.messageBlock(img) },
+      ] }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: imageKit.SCHEMA } },
+    });
+    const u = r.usage ?? {};
+    const spent = {
+      cost: kit.costOf(model, u), model, input: u.input_tokens ?? 0, output: u.output_tokens ?? 0,
+      cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0,
+    };
+    if (r.stop_reason !== 'end_turn') return { ...spent, verdict: null, reason: `stop: ${r.stop_reason}` };
+    try {
+      const checked = imageKit.checkVerdict(JSON.parse(r.content.filter((b) => b.type === 'text').map((b) => b.text).join('')));
+      return checked.ok ? { ...spent, verdict: checked } : { ...spent, verdict: null, reason: checked.reason };
+    } catch (e) {
+      return { ...spent, verdict: null, reason: `unreadable answer: ${e.message}` };
     }
   };
 }

@@ -835,9 +835,24 @@ export const BATCH = {
   ladderWindowDays: 30,
   maxAgeMs: 24 * 60 * 60_000,
   overturnLimit: 0.05,
-  // CSAM: delete at once, quarantine, alert the mods and the Team, never store or repost the image. Kira's model calls
-  // send text only (no image lane yet), so this stays off: a text suspicion is an alert with buttons for the mods.
+  // CSAM from the text alone: an alert with buttons for the mods (KIRA_BATCH_CSAM_AUTO stays off: text can't show it).
   csamAuto: envOn('KIRA_BATCH_CSAM_AUTO'),
+  // The image lane (Ludovic, 2026-11-08; src/image-kit.js): every image posted where this lane reads gets one Haiku
+  // vision call, downscaled first (long side imageMaxSide px, through Discord's media proxy). On with the batch lane;
+  // KIRA_BATCH_IMAGES=off stops it. Categories csam, sexual_gore, scam, none. CSAM at ≥ imageCsamAutoFrom is the one
+  // automatic action: the message deleted at once, the author quarantined, the mods and the Team alerted with ids,
+  // times and a jump link only; the image is never stored, reposted, attached, hashed or described
+  // (KIRA_BATCH_IMAGE_CSAM_AUTO=off makes it an alert with buttons). Everything else is a flag (≥ imageFlagFrom) or a
+  // note, never an action. Same daily budget and reserve as the windows (measured 2026-11-08: 541 images, ~$0.11 a day).
+  images: !['0', 'off', 'false', 'no'].includes((process.env.KIRA_BATCH_IMAGES ?? '').trim().toLowerCase()),
+  imageCsamAuto: !['0', 'off', 'false', 'no'].includes((process.env.KIRA_BATCH_IMAGE_CSAM_AUTO ?? '').trim().toLowerCase()),
+  imageCsamAutoFrom: 0.90,
+  imageFlagFrom: 0.70,
+  imageMaxSide: 1024, // ~1,000 image tokens at most; small text in scam screenshots stays readable
+  imageMaxBytes: 3 * 1024 * 1024, // the downscaled JPEG; larger is skipped
+  imagesPerMessage: 4,
+  imageQueueMax: 200, // a burst past this (a raid of images) drops the oldest waiting ones, logged
+  imageConcurrency: 2,
   // Never read: the staff category, tickets (mod-mail and appeal threads live in staff channels), the honeypot,
   // and any channel @everyone can't see (checked live).
   excluded: ['appeal', 'honeypot', 'reports', 'modmail', 'horizonteam'],

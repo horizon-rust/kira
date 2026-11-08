@@ -349,13 +349,15 @@ export function flagView(c) {
   const head = `<@${c.userId}>${c.tag ? ` (${clip(c.tag, 40)})` : ''} · \`${c.userId}\` in <#${b.channelId}>`;
   const decision = b.decision ? [{ name: 'Decision', value: clip(decisionText(b.decision), 1000) }] : [];
   if (b.category === 'csam') {
+    const image = b.lane === 'image';
     return {
-      title: `⛔ Case #${c.n} · possible CSAM`,
+      title: `⛔ Case #${c.n} · possible CSAM${image ? ' in an image' : ''}${b.auto ? ' · Kira acted' : ''}`,
       color: 0x000000,
-      description: `${head}\nNothing was stored, reposted or attached: only the ids and times below. Report them to Discord Trust & Safety (https://dis.gd/request), and remove the messages if they are still up.`,
+      description: `${head}\nNothing was stored, reposted or attached: only the ids and times below. Report them to Discord Trust & Safety (https://dis.gd/request)${b.auto ? '' : ', and remove the messages if they are still up'}.`,
       fields: [
         { name: 'Messages', value: clip(b.messages.map((m) => `\`${m.id}\` ${stamp(m.at)} [jump](${m.url})`).join('\n'), 1000) },
         { name: 'Confidence', value: String(b.confidence), inline: true },
+        ...(b.auto ? [{ name: 'Kira acted', value: clip(`${b.autoDone ?? 'deleting and quarantining…'}\nWrong? A mod writes \`undo case #${c.n}\` here (it lifts the quarantine; the message can't come back).`, 1000) }] : []),
         ...decision,
       ],
       footer: footer(b),
@@ -392,7 +394,7 @@ export function flagView(c) {
     footer: footer(b),
   };
 }
-const footer = (b) => `Kira's batch read · ${b.window?.fresh ?? '?'} new + ${b.window?.context ?? '?'} earlier messages · ${b.model ?? ''}`.trim();
+const footer = (b) => b.lane === 'image' ? `Kira's image check · ${b.model ?? ''}`.trim() : `Kira's batch read ·${b.window?.fresh ?? '?'} new + ${b.window?.context ?? '?'} earlier messages · ${b.model ?? ''}`.trim();
 
 export function decisionText(d) {
   const by = d.by ? `<@${d.by}>` : 'Kira';
