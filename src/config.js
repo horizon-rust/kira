@@ -798,3 +798,47 @@ export const AI = {
   modBatchMax: 10,
   modPauseMs: 5 * 60_000, // after an API error, the check pauses this long (the filters still run)
 };
+
+// Batch moderation (src/features/batchmod.js, rules in src/batch-kit.js; pointofpressure's proposal, Ludovic's decision of
+// 2026-11-08: two steps). Every public channel is read in windows: the new messages since the last window plus ~50
+// earlier ones for context, one model call per window. A window closes after a random 10 to 30 minutes (so it can't be
+// timed) or 200 new messages. KIRA_BATCH: unset or off, nothing; `dry`, windows are read and logged (console only),
+// nothing is posted; `on`, step 1: each incident is a flag in #mod-chat with Confirm / Dismiss / Change action, and a
+// numbered case. Kira acts on her own only in step 2, KIRA_BATCH_AUTO=1 (off; a later decision, after a week of
+// step-1 numbers). Same AI switches and daily budget as the rest of Kira's AI.
+const envOn = (name) => ['1', 'on', 'true', 'yes'].includes((process.env[name] ?? '').trim().toLowerCase());
+const ladder = (process.env.KIRA_BATCH_LADDER ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+export const BATCH = {
+  mode: (() => {
+    const v = (process.env.KIRA_BATCH ?? '').trim().toLowerCase();
+    return v === 'dry' ? 'dry' : ['1', 'on', 'live'].includes(v) ? 'on' : 'off';
+  })(),
+  windowMinMs: 10 * 60_000,
+  windowMaxMs: 30 * 60_000,
+  windowMaxMessages: 200,
+  contextMessages: 50, // earlier messages read with each window, for context only
+  userLookbackMs: 60 * 60_000, // the per-user summary: what each author wrote in other channels in the last hour
+  textMax: 600, // characters of one message the model reads
+  flagFrom: 0.70, // below: a note in the member's history only, no flag
+  // The day's AI budget (AI.dailyUsd) is shared with Kira's answers: the batch lane pauses when less than this is left,
+  // so a busy day never stops her answers (measured 2026-11-08: about $0.6 a day of batch reading on top of ~$1.1-2.7).
+  reserveUsd: 0.75,
+  csamFrom: 0.50, // a CSAM suspicion alerts the mods and the Team from this confidence
+  // Step 2, prepared and OFF (Ludovic, 2026-11-08): at confidence ≥ autoFrom, only these categories, Kira deletes the
+  // messages and times out (the ladder) or quarantines (lifted by mods only). Never bans, never staff or the Horizon
+  // Team, never messages older than maxAgeMs. `undo case #N` reverses it; a category with more than overturnLimit of
+  // its week's auto actions overturned falls back to flag-only until a mod restores it (/kira-batch).
+  auto: envOn('KIRA_BATCH_AUTO'),
+  autoFrom: 0.95,
+  autoCategories: ['spam', 'scam', 'raid'],
+  ladder: ladder.length ? ladder : ['1h', '24h', '7d'], // first timeout, second within ladderWindowDays, third and after
+  ladderWindowDays: 30,
+  maxAgeMs: 24 * 60 * 60_000,
+  overturnLimit: 0.05,
+  // CSAM: delete at once, quarantine, alert the mods and the Team, never store or repost the image. Kira's model calls
+  // send text only (no image lane yet), so this stays off: a text suspicion is an alert with buttons for the mods.
+  csamAuto: envOn('KIRA_BATCH_CSAM_AUTO'),
+  // Never read: the staff category, tickets (mod-mail and appeal threads live in staff channels), the honeypot,
+  // and any channel @everyone can't see (checked live).
+  excluded: ['appeal', 'honeypot', 'reports', 'modmail', 'horizonteam'],
+};

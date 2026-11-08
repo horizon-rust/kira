@@ -8,6 +8,7 @@ import { GUILD_ID, OWNER_ID, MOD, LAYOUT, AI, RULES } from '../config.js';
 import { client, state, save, channel, isStaff, clip, ago, modlog, parseDuration, human, quietDeletes } from '../core.js';
 import { linkify } from '../texts.js';
 import * as kiraAi from './ai.js';
+import * as batch from './batchmod.js';
 import { honeypotExempt, honeypotAction, makeHandled, honeypotLog } from '../honeypot-kit.js';
 import { spamVerdict, warnFirst } from '../spam-kit.js';
 import { expect, banNotice } from './modcases.js';
@@ -362,12 +363,12 @@ async function moderate(msg) {
     state.spamWarned[m.id] = now; save();
     const seen = new Set();
     const copies = offending.filter((x) => seen.has(x.content) || !seen.add(x.content));
-    for (const x of copies) { dropAi(x.id); await client.channels.cache.get(x.channelId)?.messages.delete(x.id).catch(() => {}); }
+    for (const x of copies) { dropAi(x.id); batch.drop(x.id); await client.channels.cache.get(x.channelId)?.messages.delete(x.id).catch(() => {}); }
     await msg.channel.send({ content: `<@${msg.author.id}> please don't ${copies.length ? 'repeat messages' : 'flood the chat'} (${why}): next time today it's a timeout.`, allowedMentions: { parse: [] } });
     await modlog('⚠️ Spam warning', `<@${msg.author.id}> (${msg.author.tag}) in <#${msg.channel.id}>: ${why}. Warned, ${copies.length} copies deleted, no timeout (first time today).`, 0xf1c40f);
     return true;
   }
-  for (const x of offending) dropAi(x.id); // deleted below: not worth reading
+  for (const x of offending) { dropAi(x.id); batch.drop(x.id); } // deleted below: not worth reading
   for (const x of offending) await client.channels.cache.get(x.channelId)?.messages.delete(x.id).catch(() => {});
   // One case in #mod-actions: the deleted messages are its evidence, its Undo button lifts it all.
   const row = undoable({ user: msg.author.id, tag: msg.author.tag, messages: offending, timeout: true, strike: 'spamStrikes' });
@@ -481,9 +482,13 @@ async function aiAct({ msg, scope }, v, call) {
     { name: 'Model', value: `${call.model}, $${call.cost.toFixed(5)} for ${call.results.length} message${call.results.length > 1 ? 's' : ''}`, inline: true },
   ];
   if (v.verdict === 'flag') {
+    // The batch lane reads whole conversations and flags with buttons (src/features/batchmod.js): while it is on,
+    // this one-message check no longer flags (its false piracy flags: "send shaders pls"), it only removes.
+    if (batch.flagsByBatch()) return;
     return modlog('🤖 Flagged for a mod (Kira\'s AI)', `${who} · [jump](${msg.url})\nNot deleted: a mod decides.`, 0xf0932b, fields);
   }
   const lang = AI_NOTES[v.language] ? v.language : LANG_OF[scope] ?? 'en';
+  batch.drop(msg.id); // removed: the batch lane won't read it again
   await remove(msg, linkify(AI_NOTES[lang](v.rule), state));
   // Repeat offenders: from the second removal in a day, the spam timeout ladder.
   const day = Date.now() - 864e5;

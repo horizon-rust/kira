@@ -7,7 +7,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { SlashCommandBuilder, PermissionFlagsBits as P, MessageFlags } from 'discord.js';
-import { AI, GUILD_ID, OWNER_ID } from '../config.js';
+import { AI, BATCH, GUILD_ID, OWNER_ID } from '../config.js';
 import { client, state, save, isStaff, modlog, clip } from '../core.js';
 import { makePublicGitHub } from '../github.js';
 import { appToken } from '../github-app.js';
@@ -39,6 +39,10 @@ let reviewer = bugsEnabled ? ai.makeBugReviewer({ client: anthropic }) : null;
 export const modEnabled = !!AI.mode && AI.mod && KEY;
 let moderator = modEnabled ? ai.makeModerator({ client: anthropic }) : null;
 let modPausedUntil = 0; // after an API error
+// Batch moderation (src/features/batchmod.js): needs the AI on (KIRA_AI, the key) and KIRA_BATCH; the same switches
+// (/kira-ai off, /kira-ai mod off), pause after an API error and daily budget as the per-message check.
+export const batchEnabled = !!AI.mode && KEY && BATCH.mode !== 'off';
+let batchModerator = batchEnabled ? ai.makeBatchModerator({ client: anthropic, cfg: BATCH }) : null;
 const limits = rateLimiter({ ask: [AI.perMemberHour, 3_600_000], notice: [1, 3_600_000] });
 const seen = new Set(); // messages answered or being answered: one answer each
 
@@ -51,6 +55,7 @@ export function record(r, now = Date.now()) {
   d.cost_usd += r.cost ?? 0;
   if (r.kind === 'bug') d.bug_reviews = (d.bug_reviews ?? 0) + 1;
   else if (r.kind === 'mod') d.moderated = (d.moderated ?? 0) + (r.count ?? 0);
+  else if (r.kind === 'batch') { d.batch_windows = (d.batch_windows ?? 0) + 1; d.batch_messages = (d.batch_messages ?? 0) + (r.count ?? 0); d.batch_cost_usd = (d.batch_cost_usd ?? 0) + (r.cost ?? 0); }
   else if (r.status === 'ignore') d.ignored = (d.ignored ?? 0) + 1;
   else if (r.status === 'answer') d.answers++;
   else d.passed_to_team++;
@@ -263,6 +268,7 @@ const statusText = () => {
     `Today: $${spentToday().toFixed(2)} of $${AI.dailyUsd}, ${d.answers} answered, ${d.passed_to_team} passed to the team`,
     `Bug reports read before filing: ${bugsEnabled ? `on, ${d.bug_reviews ?? 0} today` : 'off (KIRA_AI_BUGS)'}`,
     `Moderation in every language: ${!modEnabled ? 'off (KIRA_AI_MOD)' : store.modOn ? `on, ${d.moderated ?? 0} messages read today` : 'off (/kira-ai mod on)'}`,
+    `Batch moderation: ${!batchEnabled ? 'off (KIRA_BATCH)' : !store.modOn ? 'off (/kira-ai mod on)' : BATCH.mode === 'dry' ? 'dry run (read and logged, nothing posted)' : `on, flags only${BATCH.auto ? ' + auto actions' : ''}`}${d.batch_windows ? `, ${d.batch_windows} windows (${d.batch_messages ?? 0} messages, $${(d.batch_cost_usd ?? 0).toFixed(3)}) today` : ''}`,
     `Waiting for the team: ${openHandoffs().length} · sources ${sources.ready() ? 'loaded' : 'not loaded yet'}`,
   ].join('\n');
 };
@@ -354,10 +360,31 @@ export async function moderateBatch(batch) {
   return r;
 }
 
+// Batch moderation: true when a window would be read now.
+export const batchActive = (now = Date.now()) => !!batchModerator && store.on && store.modOn && now >= modPausedUntil && spentToday(now) < AI.dailyUsd - BATCH.reserveUsd;
+
+// One window read (src/features/batchmod.js): the checked incidents with what the call cost, or null when the check
+// doesn't run or can't be trusted (then nothing happens).
+export async function moderateWindow(win, { exempt } = {}) {
+  if (!win.fresh.length || !batchActive()) return null;
+  let r;
+  try {
+    r = await batchModerator(win, { exempt });
+  } catch (e) {
+    modPausedUntil = Date.now() + AI.modPauseMs;
+    console.error('kira batch moderation', e.status ?? '', e.message);
+    return null;
+  }
+  record({ kind: 'batch', count: win.fresh.length, cost: r.cost, models: [r.model] });
+  save();
+  if (!r.incidents) { console.error('kira batch moderation: output not used,', r.reason); return null; }
+  return r;
+}
+
 export const _test = {
   store, limits, seen,
   set: (o) => {
     if (o.sources) sources = o.sources; if (o.answer) answer = o.answer; if (o.gameAnswer) gameAnswer = o.gameAnswer; if (o.reviewer !== undefined) reviewer = o.reviewer;
-    if (o.moderator !== undefined) moderator = o.moderator; if (o.modPausedUntil !== undefined) modPausedUntil = o.modPausedUntil;
+    if (o.moderator !== undefined) moderator = o.moderator; if (o.batchModerator !== undefined) batchModerator = o.batchModerator; if (o.modPausedUntil !== undefined) modPausedUntil = o.modPausedUntil;
   },
 };
