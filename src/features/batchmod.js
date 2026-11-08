@@ -13,6 +13,11 @@
 // Step 2 (KIRA_BATCH_AUTO=1, off): at ≥ BATCH.autoFrom, for spam, scams and raids only, Kira deletes the messages and
 // times out (the ladder) or quarantines. Never a ban, never staff or the Team, never messages older than 24 h.
 // `undo case #N` reverses it; a category with too many overturns in a week falls back to flags (/kira-batch restore).
+//
+// The image lane (with the batch lane; KIRA_BATCH_IMAGES=off stops it): each image posted where the lane reads gets one
+// Haiku vision call as it arrives, downscaled by Discord's media proxy (src/image-kit.js). CSAM at high confidence: the
+// message deleted at once, the author quarantined, an alert with ids, times and a jump link only (the one thing Kira
+// does by herself now). Sexual/gore and scam images are flags with the same buttons. Nothing of a CSAM image is kept.
 import { createHash } from 'node:crypto';
 import {
   SlashCommandBuilder, PermissionFlagsBits as P, MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
@@ -21,6 +26,7 @@ import {
 import { BATCH, GUILD_ID, LAYOUT, OWNER_ID } from '../config.js';
 import { client, state, save, channel, isStaff, clip, human, parseDuration, quietDeletes } from '../core.js';
 import * as kit from '../batch-kit.js';
+import * as imageKit from '../image-kit.js';
 import * as mk from '../modcase-kit.js';
 import * as kiraAi from './ai.js';
 import { expect, quarantine, unquarantine } from './modcases.js';
@@ -80,7 +86,10 @@ function snap(msg) {
     name: msg.member?.displayName ?? msg.author.globalName ?? msg.author.username ?? 'someone',
     tag: msg.author.tag ?? msg.author.username ?? null,
     at: msg.createdTimestamp ?? Date.now(), text,
-    files: [...(msg.attachments?.values?.() ?? [])].map((a) => ({ name: a.name ?? 'file', url: a.url, size: a.size ?? 0, type: a.contentType ?? null })),
+    files: [...(msg.attachments?.values?.() ?? [])].map((a) => ({
+      name: a.name ?? 'file', url: a.url, size: a.size ?? 0, type: a.contentType ?? null,
+      proxyUrl: a.proxyURL ?? null, width: a.width ?? null, height: a.height ?? null,
+    })),
     reply: msg.reference?.messageId ?? null, url: msg.url,
     accountAt: msg.author.createdTimestamp ?? null, joinedAt: msg.member?.joinedTimestamp ?? null,
     exempt: exemptMember(msg.member, msg.author),
@@ -101,9 +110,14 @@ export function observe(msg, now = Date.now()) {
   if (BATCH.mode === 'off' || !eligible(msg.channel, now)) return;
   const s = snap(msg);
   acts.add(s, msg.channel?.name ?? 'unknown', now);
+  queueImages(s);
   if (book.add(s, now)) closeWindow(msg.channelId).catch((e) => console.error('batch window', e));
 }
-export const drop = (id) => book.drop(id); // a filter removed it
+export const drop = (id) => { // a filter removed it
+  book.drop(id);
+  const i = imageQueue.findIndex((x) => x.snap.id === id);
+  if (i >= 0) imageQueue.splice(i, 1);
+};
 export const edit = (id, text) => book.edit(id, text);
 
 const newer = (a, b) => BigInt(a) > BigInt(b);
@@ -165,8 +179,67 @@ export async function closeWindow(channelId) {
   }
 }
 
+// ── Images ──────────────────────────────────────────────────────────────────
+
+const imageQueue = []; // [{ snap, files }], one entry per message
+let imageRunning = 0;
+function queueImages(s) {
+  if (!kiraAi.imagesEnabled || s.exempt) return;
+  const files = imageKit.images(s.files, BATCH.imagesPerMessage);
+  if (!files.length) return;
+  imageQueue.push({ snap: s, files });
+  if (imageQueue.length > BATCH.imageQueueMax) console.error(`image lane: ${imageQueue.splice(0, imageQueue.length - BATCH.imageQueueMax).length} messages dropped unread (queue full)`);
+  pumpImages();
+}
+function pumpImages() {
+  while (imageRunning < BATCH.imageConcurrency && imageQueue.length) {
+    const item = imageQueue.shift();
+    imageRunning++;
+    readImages(item).catch((e) => console.error('image lane', clip(e.message, 200))).finally(() => { imageRunning--; pumpImages(); });
+  }
+}
+const imagesIdle = async () => { while (imageRunning || imageQueue.length) await new Promise((r) => setTimeout(r, 2)); };
+
+// The downscaled picture as base64, in memory only for the call.
+const MEDIA = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+let fetchImpl = (...a) => fetch(...a);
+async function fetchImage(f) {
+  const res = await fetchImpl(imageKit.downscaledUrl(f, BATCH.imageMaxSide), { signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const type = String(res.headers.get('content-type') ?? '').split(';')[0].trim();
+  if (!MEDIA.has(type)) throw new Error(`type ${type || 'none'}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > BATCH.imageMaxBytes) throw new Error(`${buf.length} bytes`);
+  return { data: buf.toString('base64'), mediaType: type };
+}
+
+// One message's images, one call each, in order; the first that opens a case ends it (one case per message).
+async function readImages({ snap: s, files }) {
+  const name = client.channels.cache.get(s.channelId)?.name ?? 'unknown';
+  for (const f of files) {
+    if (!kiraAi.imageActive()) return;
+    let img;
+    try {
+      img = await fetchImage(f);
+    } catch (e) {
+      console.error(`image lane: ${s.id} not fetched (${clip(e.message, 80)})`);
+      continue;
+    }
+    const r = await kiraAi.classifyImage({ ...img, name: f.name, text: s.text, channel: name });
+    img = null;
+    if (!r) continue;
+    const v = r.verdict;
+    const kind = imageKit.route(v, BATCH);
+    // The log names the message, never the file or what the model saw.
+    console.log(`image${BATCH.mode === 'dry' ? ' (dry run)' : ''}: #${name} ${s.id} → ${v.category} ${v.confidence}${kind ? ` (${kind})` : ''}, $${r.cost.toFixed(5)}`);
+    if (!kind) continue;
+    await handle(imageKit.incident(v, s, f), kind, { channelId: s.channelId, window: null, model: r.model });
+    if (kind !== 'note') return;
+  }
+}
+
 async function handle(inc, kind, meta) {
-  if (BATCH.mode === 'dry') return console.log(`batch (dry run): would ${kind} ${inc.category} ${inc.confidence} on ${inc.userId}: ${clip(inc.reason, 200)}`);
+  if (BATCH.mode === 'dry') return console.log(`batch (dry run): would ${kind} ${inc.category} ${inc.confidence} on ${inc.userId}${inc.category === 'csam' ? '' : `: ${clip(inc.reason, 200)}`}`);
   if (kind === 'note') {
     const list = (store.notes[inc.userId] ?? []).filter((t) => Date.now() - t < 30 * DAY);
     list.push(Date.now());
@@ -174,6 +247,7 @@ async function handle(inc, kind, meta) {
     save();
     return;
   }
+  if (kind === 'csam-auto') return csamImage(inc, meta);
   if (kind === 'csam') return csam(inc, meta);
   if (kind === 'auto') return autoAct(inc, meta);
   return post(await openIncident(inc, meta));
@@ -182,11 +256,11 @@ async function handle(inc, kind, meta) {
 // ── Cases ───────────────────────────────────────────────────────────────────
 
 const HASH_MAX = 10 * 1024 * 1024;
-async function hashFile(f, fetchImpl = fetch) {
+async function hashFile(f, get = fetchImpl) {
   if (!f.url) return { hashError: 'no link' };
   if (f.size > HASH_MAX) return { hashError: 'over 10 MB' };
   try {
-    const res = await fetchImpl(f.url);
+    const res = await get(f.url, { signal: AbortSignal.timeout(20_000) });
     if (!res.ok) return { hashError: `HTTP ${res.status}` };
     return { sha256: createHash('sha256').update(Buffer.from(await res.arrayBuffer())).digest('hex') };
   } catch (e) {
@@ -207,7 +281,7 @@ async function openIncident(inc, meta, { csam = false, auto = false } = {}) {
     reason: csam ? '' : inc.reason, quotes: csam ? [] : inc.quotes, channelId: meta.channelId,
     messages: await Promise.all(inc.messages.map((s) => keep(s, !csam, !csam))),
     context: csam ? [] : await Promise.all(inc.context.map((s) => keep({ ...s, text: clip(s.text, 200) }, true, false))),
-    window: meta.window, model: meta.model, auto, decision: null,
+    window: meta.window, model: meta.model, auto, decision: null, lane: inc.lane ?? 'text',
   };
   const c = mk.openCase(mc(), { action: 'flag', userId: inc.userId, tag, by: mk.KIRA, reason: csam ? 'possible CSAM (only ids and times are kept)' : `${inc.rule}: ${inc.reason}` });
   c.batch = batch;
@@ -312,6 +386,35 @@ async function csam(inc, meta) {
   return post(c, { ping: true });
 }
 
+// A CSAM suspicion in an image, at high confidence: the message goes first, then the alert (pinging the mods and the
+// Team), then the quarantine, which points to the alert. Only ids, times and the jump link are kept.
+async function csamImage(inc, meta) {
+  const c = await openIncident(inc, meta, { csam: true, auto: true });
+  for (const s of inc.messages) book.drop(s.id); // the text lane won't read it either
+  const n = await deleteMessages(c.batch.messages);
+  const done = [`${n} of ${c.batch.messages.length} message${c.batch.messages.length > 1 ? 's' : ''} deleted`];
+  await post(c, { ping: true });
+  let error = null;
+  const m = await guild()?.members.fetch(c.userId).catch(() => null);
+  if (!m) error = 'not on the server any more: a mod bans by hand if needed';
+  else if (exemptMember(m, m.user)) error = 'staff or the Horizon Team: not quarantined, handle it by hand';
+  else {
+    try {
+      await quarantine(m, {
+        by: mk.KIRA, reason: `case #${c.n}: an image removed under "Keep it SFW"`, evidence: { url: c.url, label: `alert case #${c.n}` },
+        components: (ac) => { c.batch.actionCase = ac.n; save(); return []; },
+      });
+      done.push('quarantine (until a mod lifts it)');
+    } catch (e) {
+      error = e.message;
+    }
+  }
+  c.batch.autoDone = `${done.join(', ')}${error ? ` · ⚠️ ${error}` : ''}`;
+  save();
+  await refresh(c);
+  return c;
+}
+
 // Step 2 only (BATCH.auto): Kira acts, then posts the case with its Undo.
 async function autoAct(inc, meta) {
   const c = await openIncident(inc, meta, { auto: true });
@@ -345,8 +448,8 @@ export async function undo(n, by) {
   c.batch.decision = { kind: 'undone', by, at: Date.now(), error };
   save();
   await refresh(c);
-  const fell = checkFallback(c.batch.category);
-  return `↩️ Case #${c.n} undone${ac ? ` (case #${ac.n}, ${mk.ACTIONS[ac.action]?.label.toLowerCase()}, lifted)` : ''}. Deleted messages can't come back; their text is in the case.${error ? ` ⚠️ ${error}` : ''}${fell ? `\n**${c.batch.category}** now falls back to flags only (more than ${BATCH.overturnLimit * 100}% overturned this week); \`/kira-batch restore\` switches it back.` : ''}`;
+  const fell = BATCH.autoCategories.includes(c.batch.category) && checkFallback(c.batch.category);
+  return `↩️ Case #${c.n} undone${ac ? ` (case #${ac.n}, ${mk.ACTIONS[ac.action]?.label.toLowerCase()}, lifted)` : ''}. Deleted messages can't come back${c.batch.category === 'csam' ? '' : '; their text is in the case'}.${error ? ` ⚠️ ${error}` : ''}${fell ? `\n**${c.batch.category}** now falls back to flags only (more than ${BATCH.overturnLimit * 100}% overturned this week); \`/kira-batch restore\` switches it back.` : ''}`;
 }
 
 function checkFallback(category, now = Date.now()) {
@@ -433,13 +536,14 @@ export const handlers = {
       `Batch moderation: **${BATCH.mode === 'on' ? 'on (step 1: flags only)' : BATCH.mode}**${kiraAi.batchEnabled ? '' : ' (needs KIRA_AI and the key)'}${BATCH.mode === 'on' && !kiraAi.batchActive() ? ', paused now (/kira-ai, budget, or an API error)' : ''}`,
       `Auto actions (step 2): **${BATCH.auto ? `on for ${BATCH.autoCategories.join(', ')} at ≥ ${BATCH.autoFrom}` : 'off'}** · ladder ${BATCH.ladder.join(' / ')}${fell.length ? ` · back to flags: ${fell.join(', ')}` : ''}`,
       `Windows open now: ${book.size}`,
+      `Image lane: **${!kiraAi.imagesEnabled ? 'off' : `on, CSAM ${BATCH.imageCsamAuto ? `acted on at ≥ ${BATCH.imageCsamAutoFrom}` : 'flagged only'}, the rest flagged`}**${kiraAi.imagesEnabled && BATCH.mode === 'on' && !kiraAi.imageActive() ? ', paused now (/kira-ai, budget, or an API error)' : ''}${kiraAi.imagesEnabled ? ` · ${imageQueue.length} waiting` : ''}`,
       kit.weeklyLine(kit.accuracy(mc().cases, Date.now() - 7 * DAY), { auto: BATCH.auto }),
     ].join('\n')));
   },
 };
 
 export function setup() {
-  console.log(`kira batch moderation: ${BATCH.mode === 'off' ? 'off' : kiraAi.batchEnabled ? `${BATCH.mode}${BATCH.auto ? ', auto actions on' : ', flags only'}` : `${BATCH.mode}, but the AI is off (KIRA_AI, ANTHROPIC_API_KEY)`}`);
+  console.log(`kira batch moderation: ${BATCH.mode === 'off' ? 'off' : kiraAi.batchEnabled ? `${BATCH.mode}${BATCH.auto ? ', auto actions on' : ', flags only'}${kiraAi.imagesEnabled ? `, image lane on (CSAM ${BATCH.imageCsamAuto ? 'acted on' : 'flagged'})` : ', image lane off'}` :`${BATCH.mode}, but the AI is off (KIRA_AI, ANTHROPIC_API_KEY)`}`);
   if (BATCH.mode === 'off') return;
   client.on('interactionCreate', (i) => {
     if (i.guildId !== GUILD_ID || !(i.isButton?.() || i.isStringSelectMenu?.()) || !i.customId.startsWith(PREFIX)) return;
@@ -454,4 +558,7 @@ export function setup() {
   setInterval(() => hourly().catch((e) => console.error('batch hourly', e)), 3_600_000).unref?.();
 }
 
-export const _test = { book, store, closeWindow, onInteraction, undo, hourly, eligibleCache, toppedUp, hashFile };
+export const _test = {
+  book, store, closeWindow, onInteraction, undo, hourly, eligibleCache, toppedUp, hashFile, imageQueue, imagesIdle, readImages, fetchImage,
+  setFetch: (fn) => { fetchImpl = fn; },
+};

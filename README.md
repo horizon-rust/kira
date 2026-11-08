@@ -524,9 +524,35 @@ the call `makeBatchModerator` in [`src/ai.js`](src/ai.js), settings `BATCH` in `
   Kira never acts on staff or the Horizon Team (Confirm says so). Below 0.70: a note in the member's history (no ping), which the
   next windows see.
 - **CSAM suspicion** (0.50 or more): one alert in #mod-chat pinging 🛡️ Mod and the Horizon Team, with message ids, times and jump
-  links only: no text, no file names, no hashes, no image is ever stored or reposted. Confirm deletes and quarantines. Kira's model
-  calls send **text only**, so Kira can't see images: the image lane is off, and so is the automatic delete
-  (`KIRA_BATCH_CSAM_AUTO`, off). A vision check of every image would cost about $0.08 a day at today's ~400 images a day.
+  links only: no text, no file names, no hashes, no image is ever stored or reposted. Confirm deletes and quarantines. From the
+  text alone Kira never acts herself (`KIRA_BATCH_CSAM_AUTO`, off); from an image, see the image lane.
+- **The image lane** (Ludovic, 2026-11-08; [`src/image-kit.js`](src/image-kit.js), the call `makeImageClassifier` in
+  [`src/ai.js`](src/ai.js)). Every image a member posts where the windows read (same exclusions; staff, the Team and bots are
+  skipped) gets **one Haiku vision call** as it arrives, at most 4 images a message. The picture is downscaled first by Discord's
+  media proxy (long side 1,024 px, one JPEG frame, even for a GIF), held in memory for the call only, and never written anywhere.
+  The model reads the instructions (a cached first block), the image, then the member's text and file name as data, and answers
+  one of **csam**, **sexual_gore**, **scam** (fake giveaways, free Nitro, QR codes, crypto, fake staff or login notices), **none**,
+  with a confidence; a csam answer keeps no reason.
+  - **CSAM at 0.90 or more: the one thing Kira does by herself.** The message is deleted at once, then the alert above (ids, time,
+    jump link only, pinging 🛡️ Mod and the Team), then the author is quarantined (`case #N: an image removed under "Keep it SFW"`
+    in their DM, nothing more). The alert says what was done and has **Undo** (`undo case #N` too), which lifts the quarantine;
+    the message can't come back. The image, its name, its hash and the message's text are never kept, posted or logged (the
+    console line names the message id only). Below 0.90: the alert with Confirm / Dismiss, nothing done; below 0.50 a note.
+    `KIRA_BATCH_IMAGE_CSAM_AUTO=off` makes every image suspicion an alert with buttons.
+  - **sexual_gore and scam at 0.70 or more: a flag**, exactly as in step 1 (categories `image-sexual-gore` and `image-scam` in the
+    week's numbers), never an action, however sure. Its evidence holds the message's text and the attachment's name and SHA-256,
+    not the image (the jump link leads to it while it's up). Below 0.70: a note.
+  - **Budget:** counted in the same daily budget, and paused with the windows when less than $0.75 of it is left, so Kira's answers
+    are never cut for it; `/kira-ai mod off` stops it too. `GET /ai-usage` counts `image_calls` and `image_cost_usd`.
+    `KIRA_BATCH_IMAGES=off` turns the lane off.
+  - **Cost, measured** (`node scripts/measure-image-mod.mjs <hours> <out.json> [max images]`, read-only: the last hours' public
+    images through the real call, posts nothing, writes no image): on 2026-11-08, 541 member images in 24 hours, 530 read, **$0.103
+  (~$0.0002 an image, ~$0.11 a day)**; 9 flags, all `scam`: 3 right (screenshots of a "cracked" Horizon launcher repo), 6 wrong
+  (a "free RAT" joke meme posted 4 times, a member's ban screen from another server twice). The instructions then learned
+  that jokes about malware and members' own ban screens are not scams: re-read, 2 of the 6 still flag (0.72, 0.80), the 3 right
+  ones too. 11 answers were cut by a 300-token cap (thinking), now 1,500. This API account caches every prompt for an hour
+    on its own, billed at 2x: the instructions carry an explicit 1-hour breakpoint so each call reads them from the cache
+    (without it each image cost ~2.4x more); the image itself is still written at 2x and never read back.
 - **Accuracy:** each Monday from 09:00 UTC, one line in #mod-chat: per category, flags confirmed, changed, dismissed, open.
   `/kira-batch status` shows it any time.
 - **Step 2, prepared and off (`KIRA_BATCH_AUTO=1`).** At confidence ≥ 0.95, for **spam, scams and raids only**, Kira deletes the
@@ -540,7 +566,7 @@ the call `makeBatchModerator` in [`src/ai.js`](src/ai.js), settings `BATCH` in `
   stops it) and daily budget as the rest of Kira's AI, but it pauses when less than $0.75 of the day's budget is left, so her
   answers never stop for it. `GET /ai-usage` counts `batch_windows`, `batch_messages`, `batch_cost_usd` per day.
 - **Variables:** `KIRA_BATCH` (`off`, `dry`: read and logged to the console only, `on`), `KIRA_BATCH_AUTO`, `KIRA_BATCH_LADDER`,
-  `KIRA_BATCH_CSAM_AUTO`.
+  `KIRA_BATCH_CSAM_AUTO`, `KIRA_BATCH_IMAGES` (on unless `off`), `KIRA_BATCH_IMAGE_CSAM_AUTO` (on unless `off`).
 
 ## Game chat
 
