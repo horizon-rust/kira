@@ -14,6 +14,7 @@ import { dirname } from 'node:path';
 import { FAQ, FAQ_MORE, GITHUB, WORK, RULES } from './config.js';
 import { serverGuideText } from './texts.js';
 import * as kit from './ai-kit.js';
+import * as batchKit from './batch-kit.js';
 
 const REPO = `${GITHUB.owner}/${WORK.repo}`;
 export const DOCS_EVERY_MS = 24 * 60 * 60_000;
@@ -283,6 +284,36 @@ export function makeModerator({ client, model = kit.MODELS.fast, rules = RULES }
       return checked.ok ? { ...spent, results: checked.results } : { ...spent, results: null, reason: checked.reason };
     } catch (e) {
       return { ...spent, results: null, reason: `unreadable answer: ${e.message}` };
+    }
+  };
+}
+
+// Batch moderation (src/features/batchmod.js): one call to the fast model per window of one channel, no tools. The
+// rules are the cached first block of the user turn (as for makeModerator), the window comes after the breakpoint.
+// `win`: { channel, topic, context, fresh, users } (batch-kit's windowTurn), `exempt(userId)`: staff and the Team.
+// Returns { incidents, dropped, cost, model, input, output, cacheRead, cacheWrite, reason? }: incidents is
+// checkIncidents' (null when the output can't be trusted, and then nothing happens). Throws only for an API error.
+export function makeBatchModerator({ client, model = kit.MODELS.fast, rules = RULES, cfg }) {
+  const block = { type: 'text', text: batchKit.rulesBlock(rules), cache_control: { type: 'ephemeral' } };
+  const schema = batchKit.SCHEMA(rules);
+  return async function moderateWindow(win, { exempt = () => false } = {}) {
+    const turn = batchKit.windowTurn(win, cfg);
+    const r = await client.messages.create({
+      model, max_tokens: 3000, system: batchKit.SYSTEM,
+      messages: [{ role: 'user', content: [block, { type: 'text', text: turn.text }] }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+    });
+    const u = r.usage ?? {};
+    const spent = {
+      cost: kit.costOf(model, u), model, input: u.input_tokens ?? 0, output: u.output_tokens ?? 0,
+      cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0,
+    };
+    if (r.stop_reason !== 'end_turn') return { ...spent, incidents: null, reason: `stop: ${r.stop_reason}` };
+    try {
+      const checked = batchKit.checkIncidents(JSON.parse(r.content.filter((b) => b.type === 'text').map((b) => b.text).join('')), turn, { rules, exempt });
+      return checked.ok ? { ...spent, incidents: checked.incidents, dropped: checked.dropped } : { ...spent, incidents: null, reason: checked.reason };
+    } catch (e) {
+      return { ...spent, incidents: null, reason: `unreadable answer: ${e.message}` };
     }
   };
 }

@@ -46,6 +46,7 @@ export const ACTIONS = {
   unban: { label: 'Unban', emoji: '🔓', color: 0x2ecc71 },
   kick: { label: 'Kick', emoji: '👢', color: 0xff7a45 },
   mcban: { label: 'Minecraft ban', emoji: '⛏️', color: 0xff4d4d, appealable: true },
+  flag: { label: 'Flag', emoji: '🚩', color: 0xf0932b }, // the batch lane's incidents (src/features/batchmod.js): no action by itself
 };
 export const KIRA = 'kira';
 

@@ -489,12 +489,58 @@ Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`
 - **Bug reports** (`KIRA_AI_BUGS=1`, off by default): before a `#horizon-bugs` post or a `/report` becomes an issue, GitHub's search finds open issues for its title and one Haiku call reads the report next to them (about $0.0003 a report). Clearly the same bug: the report goes on that issue as a comment and the post follows it. Maybe the same: Kira asks the reporter, and **yes** adds it there, **no** files a new issue; with no answer in 30 minutes it's filed as new, naming the possible duplicate. A new issue keeps the reporter's text as written; the model only fixes the title's spelling (or writes one when the title says nothing, like "bug") and copies the version and OS above the report, which code checks are the report's own words. Kira then asks once for what's missing (version, OS, steps, a log or screenshot); the replies go to the issue. Without the model (variable unset, `/kira-ai off`, budget spent, an API error) reports are filed as before. Each one is logged in #mod-log.
 - **Moderation in every language** (`KIRA_AI_MOD`, on whenever `KIRA_AI` is; `KIRA_AI_MOD=0` turns it off): AutoMod would need regexes per language, so Kira's AI reads what the filters let through in the 🌍 languages channels, in #horizon-chat and #general (every message, any language), and non-English messages anywhere (another script, or common words of the server's other languages). Staff, bots and messages without letters are skipped, and so is anything a filter already removed. Messages of one channel that arrive within 4 seconds go in one Haiku call (10 at most). The rules from `config.js` are the cached first block of the user turn, the messages come after it as data (our own tags defused). The model returns JSON per message: `verdict` (ok, flag, remove), `category`, `rule`, `reason`, `english` (a translation), `language`; `checkModeration()` checks every field and drops the whole batch on any doubt.
   - **remove**, only for slurs, hate, threats, sexual content, doxxing, scams and targeted harassment (any other category is downgraded to a flag): the message is deleted, the usual short note is posted for 12 seconds in the member's language (English, or one of the eleven language channels' languages), and #mod-log gets the original, the English translation, the rule and the model's reason. From the second removal in a day, the spam timeout ladder applies (10 min, 1 h, 1 day).
-  - **flag**: nothing is deleted; #mod-log gets the original, the translation and a jump link, and a mod decides.
+  - **flag**: nothing is deleted; #mod-log gets the original, the translation and a jump link, and a mod decides. While the [batch lane](#batch-moderation) is on (`KIRA_BATCH=on`) this one-message check no longer flags (it made the false piracy flags, "send shaders pls"); it only removes its clear cases.
   - Nothing else is ever done on the model's say: no bans, no warnings, no roles. Budget spent, the API down (the check pauses 5 minutes after an error) or switched off: nothing is read and the filters still run.
   - **Cost, measured** on 50 real messages from the language channels and #off-topic, before it merged into #general (`node scripts/measure-ai-mod.mjs`, read-only): $0.00009 per message (36 calls; the ~2K-token rules block read from cache, ~140 output tokens a call). 10,000 messages a day would cost about $0.90 of the daily budget.
 - **Off switch:** `/kira-ai off` (Ludovic and the mods) stops all of it (answers, bug reports, moderation) at once, `/kira-ai mod off` only the moderation (`mod on` restarts it), `/kira-ai on` restarts it, and `/kira-ai status` shows the day's use. Removing `KIRA_AI` (or setting it to `0`) turns it off for good.
 - **Variables:** `KIRA_AI`, `ANTHROPIC_API_KEY` (1Password `Horizon Claude API Key ludo47j`, set on Railway with the CLI, never printed), `KIRA_AI_DAILY_USD`, `KIRA_USAGE_TOKEN`, `KIRA_AI_BUGS`, `KIRA_AI_MOD`.
 - **Cost, measured** on 38 real questions from the server's history: $0.0013 per answer with Haiku and a warm cache. The 21K-token sources block is cached for an hour as the first block of the user turn: a breakpoint on the system prompt was never read back on this account.
+
+## Batch moderation
+
+pointofpressure's proposal (the chief of mods, 2026-11-08), Ludovic's decision the same day: two steps. Rules in
+[`src/batch-kit.js`](src/batch-kit.js) (no Discord), the Discord side [`src/features/batchmod.js`](src/features/batchmod.js),
+the call `makeBatchModerator` in [`src/ai.js`](src/ai.js), settings `BATCH` in `config.js`.
+
+- **Windows.** Every public channel and thread is read in windows: its new messages since the last window, plus ~50 earlier
+  ones for context. A window closes after a random 10 to 30 minutes (so it can't be timed) or at 200 new messages. With it the
+  model gets a line per author: account and membership age, staff or not, cases and notes in the last 30 days, and what they
+  wrote in other channels in the last hour (raids, following someone around). **One Haiku call per window.** Never read: the
+  staff category, #horizon-team, #appeal, the honeypot, private threads and any channel @everyone can't see (tickets, mod-mail).
+  After a restart the first window of a channel fetches its earlier messages from Discord once.
+- **What the model returns** is the proposal's incident JSON (`user_id`, `rule`, `category`, `confidence`, `message_ids`,
+  `quotes`, `context_ids`, `reason`, `proposed_action`). Its instructions list what is **not** an incident: banter between
+  people joking with each other, swearing at no one, asking for or sharing free mods/shaders/packs, Horizon's own builds,
+  venting, arguing about the game, other languages. Member text, names and topics are data (our tags defused); the model refers
+  to messages and users by short refs (`m12`, `u3`), so `checkIncidents()` maps them back and drops any incident that doesn't
+  hold up (an unknown ref, only earlier messages, another author's message, staff, a quote that isn't in the messages).
+- **Step 1 (`KIRA_BATCH=on`): flags only.** Confidence 0.70 or more: a flag in #mod-chat, which is also a numbered case
+  (action "Flag", `/case N`), with the evidence saved when it opens: the messages' text, jump links, the context messages,
+  attachment names and SHA-256 (files up to 10 MB), the model's reason and quotes. Buttons:
+  - **Confirm**: does what the model proposed, as the mod who pressed it (delete the messages; timeout on the ladder; quarantine);
+    the timeout or quarantine is its own case in #mod-actions with the flag as its evidence. "note only" deletes nothing.
+  - **Dismiss**: nothing is done; counted as a wrong flag.
+  - **Change action**: pick note only / delete / delete + timeout / delete + quarantine, then it is done as with Confirm.
+  Kira never acts on staff or the Horizon Team (Confirm says so). Below 0.70: a note in the member's history (no ping), which the
+  next windows see.
+- **CSAM suspicion** (0.50 or more): one alert in #mod-chat pinging 🛡️ Mod and the Horizon Team, with message ids, times and jump
+  links only: no text, no file names, no hashes, no image is ever stored or reposted. Confirm deletes and quarantines. Kira's model
+  calls send **text only**, so Kira can't see images: the image lane is off, and so is the automatic delete
+  (`KIRA_BATCH_CSAM_AUTO`, off). A vision check of every image would cost about $0.08 a day at today's ~400 images a day.
+- **Accuracy:** each Monday from 09:00 UTC, one line in #mod-chat: per category, flags confirmed, changed, dismissed, open.
+  `/kira-batch status` shows it any time.
+- **Step 2, prepared and off (`KIRA_BATCH_AUTO=1`).** At confidence ≥ 0.95, for **spam, scams and raids only**, Kira deletes the
+  messages and times out (ladder `KIRA_BATCH_LADDER`, default `1h,24h,7d`, by the member's timeouts in 30 days) or quarantines
+  (scams, raids; lifted by mods only). Never a ban, never staff or the Team, never a message older than 24 hours. Any mod writes
+  `undo case #N` in #mod-chat (or presses Undo) to reverse it. A category with more than 5 % of its week's auto actions
+  overturned (undone, or lifted on appeal) falls back to flags until a mod runs `/kira-batch restore`. Turning it on is a later
+  decision, after a week of step-1 numbers.
+- **Cost, measured** (`node scripts/measure-batch-mod.mjs <hours> <out.json>`, read-only: replays real traffic window by window
+  through the real call, posts nothing): see the PR; about $0.00005 a message, ~$0.6 a day. Same `/kira-ai` switches (`mod off`
+  stops it) and daily budget as the rest of Kira's AI, but it pauses when less than $0.75 of the day's budget is left, so her
+  answers never stop for it. `GET /ai-usage` counts `batch_windows`, `batch_messages`, `batch_cost_usd` per day.
+- **Variables:** `KIRA_BATCH` (`off`, `dry`: read and logged to the console only, `on`), `KIRA_BATCH_AUTO`, `KIRA_BATCH_LADDER`,
+  `KIRA_BATCH_CSAM_AUTO`.
 
 ## Game chat
 
