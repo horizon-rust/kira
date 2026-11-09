@@ -176,11 +176,13 @@ test('a climb is announced; a first record or the same rank is not', () => {
   assert.equal(kit.climbed(RANKS, { key: null }, RANKS[1]), true);
 });
 
-test('the count sums the repos in one search', async () => {
+test('the public count is one org-wide search restricted to public repos', async () => {
   const gh = fakeGh({ '/search/issues': { total_count: 7 } });
-  assert.equal(await kit.mergedCount(gh, 'horizon-rust', ['horizon', 'horizon-mods'], 'ana'), 7);
-  const q = decodeURIComponent(gh.calls[0]);
-  assert.match(q, /repo:horizon-rust\/horizon repo:horizon-rust\/horizon-mods is:pr is:merged author:ana/);
+  assert.equal(await kit.mergedPublicCount(gh, 'horizon-rust', 'ana'), 7);
+  assert.equal(gh.calls.length, 1);
+  assert.match(decodeURIComponent(gh.calls[0]), /q=org:horizon-rust is:public is:pr is:merged author:ana/);
+  assert.equal(await kit.mergedPublicCount(gh, 'horizon-rust', 'x y'), 0, 'a bad login is never searched');
+  assert.equal(gh.calls.length, 1);
 });
 
 test('the rank roles go right above the given role, in order, and only the roles that move are sent', () => {
@@ -199,7 +201,7 @@ test('the leaderboard: top by count, ties by login, nobody at 0; the help says w
   assert.deepEqual(kit.topRanks(rows, 2).map((r) => r.id), ['4', '2']);
   const text = kit.leaderboardText(RANKS, kit.topRanks(rows));
   assert.match(text, /\*\*1\.\*\* 🟪 <@4> · d · 300/);
-  assert.match(text, /horizon-rust\/horizon and horizon-rust\/horizon-mods, summed/);
+  assert.match(text, /every public horizon-rust repo, summed/);
   assert.match(kit.rankText(RANKS, { login: 'a', verified: true, entry: { count: 37 }, rank: RANKS[1] }), /⛏️ Iron.*37 merged pull requests.*next: \*\*🥇 Gold\*\* at 40 \(3 to go\)/);
   assert.match(kit.rankText(RANKS, { login: 'a', verified: true, entry: { count: 250 }, rank: RANKS[4] }), /highest rank/);
   assert.match(kit.rankText(RANKS, { login: 'a', verified: false }), /\/verify-github/);

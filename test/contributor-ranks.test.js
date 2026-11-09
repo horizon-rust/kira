@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Collection } from 'discord.js';
+import { Collection, MessageFlags } from 'discord.js';
 
 process.env.KIRA_STATE = join(mkdtempSync(join(tmpdir(), 'kira-ranks-')), 'state.json');
 process.env.GITHUB_TOKEN = 'test-token-not-used';
@@ -44,13 +44,15 @@ core.state.channels.contributors = 'C1';
 const lines = [];
 core.client.channels.cache.set('C1', { send: async (m) => lines.push(m) });
 
-// GitHub: the Horizon-only count, and the count summed with horizon-mods.
+// GitHub: the Horizon-only count (repo:), and the count over every public repo of the org (org: … is:public).
+const queries = [];
 const hub = { horizon: {}, all: {} };
 c._test.setGitHub({
   get: async (path) => {
     const q = decodeURIComponent(path);
     const login = q.match(/author:([\w-]+)/)?.[1];
-    if (login) return { total_count: (q.includes('horizon-mods') ? hub.all : hub.horizon)[login] ?? 0 };
+    queries.push(q);
+    if (login) return { total_count: (q.includes('org:horizon-rust is:public') ? hub.all : hub.horizon)[login] ?? 0 };
     return null;
   },
   write: async () => ({}),
@@ -119,15 +121,54 @@ test('a fresh verification above the base: the welcome line says the rank, no se
   assert.match(lines[2].content, /Welcome <@b>.*at \*\*💎 Diamond\*\* already/);
 });
 
-test('/ranks: the top by count, public in #contributors and only for the asker elsewhere; /rank shows the count and the next rank', async () => {
+test('/ranks: the top by count, ephemeral in #contributors too; /rank shows the count and the next rank', async () => {
   const run = async (channelId) => { let out; await c.handlers.ranks({ channelId, reply: async (m) => { out = m; } }); return out; };
   const here = await run('C1');
-  assert.equal(here.flags, undefined);
+  assert.equal(here.flags, MessageFlags.Ephemeral, 'private even in #contributors (rdbt)');
   assert.deepEqual(here.allowedMentions, { parse: [] });
   assert.match(here.content, /\*\*1\.\*\* 💎 <@b> · bo · 120\n\*\*2\.\*\* 🥇 <@a> · ana · 20/);
-  assert.ok((await run('elsewhere')).flags, 'ephemeral outside #contributors');
+  assert.equal((await run('elsewhere')).flags, MessageFlags.Ephemeral);
   assert.match(c.rankNote('b'), /💎 Diamond.*120 merged pull requests by \*\*bo\*\*.*next: \*\*🟪 Netherite\*\* at 200 \(80 to go\)/);
   assert.equal(c.rankNote('nobody'), '', 'no GitHub link: nothing added to /rank');
+});
+
+test('/rank replies ephemerally, in #contributors and elsewhere', async () => {
+  const levels = await import('../src/features/levels.js');
+  for (const channelId of ['C1', 'elsewhere']) {
+    let out;
+    await levels.handlers.rank({ channelId, options: { getUser: () => ({ id: 'b', username: 'b', displayAvatarURL: () => 'https://cdn.example/a.png' }) }, user: { id: 'b' }, reply: async (m) => { out = m; } });
+    assert.equal(out.flags, MessageFlags.Ephemeral, channelId);
+    assert.deepEqual(out.allowedMentions, { parse: [] });
+  }
+});
+
+test('the ranks count every PUBLIC repo of the org in one search; the base role still counts horizon only', async () => {
+  member('d'); verify('d', 'dee'); hub.horizon.dee = 0;
+  await c.sweep(); // dee has no role yet: the base role is decided by the horizon-only search
+  const q = queries.filter((x) => x.includes('author:ana') || x.includes('author:dee')).map((x) => x.replace(/^.*q=/, ''));
+  assert.ok(q.some((x) => /^org:horizon-rust is:public is:pr is:merged author:ana/.test(x)), q.join('\n'));
+  assert.ok(q.some((x) => /^repo:horizon-rust\/horizon is:pr is:merged author:dee/.test(x)), 'the base role: horizon only');
+  assert.ok(queries.every((x) => !/org:horizon-rust is:pr/.test(x)), 'never a bare org: (it counts private repos)');
+});
+
+test('a change of counting rule raises people quietly: no line for a promotion caused only by the wider count', async () => {
+  // c had a record under the old rule (horizon + horizon-mods: 8, no rank above the base); the wider count says 12.
+  member('c'); verify('c', 'cy'); hub.horizon.cy = 5; hub.all.cy = 8;
+  core.state.roles.contributor && members.get('c').roles.cache.add('1001');
+  await c.sweep();
+  assert.equal(work.ranks.c.key, 'contributor');
+  delete work.ranks.c.scope; // the record as the previous deploy wrote it
+  const before = lines.length;
+  hub.all.cy = 12;
+  await c.sweep();
+  assert.equal(has('c', 'iron'), true, 'the role is given');
+  assert.equal(work.ranks.c.key, 'iron');
+  assert.equal(lines.length, before, 'with no announcement');
+  assert.equal(work.ranks.c.scope, CONTRIBUTORS.countScope);
+  hub.all.cy = 41; // a real climb under the new rule is announced again
+  await c.sweep();
+  assert.equal(lines.length, before + 1);
+  assert.match(lines.at(-1).content, /<@c> reached \*\*🥇 Gold\*\*/);
 });
 
 test('the rank goes with the link: roles removed, the record dropped, off the board', async () => {

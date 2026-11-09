@@ -2,8 +2,8 @@
 // code in their bio or a gist) and has at least one merged pull request in Horizon gets the role, which opens
 // #contributors. Granted when they verify, when Kira sees their pull request merge, and by a daily sweep; it is
 // never taken away because of a count, only when the link or the verification goes (src/contributor-kit.js).
-// Ranks (⛏️ Iron … 🟪 Netherite, CONTRIBUTORS.ranks) sit above it, from the merged pull requests in Horizon and
-// horizon-mods summed, settled on the same paths; they only go up, and go only with the link or the verification.
+// Ranks (⛏️ Iron … 🟪 Netherite, CONTRIBUTORS.ranks) sit above it, from the merged pull requests in
+// every public repo of the org summed, settled on the same paths; they only go up, and go only with the link or the verification.
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { rateLimiter } from '../agents.js';
 import { CONTRIBUTORS, GITHUB, GUILD_ID, OWNER_ID, ROLES, WORK } from '../config.js';
@@ -24,8 +24,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const guild = () => client.guilds.cache.get(GUILD_ID);
 const roleId = () => state.roles[CONTRIBUTORS.role];
 const merged = (login) => kit.mergedCount(gh, GITHUB.owner, WORK.repo, login);
-// The count the ranks use: every repo in CONTRIBUTORS.repos, summed.
-const mergedAll = (login) => kit.mergedCount(gh, GITHUB.owner, CONTRIBUTORS.repos, login);
+// The count the ranks use: every public repo of the org, summed (one search).
+const mergedAll = (login) => kit.mergedPublicCount(gh, GITHUB.owner, login);
 const RANKS = CONTRIBUTORS.ranks.map((r) => ({ ...r, name: ROLES.find((x) => x.key === r.key)?.name ?? r.key }));
 // A rank role's id: setup's (state.roles, which only setup writes) or the one the admin route made (work.rankRoles).
 const rankRole = (key) => state.roles[key] ?? work.rankRoles?.[key];
@@ -67,7 +67,7 @@ async function grant(id, login, count = null, total = null) {
 
 // A verified member who holds 🛠️ Contributor, at `count` merged pull requests (summed): the rank roles they should
 // hold (their highest rank only, never lower than the one reached with this login), work.ranks, and one line without
-// a ping in #contributors when they climbed. Nothing until every rank role exists. Returns the rank, or null.
+// a ping in #contributors when they climbed (not on a first record, nor the first one under a new counting rule). Nothing until every rank role exists. Returns the rank, or null.
 async function settle(member, login, count) {
   if (!ranksReady() || member.id === OWNER_ID) return null; // Ludovic's pull requests are his agents'
   const before = work.ranks?.[member.id];
@@ -80,9 +80,12 @@ async function settle(member, login, count) {
     if (ids(remove).length) await member.roles.remove(ids(remove), 'a higher contributor rank');
     if (ids(add).length) await member.roles.add(ids(add), `contributor rank: ${count} merged pull requests`);
   } catch (e) { console.error('contributors rank roles', e.message); return reached ? RANKS[kit.rankIndex(RANKS, reached.key)] ?? null : null; }
-  (work.ranks ??= {})[member.id] = { key: rank?.key ?? null, login, count, at: Date.now() };
+  // A record written under another counting rule is only rewritten: the new rule can raise people without it being
+  // a climb (CONTRIBUTORS.countScope). `reached` still decides the rank, so nobody goes down.
+  const sameRule = before?.scope === CONTRIBUTORS.countScope;
+  (work.ranks ??= {})[member.id] = { key: rank?.key ?? null, login, count, at: Date.now(), scope: CONTRIBUTORS.countScope };
   save();
-  if (kit.climbed(RANKS, reached, rank)) {
+  if (sameRule && kit.climbed(RANKS, reached, rank)) {
     await channel(CONTRIBUTORS.channel)?.send({ content: kit.rankUpLine(member.id, rank, count), allowedMentions: { parse: [] } }).catch((e) => console.error('contributors rank line', e.message));
   }
   return rank;
@@ -266,17 +269,16 @@ async function verifyMyself(i, check) {
 }
 
 export const commands = enabled ? [
-  new SlashCommandBuilder().setName('ranks').setDescription('The top 10 contributors by merged pull requests (Horizon and horizon-mods)'),
+  new SlashCommandBuilder().setName('ranks').setDescription('The top 10 contributors by merged pull requests (every public Horizon repo)'),
   new SlashCommandBuilder().setName('verify-github').setDescription('Prove your linked GitHub account is yours (a merged Horizon PR then gives you Contributor)')
     .addBooleanOption((o) => o.setName('check').setDescription('I put the code on GitHub: check it now'))
     .addUserOption((o) => o.setName('member').setDescription('Mods: verify someone by hand')),
 ] : [];
 
 export const handlers = {
-  // Public in #contributors, only for the asker elsewhere. Names only: nobody is pinged.
+  // Only the asker sees it, in every channel (rdbt, 2026-11-09). Names only: nobody is pinged.
   async ranks(i) {
-    const here = i.channelId === state.channels[CONTRIBUTORS.channel];
-    return i.reply({ content: kit.leaderboardText(RANKS, kit.topRanks(rankRows(), 10)), allowedMentions: { parse: [] }, ...(here ? {} : { flags: MessageFlags.Ephemeral }) });
+    return i.reply(ephemeral(kit.leaderboardText(RANKS, kit.topRanks(rankRows(), 10))));
   },
   async 'verify-github'(i) {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -397,6 +399,7 @@ export async function cleanup({ dry = true } = {}) {
 // holders whose grace is over lose it unless they have verified by now. Never removes the role for any other reason.
 export async function sweep() {
   work.sweepAt = Date.now();
+  work.sweepScope = CONTRIBUTORS.countScope; // every record is rewritten under the current counting rule by this pass
   save();
   const role = roleId();
   const g = guild();
@@ -433,7 +436,8 @@ export async function sweep() {
 export function setup() {
   if (!enabled) return console.log('contributors: off (GITHUB_TOKEN is not set)');
   client.once('clientReady', () => {
-    const due = () => Date.now() - (work.sweepAt ?? 0) >= CONTRIBUTORS.sweepEveryMs;
+    // Also due once after the counting rule changed, so the rewrite happens at once and quietly (see settle).
+    const due = () => Date.now() - (work.sweepAt ?? 0) >= CONTRIBUTORS.sweepEveryMs || work.sweepScope !== CONTRIBUTORS.countScope;
     const check = () => { if (due()) sweep().catch((e) => console.error('contributors sweep', e.message)); };
     setTimeout(check, 5 * 60_000).unref?.();
     setInterval(check, 60 * 60_000).unref?.();
