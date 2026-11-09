@@ -553,7 +553,7 @@ the talking, the rules are in [`src/team-vote-kit.js`](src/team-vote-kit.js), th
   from anyone else are left out. The last 50 results are kept in `state.teamVoteLog`, and each one is in #mod-log.
 - **Kira never gives or takes the role.** A passed result says that a 🛡️ Chief of Mods or Ludovic applies it.
 
-## Governance (off until the launch)
+## Governance (on since 2026-11-09)
 
 Horizon is run by a council of equals ([GOVERNANCE.md](https://github.com/horizon-rust/horizon/blob/main/GOVERNANCE.md)).
 Everything Kira does for it sits behind **`KIRA_GOVERNANCE=on`**, off by default: while it is off, Kira behaves exactly
@@ -584,6 +584,15 @@ as before. [`src/governance-kit.js`](src/governance-kit.js) holds the rules, `GO
   (`state.age.declared`), plus when each holder was asked: no age, no birth date, no ID. After `AGE.days` (7), the holders
   still not declared are listed once in #council; Kira pauses no role herself. A passed poll can't give a role of trust
   to someone who hasn't declared.
+- **Applications** ([`src/application-votes.js`](src/application-votes.js), [`src/features/staff-apply.js`](src/features/staff-apply.js)):
+  with the flag on, Ludovic has no veto and no owner decision (the dashboards' owner route answers 403). The mods' vote
+  is unchanged; then a passed **Mod** vote opens the council's **24-hour objection window**, posted in #council with an
+  "Object" button (it pings 🏛️ Council once). Two objections from council members send it to a council poll in #council
+  (simple majority); otherwise it is accepted when the window ends. A passed **Support** vote is accepted at once; a
+  passed **Team** vote goes to a 2/3 council poll. Votes without quorum or voters (`stalled`, `owner`) go to a council
+  poll as well. The poll's result accepts or declines the application, with the decision id as who decided. A Mod or
+  Team accept then waits for the applicant's 18+ declaration (`age-wait`: Kira DMs them the button) when that switch
+  is on.
 - **The decisions log** (`data/decisions.json`, `KIRA_DECISIONS`): append-only (`poll`, `applied`, `council`,
   `reopen`), served as **`GET /decisions.json`** once the flag is on. Person polls show only their result and role
   change there (no question, ballots or kind). Agents act on a decision only when they find it here.
@@ -883,7 +892,8 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   decides. A decline goes out at once; a pass opens Ludovic's 12-hour veto window (one DM), after which the Discord side
   grants the role and DMs (`docs/staff-api.md`). Ludovic can veto at any time before that, approve early, and take
   the role back later. A Team accept grants only the Discord role: GitHub organisation or team access stays his, by
-  hand. Every step is in the append-only audit log (`audit` in staff.json). Answers are deleted 90 days after the
+  hand. With the governance on, the council's objection window and polls replace the veto and Ludovic's decisions
+  ([Governance](#governance-on-since-2026-11-09)). Every step is in the append-only audit log (`audit` in staff.json). Answers are deleted 90 days after the
   decision; a decline keeps only its member, role and date, for the 14-day cooldown.
 - **The Team dashboard's data** ([`src/team-data.js`](src/team-data.js), routes in
   [`src/features/staff-team.js`](src/features/staff-team.js)): the decisions log (who, what, when, a link, a roadmap

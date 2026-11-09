@@ -40,7 +40,7 @@ export function publicView(entries) {
     if (e.type !== 'poll') return e;
     const { key, ...rest } = e;
     if (e.where !== 'council') return rest;
-    const { question, ballots, ...open } = rest;
+    const { question, ballots, ref, ...open } = rest; // a person poll: nothing about who or why
     return { ...open, kind: 'person', question: null, ballots: null };
   });
 }

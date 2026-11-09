@@ -13,7 +13,7 @@
 export const POWERS = {
   'team-vote': { kind: 'council', where: 'features/teamvote.js', note: 'Team membership: a 2/3 council poll (/poll) replaces /team-vote' },
   'team-roles': { kind: 'council', where: 'features/teamroles.js', note: 'any team role: the staff roles, plus 🏛️ Council' },
-  'application-owner': { kind: 'council', where: 'features/staff-apply.js, application-votes.js', note: "the 12 h veto becomes a council objection window: planned (build plan 3.11), unchanged until then" },
+  'application-owner': { kind: 'council', where: 'features/staff-apply.js, application-votes.js', note: "no veto: a passed Mod vote opens the council's 24 h objection window (2 objections → a council poll); stalled ones and Team go to a council poll" },
   'kira-ai': { kind: 'account', where: 'features/ai.js', note: "Kira's AI spending is the account holder's budget (the mods may also switch it)" },
   'agents-maintainer': { kind: 'account', where: 'features/agents.js', note: 'agent tokens run on the account holder’s services' },
   'org-chart-owner': { kind: 'unchanged', where: 'bot.js, org-chart.js', note: 'the 👑 Founder tier: symbolic, no power (Ludovic, 2026-11-09)' },
