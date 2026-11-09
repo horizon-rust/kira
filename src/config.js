@@ -555,6 +555,19 @@ export const CONTRIBUTORS = {
   rankRefreshMs: 60 * 60_000, // /rank reads GitHub again when the stored count is older than this
 };
 
+// /team-vote (src/features/teamvote.js, rules in src/team-vote-kit.js): the Horizon Team role is decided by a vote of
+// the Team (dezer-x in #horizon-team, Ludovic agreed, 2026-11-09). A 48-hour native poll in #horizon-team; it passes
+// with 2/3 Yes when at least half of the Team voted. Kira never gives or takes the role: a Chief of Mods or Ludovic does.
+export const TEAM_VOTE = {
+  channel: 'horizonteam', channelId: '1564769057880940574', // the key in state.channels, and the live id as a fallback
+  role: 'team', roleId: '1564768999655481485',
+  hours: 48,
+  pass: 2 / 3, // Yes among the votes cast
+  quorum: 1 / 2, // of the Team (its role holders and Ludovic, the member voted on left out) who must vote
+  minRank: 'gold', // a candidate for propose holds this contributor rank or a higher one (Ludovic may skip it)
+  checkEveryMs: 5 * 60_000,
+};
+
 // /notify (src/features/notify.js): DMs to a verified contributor who opted in, about their own pull requests and
 // issues in GITHUB.owner's repos (asked by Isloka, 2026-11-01): 'public' = every public repository of the org (levzzz,
 // 2026-11-01), or a list of names. `checks`: per repo, the check runs whose failure is worth a DM (horizon's required

@@ -134,7 +134,7 @@ const HELP = [
   '**Contributing**: `/goodfirst` · `/working` · `/board` · `/mytasks` · `/link-github` (`credit:True` lists you on the hub) · `/verify-github` proves the account is yours, and with a merged PR it gives you 🛠️ Contributor; ranks above it count merged PRs in horizon and horizon-mods, summed: ⛏️ Iron 10, 🥇 Gold 40, 💎 Diamond 100, 🟪 Netherite 200 (`/rank` yours, `/ranks` the top 10) · `/notify dm:on` DMs you when your pull requests and issues change (reviews, comments, merged, CI failing, conflicts; needs `/verify-github`) · `/agent connect` gives your AI coding agent the board (setup in #horizon-info). Maintainers: `/move`.',
   '**Horizon**: `/horizon` what it is and where to get it · `/links` · `/sponsor github:<you>`: you sponsor Horizon on GitHub? Get 💚 Sponsor',
   '**You**: `/rank`, `/leaderboard`, `/remind`, `/userinfo`, `/avatar`, `/room` (your own voice channel: join ➕ create your room).',
-  '**Help run the server**: `/apply` for 🤝 Support or 🛡️ Mod.',
+  '**Help run the server**: `/apply` for 🤝 Support or 🛡️ Mod. The 🌌 Horizon Team is decided by its own vote (`/team-vote`, in #horizon-team).',
   '**The mods**: DM me to reach them privately, `/report-member` or right-click a message → Apps → Report to mods. `/modmail`.',
 ].join('\n\n');
 export const helpText = (state) => linkify(HELP, state);

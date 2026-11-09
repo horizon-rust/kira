@@ -89,6 +89,7 @@ already exists, and a voice channel's `bitrate` is its own (not "the most the bo
 | Work board | The board behind the hub's kanban, `/claim`, `/unclaim`, `/working`, `/board`, `/move`, `/link-github`, `/mytasks`, `/goodfirst`, `/notify`: see below |
 | Sponsors | 💚 Sponsor for anyone GitHub reports as a sponsor of Ludovic (one-time included). `/sponsor github:<login>`: Kira asks GitHub's `isSponsoredBy`, then gives a code to put in the account's bio or a public gist (`kira.txt`) and a **Verify** button; on success the role and a #mod-log line. A daily recheck takes back only the roles Kira gave, when GitHub stops reporting the sponsorship (a DM says so). Private sponsorships read false: the mods use `/sponsor-grant user: [github:] [remove:]`; roles given by hand are never taken back. 6 tries an hour per member. `SPONSORS` in `config.js`; [`src/features/sponsors.js`](src/features/sponsors.js), rules in [`src/sponsor-kit.js`](src/sponsor-kit.js) |
 | Team roles | A team's leader gives and takes back their team's role, and only it, with `/team add member:<user>`, `/team remove member:<user>` and `/team list` (Ludovic, 2026-11-03: Discord's Manage Roles would also let them edit every channel's overwrites). Refused: bots, 🔒 Quarantined members, a role Kira can't manage, a role that carries a moderation permission (`DANGEROUS` in the kit); 30 changes an hour per member. The mods, the Chief of Mods and 👑 ludovic may run it on any team (`team:`). Ephemeral replies, one line in #mod-log per change. Teams: `TEAMS` in `config.js` (now hexforge-horizons, led by azetech); [`src/features/teamroles.js`](src/features/teamroles.js), rules in [`src/team-roles-kit.js`](src/team-roles-kit.js) |
+| Team votes | `/team-vote propose\|remove member:` (Horizon Team and Ludovic, in #horizon-team): a 48-hour poll decides who joins or leaves the Team; Kira posts the result and never changes the role: see [Horizon Team by vote](#horizon-team-by-vote) |
 | Applications | `/apply role:` (🤝 Support, 🛡️ Mod, 🌌 Horizon Team; Ludovic, 2026-10-30) is the Discord side of the applications on the website's staff dashboards ([docs/staff-api.md](docs/staff-api.md)): Kira asks the staff side whether the member may apply (one open application per role, 14 days after a no), then DMs a one-time link to the form (never in a channel; a refusal is said in words). Applications go to a vote on the dashboards, then Ludovic's 12-hour veto window: the staff side DMs him once through Kira's `dm` hook when it opens (`DECISION_TEXTS.vetoWindow`). When the decision is final, the dashboards call Kira's `decide` (`src/staff-hooks.js`): accept gives the role and DMs where to start, decline DMs a short no with the date they may apply again; each one is a line in #mod-log, and what failed (left the server, closed DMs) goes back to the card. `APPLY` in `config.js`; [`src/features/apply.js`](src/features/apply.js), texts in [`src/apply-kit.js`](src/apply-kit.js) |
 | Notifications | `/notify dm:on`: DMs about your own pull requests and issues (reviews, comments, merged/closed/reopened, a failing required check, merge conflicts, labels like needs-proof), batched: see [Notifications](#notifications-notify) |
 | Contributors | `/verify-github` proves a linked GitHub account is the member's; a merged pull request in Horizon then gives 🛠️ Contributor, and ranks (⛏️ Iron, 🥇 Gold, 💎 Diamond, 🟪 Netherite) count merged pull requests above it; `/rank`, `/ranks`: see [Contributors](#contributors) |
@@ -498,6 +499,24 @@ The thresholds (`CONTRIBUTORS.ranks` in `config.js`) come from the merged-PR cou
   `{"dry": false}` creates the missing ones (found by name first), puts them in order, keeps their ids in
   `work.rankRoles` (setup owns `state.roles`) and starts the sweep that hands them out. `npm run setup` also knows
   them (`ROLES`, `rank: true`) and finds them by name. Nothing about ranks happens until all four exist.
+
+## Horizon Team by vote
+
+Since 2026-11-09 the 🌌 Horizon Team role is decided by a vote of the Team (dezer-x proposed it in #horizon-team
+because the role was getting bloated; Ludovic agreed). [`src/features/teamvote.js`](src/features/teamvote.js) does
+the talking, the rules are in [`src/team-vote-kit.js`](src/team-vote-kit.js), the numbers in `TEAM_VOTE` (`config.js`).
+
+- **Starting one**: `/team-vote propose member:` or `/team-vote remove member:`, only by a Horizon Team role holder or
+  Ludovic, only in #horizon-team. A candidate for propose must hold at least the 🥇 Gold contributor rank (see
+  [Ranks](#ranks)); Ludovic may skip that. Remove needs a Team member. One open vote per member at a time; bots refused.
+- **The poll**: a Discord native poll in #horizon-team, Yes/No, one answer each, 48 hours. Its message pings the Horizon
+  Team role once (`allowedMentions: { parse: [], roles: [<team role>] }`); nothing else is ever pinged. The vote is in
+  `state.teamVotes` (survives restarts) and a line goes to #mod-log.
+- **The result**: once the poll ends and Discord finalises the counts (Kira waits up to 30 minutes for that), Kira
+  replies to the poll with the counts, no ping. It **passes with at least 2/3 Yes among the votes cast, when at least
+  half of the Team voted**. The Team here is every holder of the role plus Ludovic, without the member voted on; votes
+  from anyone else are left out. The last 50 results are kept in `state.teamVoteLog`, and each one is in #mod-log.
+- **Kira never gives or takes the role.** A passed result says that a 🛡️ Chief of Mods or Ludovic applies it.
 
 ## AI answers
 
