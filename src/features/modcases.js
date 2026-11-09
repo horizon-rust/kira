@@ -202,7 +202,7 @@ async function hide(ch, qid) {
 
 // ── At start: the role, the channels, the overwrites, the form in #appeal ──────
 
-const OWN = ['appeal', 'modactions', 'joinleave', 'kirahandoffs'];
+const OWN = ['appeal', 'modactions', 'joinleave', 'kirahandoffs', 'modflags'];
 async function ensure() {
   const g = await client.guilds.fetch(GUILD_ID);
   await g.channels.fetch();

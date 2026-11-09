@@ -2,7 +2,7 @@
 // pointofpressure's proposal of 2026-11-08; Ludovic's decision the same day: two steps.
 //
 // Step 1 (KIRA_BATCH=on): every public channel is read in windows (its new messages, ~50 earlier ones for context, and
-// a per-user summary of the other channels), one model call per window. Each incident is a flag in #mod-chat with
+// a per-user summary of the other channels), one model call per window. Each incident is a flag in #mod-flags with
 // Confirm / Dismiss / Change action, and a numbered case (action "flag") holding its evidence: the messages' text
 // saved when the case opened, jump links, context, attachment names and hashes. A mod's Confirm does the action as
 // that mod (a case of its own in #mod-actions, pointing back). Below BATCH.flagFrom an incident is only a note in the
@@ -104,7 +104,7 @@ export async function onMessage(msg) {
   observe(msg);
   return false;
 }
-const staffChannel = (id) => ['modchat', 'modlog', 'modactions'].some((k) => (state.channels[k] ?? state.ownChannels?.[k]) === id);
+const staffChannel = (id) => ['modflags', 'modchat', 'modlog', 'modactions'].some((k) => (state.channels[k] ?? state.ownChannels?.[k]) === id);
 
 export function observe(msg, now = Date.now()) {
   if (BATCH.mode === 'off' || !eligible(msg.channel, now)) return;
@@ -312,11 +312,15 @@ function rows(c) {
   return [row];
 }
 
+// Where flags, the weekly line and fallback notices go: #mod-flags; until it exists (Kira makes it at start), #mod-chat, then #mod-log.
+const flagsChannel = () => channel('modflags') ?? channel('modchat') ?? channel('modlog');
+
 async function post(c, { ping = false } = {}) {
-  const ch = channel('modchat') ?? channel('modlog');
+  // Cases opened before #mod-flags existed stay in #mod-chat: their buttons and edits go by the stored channelId/messageId.
+  const ch = flagsChannel();
   const roles = ping ? [state.roles.mod, state.roles.team].filter(Boolean) : [];
   const msg = await ch?.send({ content: roles.length ? roles.map((r) => `<@&${r}>`).join(' ') : undefined, ...view(c), allowedMentions: { parse: [], roles } }).catch((e) => { console.error('batch flag post', e.message); return null; });
-  if (msg) { c.url = msg.url; c.messageId = msg.id; c.channelId = msg.channelId; c.evidence = { url: msg.url, label: 'the flag in #mod-chat, with the messages saved' }; save(); }
+  if (msg) { c.url = msg.url; c.messageId = msg.id; c.channelId = msg.channelId; c.evidence = { url: msg.url, label: `the flag in #${ch?.name ?? 'mod-flags'}, with the messages saved` }; save(); }
   return msg;
 }
 async function refresh(c) {
@@ -495,10 +499,10 @@ async function hourly(now = Date.now()) {
   if (BATCH.mode === 'on' && d.getUTCDay() === 1 && d.getUTCHours() >= 9 && store.weekly !== key) {
     store.weekly = key;
     save();
-    await channel('modchat')?.send({ content: kit.weeklyLine(kit.accuracy(mc().cases, now - 7 * DAY, now), { auto: BATCH.auto }), allowedMentions: { parse: [] } }).catch(() => {});
+    await flagsChannel()?.send({ content: kit.weeklyLine(kit.accuracy(mc().cases, now - 7 * DAY, now), { auto: BATCH.auto }), allowedMentions: { parse: [] } }).catch(() => {});
   }
   for (const cat of BATCH.auto ? BATCH.autoCategories : []) if (checkFallback(cat, now)) {
-    await channel('modchat')?.send({ content: `↩️ **${cat}**: more than ${BATCH.overturnLimit * 100}% of Kira's auto actions were overturned this week, so it falls back to flags only. \`/kira-batch restore\` switches it back.`, allowedMentions: { parse: [] } }).catch(() => {});
+    await flagsChannel()?.send({ content: `↩️ **${cat}**: more than ${BATCH.overturnLimit * 100}% of Kira's auto actions were overturned this week, so it falls back to flags only. \`/kira-batch restore\` switches it back.`, allowedMentions: { parse: [] } }).catch(() => {});
   }
   // Evidence is kept 90 days; then a flag keeps its ids and the decision only.
   for (const c of Object.values(mc().cases)) {

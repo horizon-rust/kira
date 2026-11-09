@@ -248,7 +248,7 @@ export function checkIncidents(out, turn, { rules, exempt = () => false }) {
 
 // ── What happens ────────────────────────────────────────────────────────────
 
-// 'csam' (an alert to the mods and the Team), 'note' (the member's history only), 'flag' (#mod-chat, the mods decide),
+// 'csam' (an alert to the mods and the Team), 'note' (the member's history only), 'flag' (#mod-flags, the mods decide),
 // or 'auto' (step 2 only: Kira acts). `fallback`: categories a mod hasn't restored after too many overturns.
 export function route(inc, cfg, { fallback = {}, now = Date.now() } = {}) {
   if (inc.category === 'csam') return inc.confidence >= cfg.csamFrom ? 'csam' : 'note';
@@ -317,7 +317,7 @@ export function accuracy(cases, since, until = Infinity) {
   return out;
 }
 
-// The weekly line in #mod-chat.
+// The weekly line in #mod-flags.
 export function weeklyLine(stats, { auto }) {
   const cats = Object.keys(stats).sort((a, b) => (stats[b].flags + stats[b].auto) - (stats[a].flags + stats[a].auto));
   if (!cats.length) return '📊 Kira\'s batch reading, last 7 days: no flags.';
@@ -337,7 +337,7 @@ export function shouldFallBack(cases, category, cfg, now = Date.now()) {
   return !!s && s.auto > 0 && s.overturned / s.auto > cfg.overturnLimit;
 }
 
-// ── The case in #mod-chat ───────────────────────────────────────────────────
+// ── The case in #mod-flags ───────────────────────────────────────────────────
 
 const clip = (s, n) => { s = String(s ?? ''); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
 const stamp = (at) => `<t:${Math.floor(at / 1000)}:t>`;

@@ -267,6 +267,8 @@ export const LAYOUT = [
     key: 'staff', category: '🛡️ staff', staff: true,
     channels: [
       { key: 'modchat', name: 'mod-chat', type: 'text', staff: true },
+      // Batch moderation's flags and image checks with their buttons, and the weekly accuracy line (rdbt, 2026-11-09: #mod-chat is for the mods talking). Kira makes it at start when missing (src/features/modcases.js).
+      { key: 'modflags', name: 'mod-flags', type: 'text', staff: true, topic: "Kira's batch moderation: the flags (and image checks) with Confirm / Dismiss / Change action, CSAM alerts, and Monday's accuracy line. Mods decide here; talk in #mod-chat." },
       { key: 'modlog', name: 'mod-log', type: 'text', staff: true, topic: 'Kira logs here: joins (and the invite they used), leaves, deleted and edited messages, warnings, timeouts, bans, raids, AutoMod.' },
       // mod-log split (pointofpressure, 2026-11-01): the numbered cases, joins and leaves, and Kira's AI lines each get their own.
       { key: 'modactions', name: 'mod-actions', type: 'text', staff: true, topic: 'The numbered cases: every timeout, quarantine, ban, unban and kick, by a mod or by Kira, and the appeals\' outcomes. The one channel to watch.' },
@@ -803,7 +805,7 @@ export const AI = {
 // 2026-11-08: two steps). Every public channel is read in windows: the new messages since the last window plus ~50
 // earlier ones for context, one model call per window. A window closes after a random 10 to 30 minutes (so it can't be
 // timed) or 200 new messages. KIRA_BATCH: unset or off, nothing; `dry`, windows are read and logged (console only),
-// nothing is posted; `on`, step 1: each incident is a flag in #mod-chat with Confirm / Dismiss / Change action, and a
+// nothing is posted; `on`, step 1: each incident is a flag in #mod-flags with Confirm / Dismiss / Change action, and a
 // numbered case. Kira acts on her own only in step 2, KIRA_BATCH_AUTO=1 (off; a later decision, after a week of
 // step-1 numbers). Same AI switches and daily budget as the rest of Kira's AI.
 const envOn = (name) => ['1', 'on', 'true', 'yes'].includes((process.env[name] ?? '').trim().toLowerCase());
