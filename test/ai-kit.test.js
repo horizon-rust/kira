@@ -126,3 +126,24 @@ test('bug reports: placeholders are not a version or an OS', () => {
   const d = kit.checkBugDraft({ title: 't', version: 'release or commit', os: 'irrelevent', missing: [], match: 'none', match_number: 0 }, { title: 't', text: 'Horizon version: release or commit\nOS: irrelevent' });
   assert.deepEqual(d.notes, { version: '', os: '' });
 });
+
+test('hand-off reminders: only open questions past the wait and inside the age limit, at most one per period', () => {
+  const H = 3_600_000;
+  const now = 100 * H;
+  const cfg = { afterMs: 6 * H, everyMs: 12 * H, maxAgeMs: 72 * H, max: 2 };
+  const h = (id, hoursAgo, o = {}) => ({ id, url: `https://discord.com/${id}`, channel: 'horizon-chat', question: `question ${id}`, at: now - hoursAgo * H, done: false, ...o });
+  assert.equal(kit.handoffReminder([h('fresh', 2)], now, cfg), null, 'nothing has waited long enough');
+  assert.equal(kit.handoffReminder([h('done', 8, { done: true }), h('stale', 80)], now, cfg), null, 'answered and too old ones are left out');
+  const r = kit.handoffReminder([h('a', 30), h('b', 7), h('c', 10), h('fresh', 1)], now, cfg);
+  assert.deepEqual(r.ids, ['c', 'b'], 'the newest two, oldest first');
+  assert.deepEqual(r.lines, [
+    '• [question c](https://discord.com/c) in #horizon-chat, 10 h ago',
+    '• [question b](https://discord.com/b) in #horizon-chat, 7 h ago',
+    '…and 1 more, older ones above in this channel.',
+  ]);
+  assert.equal(kit.handoffReminder([h('b', 7)], now, { ...cfg, lastAt: now - 11 * H }), null, 'one reminder per 12 h');
+  assert.deepEqual(kit.handoffReminder([h('b', 7)], now, { ...cfg, lastAt: now - 13 * H }).ids, ['b']);
+  const odd = kit.handoffReminder([h('x', 7, { question: `look [here](https://evil)\n${'y'.repeat(200)}` })], now, cfg);
+  assert.ok(!odd.lines[0].includes('[here]'), 'a member\'s own link markup is taken apart');
+  assert.ok(odd.lines[0].length < 160, 'long questions are cut');
+});

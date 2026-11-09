@@ -283,3 +283,40 @@ test('a Team member asking for an action is told it went to Ludovic\'s agent, no
   f.closeHandoffs([m.id]);
   delete core.state.roles.team;
 });
+
+test('a hand-off nobody answered gets one reminder in #kira-handoffs pinging the Team and Support; the button marks them answered', async () => {
+  const H = 3_600_000;
+  const now = Date.now();
+  const posts = [];
+  core.state.channels.kirahandoffs = 'kh';
+  core.state.roles.team = 'teamrole';
+  core.state.roles.support = 'supportrole';
+  core.client.channels.cache.set('kh', { send: async (m) => { posts.push(m); return m; } });
+  f._test.store.remindedAt = 0;
+  f._test.store.handoffs = [
+    { id: 'old', url: 'https://discord.com/old', channel: 'horizon-chat', author: 'P', question: 'how do I install shaders?', reason: 'x', at: now - 8 * H, done: false },
+    { id: 'new', url: 'https://discord.com/new', channel: 'horizon-chat', author: 'P', question: 'and mods?', reason: 'x', at: now - H, done: false },
+  ];
+  const due = await f.remindHandoffs(now);
+  assert.deepEqual(due.ids, ['old']);
+  assert.equal(posts.length, 1);
+  assert.match(posts[0].content, /^<@&teamrole> <@&supportrole> A question Kira passed on has waited over 6 hours/);
+  assert.match(posts[0].content, /\[how do I install shaders\?\]\(https:\/\/discord\.com\/old\)/);
+  assert.deepEqual(posts[0].allowedMentions, { parse: [], roles: ['teamrole', 'supportrole'] });
+  assert.equal(await f.remindHandoffs(now + H), null, 'not again within 12 hours');
+  assert.equal(posts.length, 1);
+
+  const id = posts[0].components[0].components[0].custom_id;
+  const replies = [];
+  const updates = [];
+  const press = (user, member) => f.onReminderButton({ customId: id, user: { id: user }, member, message: { content: posts[0].content },
+    reply: async (p) => replies.push(p), update: async (p) => updates.push(p) });
+  assert.equal(await press('stranger', { roles: { cache: new Map() }, permissions: { has: () => false } }), true);
+  assert.match(replies[0].content, /Only the Horizon Team and the mods/);
+  assert.equal(f.openHandoffs().length, 2, 'a stranger changes nothing');
+  await press(OWNER_ID, null);
+  assert.deepEqual(f.openHandoffs().map((h) => h.id), ['new']);
+  assert.deepEqual(updates[0].components, []);
+  assert.match(updates[0].content, /✅ Marked answered by <@\d+> \(1 closed\)\.$/);
+  assert.equal(await f.onReminderButton({ customId: 'something-else' }), false, 'other buttons are left alone');
+});
