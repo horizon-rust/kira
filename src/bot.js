@@ -164,7 +164,7 @@ if (port) {
     ...webhook.routes({ limiter, owner: GITHUB.owner }), // POST /github/webhook, when KIRA_GITHUB_WEBHOOK_SECRET is set (src/webhook.js)
     ...(DISCORD ? staff.routes(modcases.routes()) : {}), // the staff dashboards' API, only through the website's proxy (STAFF_PROXY_KEY)
     ...gameRoutes({ store: gameServers, ask: kiraAi.askInGame, limiter }),
-    ...adminRoutes({ hash: process.env.KIRA_ADMIN_TOKEN_SHA256, limiter, save, freeze, gameTokens: gameTokens({ store: gameServers, dm: async (id, text) => (await client.users.fetch(id)).send({ content: text, allowedMentions: { parse: [] } }), endpoint: `${AGENTS.url.replace(/\/mcp$/, '')}/game/ask` }), cleanup: DISCORD && contributors.enabled ? contributors.cleanup : null, files: { state: dataFile('state.json'), agents: process.env.KIRA_AGENTS || dataFile('agents.json') } }),
+    ...adminRoutes({ hash: process.env.KIRA_ADMIN_TOKEN_SHA256, limiter, save, freeze, gameTokens: gameTokens({ store: gameServers, dm: async (id, text) => (await client.users.fetch(id)).send({ content: text, allowedMentions: { parse: [] } }), endpoint: `${AGENTS.url.replace(/\/mcp$/, '')}/game/ask` }), cleanup: DISCORD && contributors.enabled ? contributors.cleanup : null, ranks: DISCORD && contributors.enabled ? contributors.ensureRankRoles : null, files: { state: dataFile('state.json'), agents: process.env.KIRA_AGENTS || dataFile('agents.json') } }),
   };
   startServer(Number(port), { store: agents.store, api: agents.api, routes, limiter }).then(() => console.log(`mcp server on :${port}${routes['GET /admin/backup'] ? ', admin routes on' : ''}`));
 }

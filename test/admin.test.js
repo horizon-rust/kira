@@ -61,6 +61,23 @@ test('backup and restore need the admin token; restore replaces the files and re
   server.close();
 });
 
+test('the contributor rank roles: a dry run unless told otherwise; the token is needed', async () => {
+  const calls = [];
+  const ranks = async ({ dry }) => { calls.push(dry); return { dry, roles: [{ key: 'iron', action: dry ? 'would create' : 'created' }] }; };
+  const limiter = rateLimiter({ auth: [50, 60_000] });
+  const { server, url } = await serve(adminRoutes({ hash, files: {}, limiter, save: () => {}, freeze: () => {}, ranks }), limiter);
+  const auth = { Authorization: `Bearer ${SECRET}` };
+  assert.equal((await fetch(`${url}/admin/contributor-ranks`, { method: 'POST', body: '{"dry":false}' })).status, 401);
+  assert.deepEqual(calls, []);
+  const dry = await fetch(`${url}/admin/contributor-ranks`, { method: 'POST', headers: auth, body: 'not json' });
+  assert.equal(dry.status, 200);
+  assert.equal((await dry.json()).roles[0].action, 'would create');
+  assert.equal((await (await fetch(`${url}/admin/contributor-ranks`, { method: 'POST', headers: auth, body: '{"dry":false}' })).json()).roles[0].action, 'created');
+  assert.deepEqual(calls, [true, false]);
+  server.closeAllConnections();
+  server.close();
+});
+
 test('the contributor clean-up: a dry run unless told otherwise, one at a time, counts back; the token is needed', async () => {
   const calls = [];
   let release;
