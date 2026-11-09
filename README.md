@@ -577,6 +577,13 @@ as before. [`src/governance-kit.js`](src/governance-kit.js) holds the rules, `GO
   - **After a pass**: Kira gives or takes the role herself (reason `Council decision D<n>`); for 🏛️ Council she also
     updates the registry. Team changes say that an org owner updates `horizon-team` on GitHub.
   - **Asking again**: a failed poll can't be repeated for 7 days unless two members sign `/poll reopen decision:`.
+- **The 18+ declaration** (GOVERNANCE.md 9; [`src/age-kit.js`](src/age-kit.js), [`src/features/age.js`](src/features/age.js)):
+  its own switch, **`KIRA_AGE_DECLARATION=on`**, and only with governance on. Kira DMs each holder of a role of trust
+  (`AGE.roles`: Council, Team, Chief of Mods, Mod, 🔧 Server Manager, the leads; not Support) once, with a button;
+  `/age-declaration` shows anyone the same button. Kira stores only `{ yes: true, at }` under the member's id
+  (`state.age.declared`), plus when each holder was asked: no age, no birth date, no ID. After `AGE.days` (7), the holders
+  still not declared are listed once in #council; Kira pauses no role herself. A passed poll can't give a role of trust
+  to someone who hasn't declared.
 - **The decisions log** (`data/decisions.json`, `KIRA_DECISIONS`): append-only (`poll`, `applied`, `council`,
   `reopen`), served as **`GET /decisions.json`** once the flag is on. Person polls show only their result and role
   change there (no question, ballots or kind). Agents act on a decision only when they find it here.

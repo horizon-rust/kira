@@ -103,3 +103,13 @@ test('/poll: off by default, no command, no /decisions.json, and the handler ref
   await poll.handlers.poll({ user: { id: OWNER_ID }, deferReply: async () => {}, editReply: async (m) => { out = m; } });
   assert.match(out.content, /not on yet/);
 });
+
+test('the 18+ declaration: off without its own switch, even with governance on', async () => {
+  const age = await import('../src/features/age.js');
+  assert.deepEqual(age.commands, []);
+  GOVERNANCE.on = true;
+  try {
+    assert.equal(age.enabled(), false, 'KIRA_AGE_DECLARATION is unset');
+    assert.equal(age.required('team'), false, 'no role is held back');
+  } finally { GOVERNANCE.on = false; }
+});

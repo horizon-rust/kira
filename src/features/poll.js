@@ -12,6 +12,7 @@ import { dataFile } from '../store.js';
 import * as kit from '../poll-kit.js';
 import * as gk from '../governance-kit.js';
 import { openLog, route } from '../decisions-kit.js';
+import * as age from './age.js';
 
 export const log = openLog(process.env.KIRA_DECISIONS || dataFile('decisions.json'));
 const polls = () => (state.polls ??= {});
@@ -166,7 +167,9 @@ export async function close(p, now = Date.now()) {
 async function apply(d, o, now) {
   const member = await client.guilds.cache.get(GUILD_ID)?.members.fetch(o.member).catch(() => null);
   let error = member ? null : 'not in the server';
-  if (member) {
+  // No declaration, no role of trust (GOVERNANCE.md 9): the member confirms with /age-declaration, then it is applied.
+  if (!error && o.action === 'add' && age.required(o.role) && !age.isDeclared(o.member)) error = 'no 18+ declaration yet: they confirm with `/age-declaration`';
+  if (member && !error) {
     try {
       if (o.action === 'add') await member.roles.add(roleId(o.role), `Council decision ${d.id}`);
       else await member.roles.remove(roleId(o.role), `Council decision ${d.id}`);

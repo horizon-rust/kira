@@ -600,6 +600,18 @@ export const GOVERNANCE = {
   channels: { council: '1569448273112993836', polls: '1569137355774763081' },
 };
 
+// The 18+ declaration (GOVERNANCE.md section 9; src/age-kit.js, src/features/age.js). Its own switch, off by default,
+// and only with KIRA_GOVERNANCE on: KIRA_AGE_DECLARATION=on. Kira keeps only the member id, "yes" and the time.
+export const AGE = {
+  on: ['1', 'on', 'true', 'yes'].includes((process.env.KIRA_AGE_DECLARATION ?? '').trim().toLowerCase()),
+  days: 7, // current holders' time to declare, from the first DM
+  // The roles of trust: their holders are asked, and Kira gives none of them without a declaration. Keys of
+  // GOVERNANCE.roles, plus 🔧 Server Manager (Manage Roles and Channels). 🤝 Support has no age rule.
+  roles: ['council', 'team', 'chiefmod', 'mod', 'servermanager', 'lead-modding', 'lead-rendering', 'lead-performance', 'lead-launcher', 'lead-server', 'lead-translations', 'lead-website', 'lead-parity', 'lead-ui'],
+  extraRoles: { servermanager: '1566158122517790771' },
+  dmGapMs: 1_500, // between two DMs of the sweep
+};
+
 // /notify (src/features/notify.js): DMs to a verified contributor who opted in, about their own pull requests and
 // issues in GITHUB.owner's repos (asked by Isloka, 2026-11-01): 'public' = every public repository of the org (levzzz,
 // 2026-11-01), or a list of names. `checks`: per repo, the check runs whose failure is worth a DM (horizon's required
