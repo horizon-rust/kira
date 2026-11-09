@@ -268,3 +268,25 @@ test('/vote: one question is enough (a project decision, simple majority); type 
   assert.equal(lastPoll().threshold, 'two-thirds', 'a rule stays at two thirds');
   assert.match(await vote(LEVZZZ, { question: 'short' }), /full sentence/);
 });
+
+test('poll_open end to end: the MCP api posts the poll, poll_list lists it, and a restart keeps it (2026-11-09: P21-P27)', async () => {
+  process.env.KIRA_AGENTS = join(dir, 'agents.json');
+  const { api } = await import('../src/features/agents.js');
+  const me = { user: LUDO, name: 'ludovic1', id: 'tok', scope: 'write' };
+  const before = sent.length;
+  const r = await api.pollOpen(me, { kind: 'decision', question: 'Move the weekly call to Sunday evenings?', thread: 'Context: the doodle.' });
+  assert.equal(r.ok, true);
+  const p = core.state.polls[r.poll];
+  assert.ok(p, 'in the store the bot ticks');
+  const [ch, post] = sent[before];
+  assert.equal(ch, GOVERNANCE.channels.polls);
+  assert.match(post.content, new RegExp(`Council poll ${r.poll}\\b`));
+  assert.equal(r.link, `https://discord.com/channels/${GUILD_ID}/${p.channelId}/${p.messageId}`);
+  assert.equal(sent[before + 1][0], p.threadId, 'the thread text went to its thread');
+  const listed = api.pollList(me).open.find((x) => x.id === r.poll);
+  assert.ok(listed, 'poll_list shows it');
+  assert.match(listed.question, /weekly call/);
+  assert.deepEqual(await poll.cancelStale(Date.now()), [], 'a restart cancels nothing a member opened');
+  assert.ok(core.state.polls[r.poll], 'still open after the start sweep');
+  assert.ok(api.pollList(me).open.some((x) => x.id === r.poll));
+});
