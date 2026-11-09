@@ -866,6 +866,13 @@ export const AI = {
   helpChannels: [], // LAYOUT keys where a question needs no mention (mode `all`); none yet: added once the #mod-log lines are read
   contextMessages: 4, // the reply chain the model sees (the messages being replied to), at most
   handoffsKept: 200, // questions passed to the team that the orchestrator can read (MCP ai_handoffs)
+  // Hand-offs nobody closed (src/features/ai.js remindHandoffs): one reminder in #kira-handoffs pinging the Team and
+  // Support once a question waited this long, at most one every `everyMs`, questions older than `maxAgeMs` left out.
+  // KIRA_HANDOFF_REMINDERS=off turns it off.
+  handoffRemind: {
+    on: !['0', 'off', 'false', 'no'].includes((process.env.KIRA_HANDOFF_REMINDERS ?? '').trim().toLowerCase()),
+    afterMs: 6 * 3_600_000, everyMs: 12 * 3_600_000, maxAgeMs: 7 * 86_400_000, max: 10,
+  },
   daysKept: 62, // daily usage kept for GET /ai-usage
   // KIRA_AI_BUGS=1: a bug report is read by the model before it's filed (src/features/github.js): a title, the
   // version and OS from the report, a duplicate check against open issues, one ask for what's missing.

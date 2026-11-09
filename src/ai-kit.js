@@ -152,9 +152,26 @@ export function checkReply(text, { invite = 'playhorizon' } = {}) {
 
 // What Kira says when she passes a question on and the model's own sentence can't be used.
 export const PASSED = "I don't have a sure answer to this one. I've passed this to the team; they'll answer here.";
-// To a member of the Team or a mod: they are the team, so the question goes to Ludovic's agent instead.
-export const PASSED_TEAM = "I can't settle this one myself. I've noted it for Ludovic's agent; it reads these and will answer here.";
+// To a member of the Team or a mod: they are the team, so the question is noted in #kira-handoffs for the others.
+export const PASSED_TEAM = "I can't settle this one myself. I've noted it in #kira-handoffs; someone from the team will answer here.";
 export const BUDGET_SPENT = "I've reached my limit of answers for today, so I've passed this to the team; they'll answer here.";
+
+// ── Reminding the team of the questions Kira passed on ───────────────────────
+// Without an agent reading them, hand-offs wait for nobody. Once some have waited `afterMs` unanswered, Kira posts one
+// reminder in #kira-handoffs that pings the people who answer; at most one every `everyMs`, and never about a
+// question older than `maxAgeMs` (it went stale). `handoffs`: [{ id, url, channel, question, at, done }].
+// → null, or { ids, lines } for the newest `max` open hand-offs in the window, listed oldest first.
+export function handoffReminder(handoffs, now, { afterMs, everyMs, maxAgeMs, max = 10, lastAt = 0 }) {
+  if (now - lastAt < everyMs) return null;
+  const open = (handoffs ?? []).filter((h) => !h.done && now - h.at >= afterMs && now - h.at <= maxAgeMs).sort((a, b) => b.at - a.at);
+  if (!open.length) return null;
+  const shown = open.slice(0, max).reverse();
+  const hours = (h) => Math.max(1, Math.round((now - h.at) / 3_600_000));
+  const excerpt = (t) => { const one = String(t ?? '').replace(/\s+/g, ' ').trim(); return one.length > 90 ? `${one.slice(0, 89)}…` : one; };
+  const lines = shown.map((h) => `• [${excerpt(h.question).replace(/[[\]]/g, '') || 'a question'}](${h.url}) in #${h.channel}, ${hours(h)} h ago`);
+  if (open.length > shown.length) lines.push(`…and ${open.length - shown.length} more, older ones above in this channel.`);
+  return { ids: shown.map((h) => h.id), lines };
+}
 
 // ── Bug reports in #horizon-bugs (src/features/github.js files them) ─────────
 // Before a report becomes an issue, one model call reads it next to the open issues GitHub's search found: a title

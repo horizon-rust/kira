@@ -103,6 +103,43 @@ function handoff(msg, text, reason) {
   store.handoffs = store.handoffs.slice(-AI.handoffsKept);
 }
 export const openHandoffs = () => store.handoffs.filter((h) => !h.done);
+
+// Questions passed on and still open after AI.handoffRemind.afterMs: one post in #kira-handoffs that pings the Team and
+// Support (the agents that used to answer them may not be running), with a button that marks those answered. Hourly.
+const REMIND_BUTTON = 'kira-ai:handoffs-done:';
+export async function remindHandoffs(now = Date.now()) {
+  const cfg = AI.handoffRemind;
+  if (!cfg.on) return null;
+  const due = kit.handoffReminder(store.handoffs, now, { ...cfg, lastAt: store.remindedAt ?? 0 });
+  const ch = due && state.channels.kirahandoffs && client.channels.cache.get(state.channels.kirahandoffs);
+  if (!ch) return null;
+  const roles = [state.roles.team, state.roles.support].filter(Boolean);
+  const stamp = String(now);
+  store.reminders = { ...(store.reminders ?? {}), [stamp]: due.ids };
+  for (const k of Object.keys(store.reminders).sort().slice(0, -20)) delete store.reminders[k];
+  store.remindedAt = now;
+  save();
+  const head = `${roles.map((r) => `<@&${r}>`).join(' ')} ${due.ids.length === 1 ? 'A question' : `${due.ids.length} questions`} Kira passed on ${due.ids.length === 1 ? 'has' : 'have'} waited over ${Math.round(cfg.afterMs / 3_600_000)} hours. Answer the member in their thread, then press the button.`;
+  await ch.send({
+    content: clip([head.trim(), ...due.lines].join('\n'), 1900),
+    allowedMentions: { parse: [], roles },
+    components: [{ type: 1, components: [{ type: 2, style: 3, label: 'Mark these answered', custom_id: REMIND_BUTTON + stamp }] }],
+  }).catch((e) => console.error('kira ai reminder', e.message));
+  return due;
+}
+
+// The reminder's button: a Team member or a mod marks its questions answered (they leave the agents' list too).
+export async function onReminderButton(i) {
+  if (!i.customId?.startsWith(REMIND_BUTTON)) return false;
+  if (i.user.id !== OWNER_ID && !isTeam(i.member)) {
+    await i.reply({ content: 'Only the Horizon Team and the mods can mark these answered.', flags: MessageFlags.Ephemeral }).catch(() => {});
+    return true;
+  }
+  const ids = store.reminders?.[i.customId.slice(REMIND_BUTTON.length)] ?? [];
+  const n = closeHandoffs(ids);
+  await i.update({ content: `${clip(i.message?.content ?? '', 1700)}\n✅ Marked answered by <@${i.user.id}> (${n} closed).`, components: [], allowedMentions: { parse: [] } }).catch(() => {});
+  return true;
+}
 // Marks hand-offs read by the team (by message id); returns how many.
 export function closeHandoffs(ids) {
   let n = 0;
@@ -304,6 +341,10 @@ export const handlers = {
 };
 
 export function setup() {
+  if (enabled && AI.handoffRemind.on) {
+    setInterval(() => remindHandoffs().catch((e) => console.error('kira ai reminder', e.message)), 3_600_000).unref?.();
+    client.on('interactionCreate', (i) => { if (i.isButton?.() && i.guildId === GUILD_ID) onReminderButton(i).catch((e) => console.error('kira ai reminder button', e.message)); });
+  }
   console.log(`kira ai bug reports: ${bugsEnabled ? 'read before filing' : 'off'}`);
   console.log(`kira ai moderation: ${modEnabled ? (store.modOn ? 'on' : 'off (/kira-ai mod on)') : 'off'}`);
   console.log(`kira ai: ${enabled ? `${store.on ? 'on' : 'off (/kira-ai)'}, ${AI.mode}, $${AI.dailyUsd} a day` : `off (${AI.mode ? 'no ANTHROPIC_API_KEY' : 'KIRA_AI is not set'})`}`);
