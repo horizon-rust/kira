@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Kira, the bot of the Horizon Discord server: layout, onboarding, moderation, levels, voice rooms, mod-mail, releases, GitHub issues, work board",
+  "license": "MIT",
   "type": "module",
   "main": "src/bot.js",
   "scripts": {

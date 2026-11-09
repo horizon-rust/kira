@@ -1,3 +1,9 @@
 node_modules
 data/
 scratch/
+# Secrets never go in the repo. .env.op holds only 1Password references (op://…), no values.
+.env
+.env.*
+!.env.op
+!.env.example
+*.pem
