@@ -28,6 +28,18 @@ const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowe
 const ts = (ms) => `<t:${Math.floor(ms / 1000)}:R>`;
 const VERBS = { yes: 'Yes', no: 'No', abstain: 'Abstain' };
 
+// /vote's types: the kinds that change no role, with plain names (the threshold each one carries is in poll-kit.js).
+export const VOTE_TYPES = [
+  ['decision', 'Project decision (simple majority)'],
+  ['rule', 'Rules: GOVERNANCE.md, server rules, policy, licence (2/3)'],
+  ['money', 'Money (2/3)'],
+  ['accounts', 'Account handover step (2/3)'],
+  ['waiver', 'Waiving part of the selection filter (2/3)'],
+  ['size', "The council's size (2/3)"],
+  ['probation-end', 'Ending a probation early (simple majority)'],
+  ['appeal', 'Second-level moderation appeal, in #council (simple majority)'],
+];
+
 export const commands = GOVERNANCE.on ? [
   new SlashCommandBuilder().setName('poll').setDescription('Council polls (GOVERNANCE.md)')
     .addSubcommand((s) => s.setName('start').setDescription('Council: start a 24-hour poll')
@@ -41,6 +53,13 @@ export const commands = GOVERNANCE.on ? [
         .addChoices({ name: 'give', value: 'add' }, { name: 'take', value: 'remove' })))
     .addSubcommand((s) => s.setName('reopen').setDescription('Council: sign to ask a failed poll again within 7 days (two members)')
       .addStringOption((o) => o.setName('decision').setDescription("The failed poll's decision id, like D12").setRequired(true))),
+  // The short way: a question, and that's it. A project decision by simple majority unless `type` or `two_thirds` say
+  // otherwise. Polls that give or take a role stay on /poll start (they need a member and a role).
+  new SlashCommandBuilder().setName('vote').setDescription('Council: put a question to a 24-hour council vote (simple majority unless you choose)')
+    .addStringOption((o) => o.setName('question').setDescription('The question, in a full sentence').setRequired(true).setMaxLength(1000))
+    .addStringOption((o) => o.setName('type').setDescription('What it decides (default: a project decision, simple majority)')
+      .addChoices(...VOTE_TYPES.map(([value, name]) => ({ name, value }))))
+    .addBooleanOption((o) => o.setName('two_thirds').setDescription('Needs two thirds instead of a simple majority')),
 ] : [];
 
 // The poll message: the question, what passing does, the threshold, the end, and how many voted (not who).
@@ -64,6 +83,13 @@ export function render(p) {
 }
 
 export const handlers = {
+  async vote(i) {
+    await i.deferReply({ flags: MessageFlags.Ephemeral });
+    const r = await start(i.user.id, { kind: i.options.getString('type') ?? 'decision', question: i.options.getString('question'), twoThirds: !!i.options.getBoolean('two_thirds') });
+    if (!r.ok) return i.editReply(ephemeral(r.why));
+    const p = r.poll;
+    return i.editReply(ephemeral(`Vote ${p.id} started in <#${p.channelId}>: it passes with ${kit.thresholdText(p.threshold)} and ends ${ts(p.endsAt)}.`));
+  },
   async poll(i) {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     if (!GOVERNANCE.on) return i.editReply(ephemeral('Council polls are not on yet.'));
@@ -80,7 +106,8 @@ export const handlers = {
 };
 
 // Starts a poll for council member `opener`: the one path behind `/poll start` and the MCP tool poll_open (src/mcp.js),
-// so both keep the same rules, channels and log. args: { kind, question, member?, role?, action?, thread? }; `thread`
+// so both keep the same rules, channels and log (and /vote). args: { kind, question, member?, role?, action?, thread?,
+// twoThirds? }; `twoThirds` raises the threshold, never lowers it; `thread`
 // (from an agent) is posted first in the poll's discussion thread; `via: 'agent'` marks a poll an agent opened.
 // → { ok: true, poll } or { ok: false, why }.
 export async function start(opener, args, { now = Date.now(), via = null } = {}) {
@@ -88,7 +115,8 @@ export async function start(opener, args, { now = Date.now(), via = null } = {})
   if (!isCouncil(opener)) return { ok: false, why: 'Only council members start a poll. Ask one of them.' };
   const verdict = kit.check({ ...args, opener }, { council: council(), log: log.all(), now });
   if (!verdict.ok) return verdict;
-  const p = await open({ ...verdict.poll, ...(via ? { via } : {}) }, { openedBy: String(opener), now });
+  const fields = { ...verdict.poll, ...(args.twoThirds ? { threshold: 'two-thirds' } : {}), ...(via ? { via } : {}) };
+  const p = await open(fields, { openedBy: String(opener), now });
   if (!p) return { ok: false, why: 'The poll could not be posted: try again in a minute.' };
   const text = String(args.thread ?? '').trim();
   if (text && p.threadId) {
