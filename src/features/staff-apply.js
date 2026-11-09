@@ -5,7 +5,7 @@
 // #council (an "Object" button; two objections → a council poll), and the stalled ones go to a council poll too
 // (src/application-votes.js has the rules). The dashboards' owner route then refuses.
 import { Routes, MessageFlags } from 'discord.js';
-import { GUILD_ID, GITHUB, WORK, OWNER_ID, GOVERNANCE } from '../config.js';
+import { GUILD_ID, GITHUB, WORK, OWNER_ID, GOVERNANCE, APPLICATIONS } from '../config.js';
 import { client, state } from '../core.js';
 import * as gk from '../governance-kit.js';
 import * as polls from './poll.js';
@@ -46,6 +46,8 @@ async function contributor(userId) {
 // deps (the dev server's fakes, scripts/staff-dev.mjs): member(id) → Discord's member object or null,
 // contributor(id), holders(roleKey) → Set of ids.
 export function applicationRoutes({ store, site, log, deps = {} }) {
+  // Off: no form, no dashboard routes, no tick, no objection button, no poll hook (KIRA_APPLICATIONS).
+  if (!(deps.applications ?? APPLICATIONS.on)) return Object.assign([], { off: true });
   const memberOf = deps.member ?? member;
   const contributorOf = deps.contributor ?? contributor;
   const hasRoleOf = async (userId, role) => { const id = roleId(role); return !!id && !!(await memberOf(userId))?.roles?.includes(id); };

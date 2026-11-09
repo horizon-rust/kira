@@ -107,7 +107,6 @@ export async function advance(store, app, ctx) {
   if (app.status === 'veto-window' && ctx.now >= app.veto.until) return accept(store, app, 'vote', ctx);
   if (app.status === 'objection-window' && ctx.now >= app.objection.until) return accept(store, app, 'vote', ctx);
   if (app.status === 'council-poll' && !app.council.poll) return toCouncil(store, app, app.council.reason, ctx); // posting failed: again
-  if (ctx.gov && ['stalled', 'owner'].includes(app.status)) return toCouncil(store, app, app.status, ctx); // left from before the governance
   if (app.status === 'age-wait') return ctx.gov?.needsDeclaration(app) ? null : accept(store, app, app.ageWait.by, ctx);
   if (app.status !== 'open') return null;
   const c = count(app, ctx);
@@ -161,8 +160,7 @@ async function governedPass(store, app, tally, ctx) {
 // Accepts, or waits for the applicant's 18+ declaration first when the role needs one (GOVERNANCE.md 9).
 async function accept(store, app, by, ctx) {
   if (ctx.gov?.needsDeclaration(app)) {
-    if (ctx.gov && ['stalled', 'owner'].includes(app.status)) return toCouncil(store, app, app.status, ctx); // left from before the governance
-  if (app.status === 'age-wait') return null;
+    if (app.status === 'age-wait') return null;
     store.update(() => Object.assign(app, { status: 'age-wait', ageWait: { from: ctx.now, by } }));
     const result = await ctx.gov.askDeclaration(app);
     audit(store, { at: ctx.now, by: 'vote', app: app.id, action: 'age-wait', result });

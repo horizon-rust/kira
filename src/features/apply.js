@@ -3,7 +3,7 @@
 // member a one-time link to the form, gives the role and DMs the member once a decision is final, and sends the DMs
 // the staff side asks for (Ludovic's veto window) through dm(). The two sides meet only through src/staff-hooks.js.
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { APPLY, GUILD_ID } from '../config.js';
+import { APPLY, APPLICATIONS, GUILD_ID } from '../config.js';
 import { client, state, modlog } from '../core.js';
 import { rateLimiter } from '../agents.js';
 import { APPLY_ROLES, CLOSED_ROLES, canApply, issueApplyLink, setDiscordSide } from '../staff-hooks.js';
@@ -70,7 +70,8 @@ export async function dm({ userId, content }) {
   }
 }
 
-export const commands = [
+// Off (KIRA_APPLICATIONS unset): no /apply command, and no Discord side for decisions (no role given, no DM).
+export const commands = !APPLICATIONS.on ? [] : [
   new SlashCommandBuilder().setName('apply').setDescription('Apply for 🤝 Support or 🛡️ Mod: Kira DMs you the form')
     .addStringOption((o) => o.setName('role').setDescription('Which role').setRequired(true)
       .addChoices(...Object.entries(APPLY.roles).filter(([value]) => !CLOSED_ROLES.includes(value)).map(([value, r]) => ({ name: r.label, value })))),
@@ -78,6 +79,7 @@ export const commands = [
 
 export const handlers = {
   async apply(i) {
+    if (!APPLICATIONS.on) return i.reply(ephemeral('Applications are closed.'));
     // Until the website's form is deployed, a link would lead nowhere: APPLY_FORM_LIVE=1 opens /apply.
     if (process.env.APPLY_FORM_LIVE !== '1') return i.reply(ephemeral(kit.refusal('soon')));
     const role = i.options.getString('role');
@@ -97,5 +99,6 @@ export const handlers = {
 export const _test = { decide, dm, revokeRole };
 
 export function setup() {
+  if (!APPLICATIONS.on) return;
   setDiscordSide({ decide, dm, revokeRole });
 }

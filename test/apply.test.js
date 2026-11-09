@@ -7,6 +7,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+process.env.KIRA_APPLICATIONS = 'on'; // off in production since 2026-11-09; the flow is kept behind the flag
 process.env.KIRA_STATE = join(mkdtempSync(join(tmpdir(), 'kira-apply-')), 'state.json');
 process.env.APPLY_FORM_LIVE = '1';
 const { APPLY, GUILD_ID, OWNER_ID, LAYOUT } = await import('../src/config.js');

@@ -508,6 +508,10 @@ export const ORG = {
 // /apply (src/features/apply.js): Discord's way into the application form on the website (docs/staff-api.md). The
 // staff side (the dashboards) owns the form, who may apply and the decisions; Kira DMs the form's link, and when a
 // decision comes back she gives the role and DMs the member. `intro`: where a newly accepted member starts.
+// The application system (/apply, the staff dashboards' application votes): off unless KIRA_APPLICATIONS=on. The
+// council stopped it on 2026-11-09: it recruits the people it wants itself, nobody applies.
+export const APPLICATIONS = { on: ['1', 'on', 'true', 'yes'].includes((process.env.KIRA_APPLICATIONS ?? '').trim().toLowerCase()) };
+
 export const APPLY = {
   perHour: 3, // links asked for per member an hour (each one voids the one before)
   roles: {

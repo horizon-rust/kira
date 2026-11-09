@@ -15,6 +15,7 @@ process.env.KIRA_DECISIONS = join(dir, 'decisions.json');
 process.env.GITHUB_TOKEN = 'test-token-not-used';
 process.env.KIRA_GOVERNANCE = 'on';
 process.env.KIRA_AGE_DECLARATION = 'on';
+process.env.KIRA_APPLICATIONS = 'on'; // the council turned them off in production; the flow is kept
 const { GUILD_ID, GOVERNANCE, OWNER_ID } = await import('../src/config.js');
 const core = await import('../src/core.js');
 const { openStaffStore } = await import('../src/staff-store.js');
@@ -153,6 +154,5 @@ test('a Team vote that passes goes to a council poll at two thirds', async () =>
   assert.deepEqual(app.council, { reason: 'team', at: T0, poll: 'PX' });
   const old = { id: 's1', user: 'w', role: 'mod', answers: {}, status: 'stalled', vote: v.newVote(T0), submittedAt: T0 };
   s.update((d) => { d.applications.s1 = old; });
-  assert.equal(await v.advance(s, old, ctx), 'to-council', 'one left for Ludovic before the launch goes to the council');
-  assert.equal(old.council.reason, 'stalled');
+  assert.equal(await v.advance(s, old, ctx), null, 'no migration: one left from before the launch stays as it is');
 });
