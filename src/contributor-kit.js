@@ -83,12 +83,18 @@ export async function codeIsPublished(gh, login, code, pub = publicGet) {
 
 // ── Merged pull requests ─────────────────────────────────────────────────────
 
-// How many pull requests by `login` were merged in owner/repo (the search API: its own limit, 30 a minute). `repo`
-// may be a list: one search counts them summed (several repo: qualifiers are an OR).
+// How many pull requests by `login` were merged in owner/repo (the search API: its own limit, 30 a minute).
 export async function mergedCount(gh, owner, repo, login) {
+  return searchCount(gh, `repo:${owner}/${repo}`, login);
+}
+// The same summed over every PUBLIC repo of the org `owner`, in one search. `is:public` matters: a bare `org:` also
+// counts the private repos the token can see (checked on 2026-11-09: 2198 public + 149 private = 2347).
+export async function mergedPublicCount(gh, owner, login) {
+  return searchCount(gh, `org:${owner} is:public`, login);
+}
+async function searchCount(gh, scope, login) {
   if (!LOGIN.test(login)) return 0;
-  const repos = [repo].flat().map((r) => `repo:${owner}/${r}`).join(' ');
-  const q = encodeURIComponent(`${repos} is:pr is:merged author:${login}`);
+  const q = encodeURIComponent(`${scope} is:pr is:merged author:${login}`);
   const found = await gh.get(`/search/issues?q=${q}&per_page=1`);
   return Number(found?.total_count) || 0;
 }
@@ -128,7 +134,7 @@ export async function mergedAuthors(gh, owner, repo, { today = new Date(), sleep
 // ── Ranks ────────────────────────────────────────────────────────────────────
 // `ranks`: [{ key, min, name }] lowest first (CONTRIBUTORS.ranks with the role names); the first is the base role,
 // 🛠️ Contributor. The ranks above it are held one at a time (the highest reached), with the base kept. They count
-// merged pull requests in several repos, summed. Ranks only go up: `reached` ({ key, login } in work.ranks) keeps the
+// merged pull requests in every public repo of the org, summed. Ranks only go up: `reached` ({ key, login } in work.ranks) keeps the
 // best one a member had with the login they still have verified; a new login starts again from its own count.
 
 export const rankIndex = (ranks, key) => ranks.findIndex((r) => r.key === key);
@@ -233,7 +239,7 @@ export const codeInstructions = (login, challenge) => [
 
 export const welcomeLine = (id, login, rank = null) => `🛠️ Welcome <@${id}>! A pull request by **${login}** is merged in Horizon: you are a contributor now${rank ? `, at **${rank.name}** already` : ''}.`;
 
-export const COUNTED = 'merged pull requests in horizon-rust/horizon and horizon-rust/horizon-mods, summed';
+export const COUNTED = 'merged pull requests in every public horizon-rust repo, summed';
 const plural = (n) => `${n} merged pull request${n === 1 ? '' : 's'}`;
 
 // One line in #contributors, no ping.

@@ -54,7 +54,7 @@ export const handlers = {
     const { level, into, next } = levelOf(me.xp);
     // The contributor rank (src/features/contributors.js): merged pull requests and the next threshold.
     const contributor = rankNote(user.id);
-    return i.reply({ allowedMentions: { parse: [] }, embeds: [new EmbedBuilder().setColor(COLOR).setAuthor({ name: user.username, iconURL: user.displayAvatarURL() })
+    return i.reply({ flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] }, embeds: [new EmbedBuilder().setColor(COLOR).setAuthor({ name: user.username, iconURL: user.displayAvatarURL() })
       .setDescription(`**Level ${level}** · rank #${rankOf(user.id) || '–'}\n${bar(into, next)}  ${into} / ${next} XP\n\n💬 ${me.messages} messages · 🔊 ${Math.round(me.voiceMin / 60 * 10) / 10} h in voice · ${me.xp} XP in all${contributor ? `\n\n🛠️ ${contributor}` : ''}`)] });
   },
   async leaderboard(i) {

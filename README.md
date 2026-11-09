@@ -470,8 +470,11 @@ horizon-rust/horizon. Members don't pick it any more (no button, not an Onboardi
 ### Ranks
 
 Above 🛠️ Contributor (Ludovic, 2026-11-09), Minecraft ores earned the same way, from the merged pull requests of the
-verified account in **horizon-rust/horizon and horizon-rust/horizon-mods, summed** (one search: `repo:… repo:…`).
-🛠️ Contributor itself still needs one merged in horizon.
+verified account in **every public repo of the horizon-rust org, summed** (Akirabane, 2026-11-09: a PR in
+horizon-mixins was missing; first it was horizon and horizon-mods only). It is one search per login,
+`org:horizon-rust is:public is:pr is:merged author:<login>`: `is:public` is needed, because a bare `org:` also counts
+the private repos the token can see (checked on 2026-11-09: 2198 public + 149 private = 2347 for one author). New
+public repos count by themselves. 🛠️ Contributor itself still needs one merged in horizon.
 
 | Rank | Merged PRs | Authors at it or above (2026-11-09) |
 | --- | --- | --- |
@@ -481,8 +484,9 @@ verified account in **horizon-rust/horizon and horizon-rust/horizon-mods, summed
 | 💎 Diamond | 100 | 13 |
 | 🟪 Netherite | 200 | 5 |
 
-The thresholds (`CONTRIBUTORS.ranks` in `config.js`) come from the merged-PR count of every author in both repos on
-2026-11-09, ludovic111 (his agents) and bots left out: Netherite for a handful, Diamond for about the top 13.
+The thresholds (`CONTRIBUTORS.ranks` in `config.js`) come from the merged-PR count of every author in horizon and
+horizon-mods on 2026-11-09, ludovic111 (his agents) and bots left out: Netherite for a handful, Diamond for about the
+top 13. The wider count can only raise people, never lower them.
 
 - **Holding**: a member holds their highest rank only, plus 🛠️ Contributor (the channels' permissions use it). Ranks
   only go up (`work.ranks` keeps the best one reached with the verified login); a rank goes only when the link or the
@@ -490,10 +494,14 @@ The thresholds (`CONTRIBUTORS.ranks` in `config.js`) come from the merged-PR cou
 - **When**: on the same paths as the base role: verifying, the board's refresh when a verified author's pull request
   merges, and the daily sweep (which now reads every verified holder's count). Climbing posts one line in
   #contributors, no ping. A member's first record is not announced (the backfill when ranks start; a new
-  contributor's welcome line says their rank instead).
+  contributor's welcome line says their rank instead). Neither is the first record under a new counting rule
+  (`CONTRIBUTORS.countScope`, kept in each `work.ranks` entry as `scope`): after the public-repos change Kira runs
+  the sweep once at start, which rewrites every record quietly, so people promoted only by the wider count get
+  their role without a line; later climbs are announced as before.
 - **Commands**: `/rank` (the XP card) adds the contributor rank, the count and the next threshold, from the stored count
-  (read again in the background when older than an hour). `/ranks`: the top 10, public in #contributors, only for the
-  asker elsewhere; names only, nobody pinged.
+  (read again in the background when older than an hour). `/ranks`: the top 10; names only, nobody pinged. Both reply
+  **ephemerally everywhere**, so only the caller sees them (rdbt, 2026-11-09); `/link-github` and `/verify-github`
+  already did.
 - **The roles**: hoisted, distinct colours, no permissions, right above lvl 50 (so the member list shows them above
   🛠️ Contributor and the levels). `POST /admin/contributor-ranks` (admin token) lists what it would create and move;
   `{"dry": false}` creates the missing ones (found by name first), puts them in order, keeps their ids in
