@@ -113,3 +113,17 @@ test('the 18+ declaration: off without its own switch, even with governance on',
     assert.equal(age.required('team'), false, 'no role is held back');
   } finally { GOVERNANCE.on = false; }
 });
+
+test('applications off by default (the council, 2026-11-09): no /apply, no Discord side, no dashboard routes', async () => {
+  const { APPLICATIONS } = await import('../src/config.js');
+  assert.equal(APPLICATIONS.on, false);
+  const apply = await import('../src/features/apply.js');
+  assert.deepEqual(apply.commands, []);
+  const { discordSide, canApply } = await import('../src/staff-hooks.js');
+  apply.setup();
+  assert.equal(discordSide(), null, 'no role given and no DM sent for any decision');
+  const { applicationRoutes } = await import('../src/features/staff-apply.js');
+  const routes = applicationRoutes({ store: null, site: 'https://playhorizon.dev', log: () => {} });
+  assert.deepEqual([...routes], []);
+  assert.deepEqual(await canApply('1', 'mod'), { ok: false, why: 'closed' });
+});

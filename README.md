@@ -584,6 +584,11 @@ as before. [`src/governance-kit.js`](src/governance-kit.js) holds the rules, `GO
   (`state.age.declared`), plus when each holder was asked: no age, no birth date, no ID. After `AGE.days` (7), the holders
   still not declared are listed once in #council; Kira pauses no role herself. A passed poll can't give a role of trust
   to someone who hasn't declared.
+- **Applications are off** (the council, 2026-11-09: it recruits the people it wants itself). Unless
+  **`KIRA_APPLICATIONS=on`**: no `/apply`, no form or dashboard application routes, no vote tick, no role given or DM sent
+  for a decision. The polls Kira had opened from applications were cancelled (`cancelStale` in
+  [`src/features/poll.js`](src/features/poll.js): never closed, applied, reminded or logged; listed in
+  `state.pollsCancelled`). With the flag on, the flow below applies.
 - **Applications** ([`src/application-votes.js`](src/application-votes.js), [`src/features/staff-apply.js`](src/features/staff-apply.js)):
   with the flag on, Ludovic has no veto and no owner decision (the dashboards' owner route answers 403). The mods' vote
   is unchanged; then a passed **Mod** vote opens the council's **24-hour objection window**, posted in #council with an

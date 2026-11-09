@@ -39,7 +39,7 @@ const makeChannel = (id) => ({
   id,
   send: async (m) => {
     sent.push([id, m]);
-    const msg = { id: `M${sent.length}`, channelId: id, content: m.content, components: m.components, edit: async (e) => { Object.assign(msg, e); }, startThread: async (t) => { msg.thread = t.name; } };
+    const msg = { id: `M${sent.length}`, channelId: id, content: m.content, components: m.components, edit: async (e) => { Object.assign(msg, e); }, delete: async () => { msg.deleted = true; }, startThread: async (t) => { msg.thread = t.name; } };
     msgs.set(msg.id, msg);
     return msg;
   },
@@ -179,4 +179,25 @@ test('needs 2/3: any council member raises the threshold', async () => {
   assert.match(await press(LEVZZZ, p.id, 'two-thirds'), /now needs two thirds/);
   assert.equal(core.state.polls[p.id].threshold, 'two-thirds');
   assert.match(msgs.get(p.messageId).content, /two thirds of Yes \+ No, and at least 3 Yes/);
+});
+
+test('the council cancelled the polls open on 2026-11-09: they never close, apply, remind or log; their messages go', async () => {
+  for (const p of Object.values(core.state.polls)) delete core.state.polls[p.id]; // the earlier tests' leftovers
+  const old = (id, extra) => ({ id, kind: 'mod', where: 'council', key: id, question: 'Accept them as Mod?', threshold: 'simple', subject: CAND, outcome: null, ballots: { [KACPER]: 'yes' }, recused: [], reminded: [], openedBy: 'kira', startedAt: Date.UTC(2026, 10, 9, 21, 57), endsAt: Date.UTC(2026, 10, 10, 21, 57), ...extra });
+  const ch = core.client.channels.cache.get(GOVERNANCE.channels.council);
+  const m = await ch.send({ content: 'P90' });
+  core.state.polls.P90 = old('P90', { channelId: ch.id, messageId: m.id });
+  core.state.polls.P91 = old('P91', { channelId: ch.id, messageId: 'gone' }); // its message was deleted by hand already
+  core.state.polls.P92 = old('P92', { openedBy: KACPER, startedAt: poll.CANCEL_BEFORE + 60_000 }); // a member's, after: kept
+  const logged = poll.log.all().length;
+  assert.deepEqual((await poll.cancelStale(Date.UTC(2026, 10, 9, 23))).sort(), ['P90', 'P91']);
+  assert.deepEqual(Object.keys(core.state.polls), ['P92']);
+  assert.equal(msgs.get(m.id).deleted, true);
+  assert.equal(core.state.pollsCancelled.P90.why, 'cancelled by the council on 2026-11-09');
+  const dmsBefore = dms.length;
+  await poll.tick(Date.UTC(2026, 10, 11)); // past their end and every reminder
+  assert.equal(poll.log.all().filter((d) => ['P90', 'P91'].includes(d.poll)).length, 0, 'no decision logged');
+  assert.ok(!dms.slice(dmsBefore).some(([, t]) => /P9[01]/.test(t)), 'no reminder');
+  assert.equal(poll.log.all().length, logged + 1, 'only P92, a real poll, closed and was logged');
+  assert.deepEqual(await poll.cancelStale(Date.UTC(2026, 10, 11)), [], 'nothing twice');
 });

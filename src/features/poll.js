@@ -104,8 +104,37 @@ export async function open(fields, { openedBy, now = Date.now() }) {
   }
   Object.assign(p, { channelId: msg.channelId ?? ch.id, messageId: msg.id });
   save();
-  await msg.startThread?.({ name: `${p.id}: discussion` }).catch(() => {});
+  const th = await msg.startThread?.({ name: `${p.id}: discussion` }).catch(() => null);
+  if (th?.id) { p.threadId = th.id; save(); }
   return p;
+}
+
+// Cancels an open poll: it never closes, applies, reminds or goes in the decisions log. Its message and thread are
+// deleted (when still there); state.pollsCancelled keeps a line about it. → true if it was open.
+export async function cancel(p, why, now = Date.now()) {
+  if (!polls()[p.id]) return false;
+  delete polls()[p.id];
+  (state.pollsCancelled ??= {})[p.id] = { at: now, why, kind: p.kind, openedBy: p.openedBy, startedAt: p.startedAt };
+  save();
+  const ch = await getChannel(p.channelId);
+  await ch?.messages?.fetch(p.messageId).then((m) => m.delete()).catch(() => {});
+  if (p.threadId) await getChannel(p.threadId).then((t) => t?.delete?.()).catch(() => {});
+  console.log(`poll cancelled ${p.id} (${why})`);
+  return true;
+}
+
+// The polls Kira opened from applications on 2026-11-09 (P4 onwards, ~21:57Z): the council cancelled every poll open
+// then (Ludovic: "enlève tous les votes que tu as envoyés"). Every poll started before CANCEL_BEFORE, or opened by
+// Kira herself, is cancelled at start. → the ids cancelled.
+export const CANCEL_BEFORE = Date.UTC(2026, 10, 9, 22, 15);
+export async function cancelStale(now = Date.now()) {
+  const out = [];
+  for (const p of Object.values(polls())) {
+    if (p.startedAt < CANCEL_BEFORE || p.openedBy === 'kira') {
+      if (await cancel(p, 'cancelled by the council on 2026-11-09', now)) out.push(p.id);
+    }
+  }
+  return out;
 }
 
 // What other features run when a poll closes (an application waiting for its poll): fn(poll, decision).
@@ -228,5 +257,8 @@ export function setup() {
   client.on('interactionCreate', (i) => {
     if (i.isButton?.() && i.guildId === GUILD_ID && i.customId.startsWith('poll:')) onButton(i).catch((e) => console.error('poll button', e));
   });
-  client.once('clientReady', () => { setInterval(() => tick().catch((e) => console.error('poll', e.message)), 60_000).unref?.(); });
+  client.once('clientReady', async () => {
+    await cancelStale().then((ids) => console.log(`polls cancelled at start: ${ids.length ? ids.join(', ') : 'none'}`)).catch((e) => console.error('poll cancel', e.message));
+    setInterval(() => tick().catch((e) => console.error('poll', e.message)), 60_000).unref?.();
+  });
 }
