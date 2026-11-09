@@ -180,25 +180,26 @@ test('needs 2/3: any council member raises the threshold', async () => {
   assert.match(msgs.get(p.messageId).content, /two thirds of Yes \+ No, and at least 3 Yes/);
 });
 
-test('the council cancelled the polls open on 2026-11-09: they never close, apply, remind or log; their messages go', async () => {
+test("the council cancelled P1-P20, the polls Kira opened from applications; a member's poll is never cancelled", async () => {
   for (const p of Object.values(core.state.polls)) delete core.state.polls[p.id]; // the earlier tests' leftovers
   const old = (id, extra) => ({ id, kind: 'mod', where: 'council', key: id, question: 'Accept them as Mod?', threshold: 'simple', subject: CAND, outcome: null, ballots: { [KACPER]: 'yes' }, recused: [], reminded: [], openedBy: 'kira', startedAt: Date.UTC(2026, 10, 9, 21, 57), endsAt: Date.UTC(2026, 10, 10, 21, 57), ...extra });
   const ch = core.client.channels.cache.get(GOVERNANCE.channels.council);
-  const m = await ch.send({ content: 'P90' });
-  core.state.polls.P90 = old('P90', { channelId: ch.id, messageId: m.id });
-  core.state.polls.P91 = old('P91', { channelId: ch.id, messageId: 'gone' }); // its message was deleted by hand already
-  core.state.polls.P92 = old('P92', { openedBy: KACPER, startedAt: poll.CANCEL_BEFORE + 60_000 }); // a member's, after: kept
+  const m = await ch.send({ content: 'P4' });
+  core.state.polls.P4 = old('P4', { channelId: ch.id, messageId: m.id });
+  core.state.polls.P20 = old('P20', { channelId: ch.id, messageId: 'gone' }); // its message was deleted by hand already
+  core.state.polls.P21 = old('P21', { openedBy: KACPER, startedAt: Date.UTC(2026, 10, 9, 22, 10) }); // a member's, same evening: kept
+  core.state.polls.P3 = old('P3', { openedBy: KACPER }); // a member's poll with a low id: kept
   const logged = poll.log.all().length;
-  assert.deepEqual((await poll.cancelStale(Date.UTC(2026, 10, 9, 23))).sort(), ['P90', 'P91']);
-  assert.deepEqual(Object.keys(core.state.polls), ['P92']);
+  assert.deepEqual((await poll.cancelStale(Date.UTC(2026, 10, 9, 23))).sort(), ['P20', 'P4']);
+  assert.deepEqual(Object.keys(core.state.polls).sort(), ['P21', 'P3']);
   assert.equal(msgs.get(m.id).deleted, true);
-  assert.equal(core.state.pollsCancelled.P90.why, 'cancelled by the council on 2026-11-09');
+  assert.equal(core.state.pollsCancelled.P4.why, 'cancelled by the council on 2026-11-09');
   const dmsBefore = dms.length;
   await poll.tick(Date.UTC(2026, 10, 11)); // past their end and every reminder
-  assert.equal(poll.log.all().filter((d) => ['P90', 'P91'].includes(d.poll)).length, 0, 'no decision logged');
-  assert.ok(!dms.slice(dmsBefore).some(([, t]) => /P9[01]/.test(t)), 'no reminder');
-  assert.equal(poll.log.all().length, logged + 1, 'only P92, a real poll, closed and was logged');
-  assert.deepEqual(await poll.cancelStale(Date.UTC(2026, 10, 11)), [], 'nothing twice');
+  assert.deepEqual(poll.log.all().slice(logged).map((d) => d.poll).sort(), ['P21', 'P3'], 'no decision logged for P4 or P20');
+  assert.ok(!dms.slice(dmsBefore).some(([, t]) => /P(4|20)\b/.test(t)), 'no reminder');
+  assert.equal(poll.log.all().length, logged + 2, 'only the members\' polls closed and were logged');
+  assert.deepEqual(await poll.cancelStale(Date.UTC(2027, 0, 1)), [], 'nothing later, whatever the date');
 });
 
 test('the MCP path (poll.start): council only, the same rules, the opener is the member, an agent mark and the thread text', async () => {
