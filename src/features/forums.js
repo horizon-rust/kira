@@ -32,6 +32,23 @@ export function missing(spec, msg) {
   return out;
 }
 
+// The post as one message: its first message plus what the poster added in replies, since people
+// often fill in the template in a second message after Kira's notice (#120).
+export function withReplies(starter, replies) {
+  const own = replies.filter((m) => m.id !== starter.id && m.author?.id === starter.author.id);
+  if (!own.length) return starter;
+  return Object.assign(Object.create(starter), {
+    content: [starter, ...own].map((m) => m.content ?? '').filter(Boolean).join('\n'),
+    attachments: new Map([starter, ...own].flatMap((m) => [...m.attachments])),
+    embeds: [starter, ...own].flatMap((m) => m.embeds ?? []),
+  });
+}
+
+// Someone from the team (a mod, or the forum's helpers) answered in the post: a person took it, so
+// Kira no longer closes it for the template.
+export const answeredByTeam = (spec, starter, replies) =>
+  replies.some((m) => !m.author?.bot && m.author?.id !== starter.author.id && (isStaff(m.member) || isHelper(spec, m.member)));
+
 async function inspect(thread) {
   const spec = forumOf(thread.parentId);
   if (!spec?.check || isOwnPost(thread, client.user?.id)) return; // Kira's own "How to post here" posts are not member posts
@@ -68,11 +85,16 @@ async function sweep() {
     if (!thread || !spec) { delete state.formatChecks[threadId]; continue; }
     const starter = await thread.fetchStarterMessage().catch(() => null);
     if (!starter) { delete state.formatChecks[threadId]; continue; }
-    if (!missing(spec, starter).length) {
+    const fetched = await thread.messages.fetch({ limit: 100 }).catch(() => null);
+    if (!fetched) continue; // check again next minute rather than close on what Kira couldn't read
+    const replies = [...fetched.values()];
+    if (answeredByTeam(spec, starter, replies)) { delete state.formatChecks[threadId]; continue; }
+    const post = withReplies(starter, replies);
+    if (!missing(spec, post).length) {
       await thread.messages.delete(c.notice).catch(() => {});
       await thread.send('✅ Thanks, your post follows the template now.').then((m) => setTimeout(() => m.delete().catch(() => {}), 30_000)).catch(() => {});
       delete state.formatChecks[threadId];
-      passed(thread, starter);
+      passed(thread, post);
     } else if (Date.now() - c.at > MOD.formatGraceMs) {
       await thread.send(`🔒 Closed: the template wasn't filled in. <@${c.owner}>, you can post again following ${howToLink(spec, state)} at the top of the forum.`).catch(() => {});
       await thread.setLocked(true).catch(() => {});
