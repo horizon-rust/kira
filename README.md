@@ -565,6 +565,10 @@ as before. [`src/governance-kit.js`](src/governance-kit.js) holds the rules, `GO
   on), *account* (the account holder's own spending and accounts: they stay his), *unchanged* (operations, or rules
   about his own data). With the flag on, `/team-vote` is refused (the Team is decided by a 2/3 council poll) and
   🏛️ Council may manage every team role.
+- **`/vote question: [type:] [two_thirds:]`** (council members): the short way to put a question to the council. Only the
+  question is needed: it starts a 24-hour project-decision poll at simple majority. `type` picks another kind that changes
+  no role (rules, money, accounts…, with its threshold in the name) and `two_thirds` raises the threshold. Same code as
+  `/poll start` and the MCP tool `poll_open` (`poll.start()`): same rules, channels and decisions log.
 - **`/poll start kind: question: [member:] [role:] [action:]`** (council members; rules in
   [`src/poll-kit.js`](src/poll-kit.js), Discord in [`src/features/poll.js`](src/features/poll.js)): a 24-hour poll
   with Yes / No / Abstain buttons (a ballot changes until the close), "Needs 2/3" (any member raises the threshold) and

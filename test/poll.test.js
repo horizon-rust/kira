@@ -67,8 +67,7 @@ const press = async (by, id, verb) => {
 const lastPoll = () => Object.values(core.state.polls).at(-1);
 
 test('on: the command is registered and /decisions.json is served', () => {
-  assert.equal(poll.commands.length, 1);
-  assert.equal(poll.commands[0].toJSON().name, 'poll');
+  assert.deepEqual(poll.commands.map((c) => c.toJSON().name), ['poll', 'vote']);
   assert.ok(poll.routes()['/decisions.json']);
 });
 
@@ -243,4 +242,28 @@ test('poll.list: counts while open (never who or what), questions of #council po
   assert.deepEqual([closedOut.question, closedOut.ballots, closedOut.result.passed], [null, null, false]);
   assert.equal(poll.list(KACPER).closed.find((x) => x.id === priv.id).question, priv.question);
   assert.equal(poll.list(CAND, { now: Date.now() + 30 * 24 * kit.HOUR }).closed.length, 0, 'only the last 14 days');
+});
+
+test('/vote: one question is enough (a project decision, simple majority); type and two thirds are optional; council only', async () => {
+  const vote = async (by, o) => {
+    let out;
+    await poll.handlers.vote({ user: { id: by }, options: { getString: (k) => o[k] ?? null, getBoolean: (k) => o[k] ?? null }, deferReply: async () => {}, editReply: async (m) => { out = m; } });
+    return out.content;
+  };
+  const json = poll.commands.find((c) => c.toJSON().name === 'vote').toJSON();
+  assert.equal(json.default_member_permissions ?? null, null, 'shown to everyone, so to all six council members; Kira checks the council');
+  assert.deepEqual(json.options.map((o) => [o.name, !!o.required]), [['question', true], ['type', false], ['two_thirds', false]]);
+  assert.ok(json.options[1].choices.every((c) => !kit.KINDS[c.value].roles), 'no role-changing kinds: those need /poll start');
+  assert.match(await vote(CAND, { question: 'Do we ship the new launcher on Friday?' }), /Only council members/);
+  const before = Object.keys(core.state.polls).length;
+  assert.match(await vote(LEVZZZ, { question: 'Do we ship the new launcher on Friday?' }), /passes with more Yes than No/);
+  let p = lastPoll();
+  assert.deepEqual([p.kind, p.threshold, p.where, p.openedBy], ['decision', 'simple', 'public', LEVZZZ]);
+  assert.equal(Object.keys(core.state.polls).length, before + 1);
+  await vote(LEVZZZ, { question: 'Do we spend 20 euros on a domain?', two_thirds: true });
+  p = lastPoll();
+  assert.deepEqual([p.kind, p.threshold], ['decision', 'two-thirds']);
+  await vote(LEVZZZ, { question: 'Do we change the server rules on spam?', type: 'rule', two_thirds: false });
+  assert.equal(lastPoll().threshold, 'two-thirds', 'a rule stays at two thirds');
+  assert.match(await vote(LEVZZZ, { question: 'short' }), /full sentence/);
 });
