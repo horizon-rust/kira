@@ -84,7 +84,7 @@ test('the call: Haiku, the instructions as a cached first block, then the image,
 
 // ── The feature, with fake Discord ──────────────────────────────────────────
 
-Object.assign(core.state.channels, { modchat: 'mc', modlog: 'ml', modactions: 'ma', general: 'c1' });
+Object.assign(core.state.channels, { modflags: 'mf', modchat: 'mc', modlog: 'ml', modactions: 'ma', general: 'c1' });
 Object.assign(core.state.roles, { mod: 'MOD', team: 'TEAM', quarantined: 'Q' });
 const posted = [];
 const deleted = [];
@@ -95,10 +95,12 @@ core.client.channels.cache.set('c1', {
   permissionsFor: () => ({ has: () => true }),
   messages: { fetch: async () => new Collection(), delete: async (mid) => { deleted.push(mid); } },
 });
-core.client.channels.cache.set('mc', {
-  id: 'mc', send: async (p) => { posted.push(p); const id = `p${posted.length}`; return { id, url: `https://x/mc/${id}`, channelId: 'mc' }; },
+core.client.channels.cache.set('mf', {
+  id: 'mf', send: async (p) => { posted.push(p); const id = `p${posted.length}`; return { id, url: `https://x/mf/${id}`, channelId: 'mf' }; },
   messages: { fetch: async () => ({ edit: async (p) => { posted.push({ edit: true, ...p }); } }) },
 });
+const chatPosts = []; // #mod-chat is for the mods talking: image checks never land there
+core.client.channels.cache.set('mc', { id: 'mc', send: async (p) => { chatPosts.push(p); return { id: 'x', url: 'https://x/mc/x', channelId: 'mc' }; } });
 const member = (id) => ({
   id, user: { id, bot: false }, guild: { id: GUILD_ID }, permissions: { has: () => false },
   roles: { cache: new Collection([['lvl5', { id: 'lvl5', managed: false }]]), set: async (ids) => { roleSets.push([id, ids]); } },
@@ -135,7 +137,7 @@ const today = () => f._test.store.days[new Date().toISOString().slice(0, 10)];
 const caseOf = (p) => core.state.modcases.cases[Number(p.components[0].toJSON().components[0].custom_id.split(':')[2])];
 
 beforeEach(() => {
-  posted.length = 0; deleted.length = 0; roleSets.length = 0; reads.length = 0; fetched.length = 0;
+  posted.length = 0; chatPosts.length = 0; deleted.length = 0; roleSets.length = 0; reads.length = 0; fetched.length = 0;
   verdict = { category: 'none', confidence: 0.98, reason: 'A Minecraft build.' };
   f._test.store.on = true; f._test.store.modOn = true; f._test.store.days = {};
   f._test.set({ modPausedUntil: 0 });
@@ -164,6 +166,7 @@ test('a scam screenshot: a flag with the mods\' buttons, the file named and neve
   await post(msg);
   assert.equal(deleted.length, 0);
   assert.equal(posted.length, 1);
+  assert.equal(chatPosts.length, 0, 'the flag is in #mod-flags, not #mod-chat');
   assert.deepEqual(posted[0].allowedMentions, { parse: [], roles: [] });
   assert.equal(posted[0].files, undefined, 'no attachment reposted');
   const embed = JSON.stringify(posted[0].embeds[0].toJSON());

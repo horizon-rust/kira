@@ -514,7 +514,7 @@ the call `makeBatchModerator` in [`src/ai.js`](src/ai.js), settings `BATCH` in `
   venting, arguing about the game, other languages. Member text, names and topics are data (our tags defused); the model refers
   to messages and users by short refs (`m12`, `u3`), so `checkIncidents()` maps them back and drops any incident that doesn't
   hold up (an unknown ref, only earlier messages, another author's message, staff, a quote that isn't in the messages).
-- **Step 1 (`KIRA_BATCH=on`): flags only.** Confidence 0.70 or more: a flag in #mod-chat, which is also a numbered case
+- **Step 1 (`KIRA_BATCH=on`): flags only.** Confidence 0.70 or more: a flag in #mod-flags (staff only, Kira makes it at start; before 2026-11-09 flags went to #mod-chat, and those cases still work), which is also a numbered case
   (action "Flag", `/case N`), with the evidence saved when it opens: the messages' text, jump links, the context messages,
   attachment names and SHA-256 (files up to 10 MB), the model's reason and quotes. Buttons:
   - **Confirm**: does what the model proposed, as the mod who pressed it (delete the messages; timeout on the ladder; quarantine);
@@ -523,7 +523,7 @@ the call `makeBatchModerator` in [`src/ai.js`](src/ai.js), settings `BATCH` in `
   - **Change action**: pick note only / delete / delete + timeout / delete + quarantine, then it is done as with Confirm.
   Kira never acts on staff or the Horizon Team (Confirm says so). Below 0.70: a note in the member's history (no ping), which the
   next windows see.
-- **CSAM suspicion** (0.50 or more): one alert in #mod-chat pinging 🛡️ Mod and the Horizon Team, with message ids, times and jump
+- **CSAM suspicion** (0.50 or more): one alert in #mod-flags pinging 🛡️ Mod and the Horizon Team, with message ids, times and jump
   links only: no text, no file names, no hashes, no image is ever stored or reposted. Confirm deletes and quarantines. From the
   text alone Kira never acts herself (`KIRA_BATCH_CSAM_AUTO`, off); from an image, see the image lane.
 - **The image lane** (Ludovic, 2026-11-08; [`src/image-kit.js`](src/image-kit.js), the call `makeImageClassifier` in
@@ -553,12 +553,12 @@ the call `makeBatchModerator` in [`src/ai.js`](src/ai.js), settings `BATCH` in `
   ones too. 11 answers were cut by a 300-token cap (thinking), now 1,500. This API account caches every prompt for an hour
     on its own, billed at 2x: the instructions carry an explicit 1-hour breakpoint so each call reads them from the cache
     (without it each image cost ~2.4x more); the image itself is still written at 2x and never read back.
-- **Accuracy:** each Monday from 09:00 UTC, one line in #mod-chat: per category, flags confirmed, changed, dismissed, open.
+- **Accuracy:** each Monday from 09:00 UTC, one line in #mod-flags: per category, flags confirmed, changed, dismissed, open.
   `/kira-batch status` shows it any time.
 - **Step 2, prepared and off (`KIRA_BATCH_AUTO=1`).** At confidence ≥ 0.95, for **spam, scams and raids only**, Kira deletes the
   messages and times out (ladder `KIRA_BATCH_LADDER`, default `1h,24h,7d`, by the member's timeouts in 30 days) or quarantines
   (scams, raids; lifted by mods only). Never a ban, never staff or the Team, never a message older than 24 hours. Any mod writes
-  `undo case #N` in #mod-chat (or presses Undo) to reverse it. A category with more than 5 % of its week's auto actions
+  `undo case #N` in a staff channel (or presses Undo) to reverse it. A category with more than 5 % of its week's auto actions
   overturned (undone, or lifted on appeal) falls back to flags until a mod runs `/kira-batch restore`. Turning it on is a later
   decision, after a week of step-1 numbers.
 - **Cost, measured** (`node scripts/measure-batch-mod.mjs <hours> <out.json>`, read-only: replays real traffic window by window

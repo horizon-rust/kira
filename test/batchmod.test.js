@@ -212,7 +212,7 @@ test('the flag: the messages saved, jump links, context, attachments hashed; a C
 
 // ── The feature, with fake Discord ──────────────────────────────────────────
 
-Object.assign(core.state.channels, { modchat: 'mc', modlog: 'ml', modactions: 'ma', general: 'c1', horizonteam: 'team' });
+Object.assign(core.state.channels, { modflags: 'mf', modchat: 'mc', modlog: 'ml', modactions: 'ma', general: 'c1', horizonteam: 'team' });
 core.state.roles.mod = 'MOD';
 core.state.roles.team = 'TEAM';
 const posted = [];
@@ -227,10 +227,13 @@ const channelOf = (id, name, { visible = true, type = ChannelType.GuildText } = 
 core.client.channels.cache.set('c1', channelOf('c1', 'general'));
 core.client.channels.cache.set('team', channelOf('team', 'horizon-team'));
 core.client.channels.cache.set('hidden', channelOf('hidden', 'secret', { visible: false }));
-core.client.channels.cache.set('mc', {
-  id: 'mc', send: async (p) => { posted.push(p); const id = `p${posted.length}`; return { id, url: `https://x/mc/${id}`, channelId: 'mc' }; },
-  messages: { fetch: async (id) => ({ edit: async (p) => { edits.push({ id, ...p }); } }) },
+// #mod-flags is where flags go; #mod-chat (below) is the mods talking, and where cases opened before 2026-11-09 still sit.
+const flagsChannel = (id) => ({
+  id, send: async (p) => { posted.push({ ...p, in: id }); const mid = `p${posted.length}`; return { id: mid, url: `https://x/${id}/${mid}`, channelId: id }; },
+  messages: { fetch: async (mid) => ({ edit: async (p) => { edits.push({ id: mid, in: id, ...p }); } }) },
 });
+core.client.channels.cache.set('mf', flagsChannel('mf'));
+core.client.channels.cache.set('mc', flagsChannel('mc'));
 
 let answer = () => [];
 const calls = [];
@@ -287,7 +290,7 @@ test('a window: one call for the channel, nothing posted when nothing happened; 
   assert.equal(calls.length, 1, 'a window of staff only costs nothing');
 });
 
-test('step 1: an incident is a flag in #mod-chat with its case and buttons; Confirm acts as the mod, Dismiss records it; nothing is done before', async () => {
+test('step 1: an incident is a flag in #mod-flags with its case and buttons; Confirm acts as the mod, Dismiss records it; nothing is done before', async () => {
   const msg = message('join my server discord.gg/xyz best smp');
   await bm.onMessage(msg);
   answer = (win) => [incident({ messages: [win.fresh[0]], proposed: 'delete', confidence: 0.86, quotes: ['best smp'] })];
@@ -303,7 +306,10 @@ test('step 1: an incident is a flag in #mod-chat with its case and buttons; Conf
   const c = core.state.modcases.cases[n];
   assert.equal(c.action, 'flag');
   assert.equal(c.batch.messages[0].text, msg.content);
-  assert.equal(c.evidence.url, `https://x/mc/p1`);
+  assert.equal(posted[0].in, 'mf');
+  assert.equal(c.channelId, 'mf');
+  assert.equal(c.evidence.url, `https://x/mf/p1`);
+  assert.equal(posted.filter((p) => p.in === 'mc').length, 0, 'nothing in #mod-chat');
 
   const notMod = button(`bmod:ok:${n}`, { staff: false });
   await bm._test.onInteraction(notMod);
@@ -322,6 +328,36 @@ test('step 1: an incident is a flag in #mod-chat with its case and buttons; Conf
   await bm._test.onInteraction(again);
   assert.match(again.log[0][1].content, /Already decided/);
   assert.equal(c.batch.decision.kind, 'confirmed');
+});
+
+test('a case posted in #mod-chat before #mod-flags existed: its buttons still work and edit that message; new flags go to #mod-flags', async () => {
+  core.client.channels.cache.delete('mf'); // Kira had no #mod-flags yet (not in the cache): the flag falls back to #mod-chat
+  await bm.onMessage(message('old flag one'));
+  answer = (win) => [incident({ category: 'harassment', rule: 'Be respectful', messages: [win.fresh[0]], proposed: 'delete', confidence: 0.8 })];
+  await bm._test.closeWindow('c1');
+  assert.equal(posted.at(-1).in, 'mc');
+  const n = Number(posted.at(-1).components[0].toJSON().components[0].custom_id.split(':')[2]);
+  const c = core.state.modcases.cases[n];
+  assert.equal(c.channelId, 'mc');
+  core.client.channels.cache.set('mf', flagsChannel('mf')); // #mod-flags is made
+  const pick = button(`bmod:pick:${n}`, { values: ['note'] });
+  await bm._test.onInteraction(pick);
+  assert.equal(c.batch.decision.kind, 'changed');
+  assert.equal(edits.at(-1).in, 'mc', 'the old flag is edited where it was posted');
+  await bm.onMessage(message('new flag one'));
+  answer = (win) => [incident({ category: 'harassment', rule: 'Be respectful', messages: [win.fresh[0]], proposed: 'delete', confidence: 0.8 })];
+  await bm._test.closeWindow('c1');
+  assert.equal(posted.at(-1).in, 'mf');
+});
+
+test('the weekly line goes to #mod-flags, not #mod-chat', async () => {
+  f._test.store.weekly = null;
+  const monday = Date.UTC(2026, 10, 9, 10); // Monday 2026-11-09, 10:00 UTC
+  await bm._test.hourly(monday);
+  const line = posted.find((p) => /Kira's batch/.test(p.content ?? ''));
+  assert.ok(line, 'a weekly line was posted');
+  assert.equal(line.in, 'mf');
+  assert.equal(posted.filter((p) => p.in === 'mc').length, 0);
 });
 
 test('Dismiss and Change action', async () => {
