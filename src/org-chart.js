@@ -18,13 +18,21 @@ export const TIERS = [
   { key: 'support', role: '🤝 Support', post: 'Support' },
 ];
 
+// Under the governance (KIRA_GOVERNANCE on): the 👑 role is the Founder's, a symbolic title at the top with no power
+// (Ludovic, 2026-11-09), then the council of equals. The five other council members show as Council, not Team.
+export const GOVERNED_TIERS = [
+  { key: 'owner', role: '👑 Founder', post: 'Founder' },
+  { key: 'council', role: '🏛️ Council', post: 'Council' },
+  ...TIERS.slice(1),
+];
+
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,38})$/i;
 const clean = (v, max) => String(v ?? '').replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, max);
 
 // members: [{ id, username, name, avatar, roles: [tier keys] }]; github: Discord id → login; jobs: Discord id → text.
 // → { tiers: [{ key, role, post, people: [{ name, username, avatar, github, job }] }] }
-export function orgChart({ members, github = {}, jobs = {} }) {
-  const tiers = TIERS.map((t) => ({ ...t, people: [] }));
+export function orgChart({ members, github = {}, jobs = {}, tiers: list = TIERS }) {
+  const tiers = list.map((t) => ({ ...t, people: [] }));
   for (const m of members) {
     const tier = tiers.find((t) => m.roles.includes(t.key));
     if (!tier) continue;
@@ -41,13 +49,13 @@ export function orgChart({ members, github = {}, jobs = {} }) {
   return { tiers };
 }
 
-// The route. `read()` → the members (as orgChart takes them), or null while Discord isn't ready.
-export function route({ read, github = () => ({}), jobs = {}, now = () => Date.now() }) {
+// The route. `read()` → the members (as orgChart takes them), or null while Discord isn't ready; `tiers()` → the tiers.
+export function route({ read, github = () => ({}), jobs = {}, tiers = () => TIERS, now = () => Date.now() }) {
   let kept = null; // { at, body }
   return (req, res) => {
     if (!kept || now() - kept.at >= TTL_MS) {
       const members = read();
-      if (members) kept = { at: now(), body: JSON.stringify({ updated: new Date(now()).toISOString(), ...orgChart({ members, github: github(), jobs }) }) };
+      if (members) kept = { at: now(), body: JSON.stringify({ updated: new Date(now()).toISOString(), ...orgChart({ members, github: github(), jobs, tiers: tiers() }) }) };
     }
     if (!kept) {
       res.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });

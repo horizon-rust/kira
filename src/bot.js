@@ -2,7 +2,7 @@
 // KIRA_DISCORD=off: no Discord connection at all, only the board (from GitHub) and the MCP server, to test a
 // new host. PORT (Railway) or KIRA_HTTP_PORT: where the MCP server listens; none, no server.
 import { MessageFlags, MessageType } from 'discord.js';
-import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_SLOW_MS, VIDEOS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS, GITHUB, ORG, OWNER_ID } from './config.js';
+import { GUILD_ID, RELEASE_EVERY_MS, RELEASE_SLOW_MS, VIDEOS, RELEASE_REPOS, ONE_OFFS, COLOR, WORK, AGENTS, GITHUB, ORG, OWNER_ID, GOVERNANCE } from './config.js';
 import { client, state, save, channel } from './core.js';
 import { newReleases } from './feeds.js';
 import { releaseMessage, remember, announced, pingDecision } from './releases.js';
@@ -136,7 +136,8 @@ else { // the board alone, from GitHub
 function staffMembers() {
   const guild = DISCORD ? client.guilds.cache.get(GUILD_ID) : null;
   if (!guild?.members.cache.size) return null;
-  const ids = Object.fromEntries(Object.entries(ORG.roles).map(([key, id]) => [key, state.roles?.[key] || id]));
+  const roles = GOVERNANCE.on ? { ...ORG.roles, council: GOVERNANCE.roles.council } : ORG.roles;
+  const ids = Object.fromEntries(Object.entries(roles).map(([key, id]) => [key, state.roles?.[key] || id]));
   const out = [];
   for (const m of guild.members.cache.values()) {
     if (m.user.bot) continue;
@@ -158,7 +159,7 @@ if (port) {
       res.end(JSON.stringify({ contributors: workboard.creditedPairs() }));
     },
     // The hub's org chart: the staff roles' holders, names and confirmed GitHub logins only (public, read-only, 5 minutes).
-    '/staff.json': orgChart.route({ read: staffMembers, github: () => ({ ...WORK.github, ...ORG.github, ...workboard.creditedLogins() }), jobs: ORG.jobs }),
+    '/staff.json': orgChart.route({ read: staffMembers, github: () => ({ ...WORK.github, ...ORG.github, ...workboard.creditedLogins() }), jobs: ORG.jobs, tiers: () => (GOVERNANCE.on ? orgChart.GOVERNED_TIERS : orgChart.TIERS) }),
     ...kiraAi.usageRoutes({ limiter }),
     ...poll.routes(), // GET /decisions.json: the council's decisions log (public, read-only), only when KIRA_GOVERNANCE is on
     ...smp.routes({ limiter }), // POST /smp/ingest/*, GET /smp/*.json: the official server's market for the hub, with KIRA_SMP_INGEST_TOKEN

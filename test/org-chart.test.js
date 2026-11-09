@@ -1,7 +1,7 @@
 // GET /staff.json: the hub's org chart (src/org-chart.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { orgChart, route, TTL_MS } from '../src/org-chart.js';
+import { orgChart, route, TTL_MS, TIERS, GOVERNED_TIERS } from '../src/org-chart.js';
 
 const fakeRes = () => ({ status: 0, headers: {}, body: '', writeHead(st, h) { this.status = st; this.headers = h ?? {}; }, end(b) { this.body = b; } });
 const member = (id, name, roles, extra = {}) => ({ id, username: name.toLowerCase(), name, avatar: `https://cdn.discordapp.com/avatars/${id}/a.png?size=128`, roles, ...extra });
@@ -59,4 +59,20 @@ test('the route keeps its answer for TTL_MS, and says 503 until Discord is ready
   handler({}, res);
   assert.equal(JSON.parse(res.body).tiers[0].people[0].name, 'Changed');
   assert.equal(reads, 3);
+});
+
+test('governed: the Founder on top with no other role shown, then the council of equals, then the rest', () => {
+  const members = [
+    member('1', 'Ludo', ['owner', 'council', 'team']),
+    member('2', 'Kacper', ['council', 'team']),
+    member('3', 'Newbie', ['team']),
+    member('4', 'Pressure', ['mod', 'chiefmod']),
+  ];
+  const { tiers } = orgChart({ members, tiers: GOVERNED_TIERS });
+  assert.deepEqual(tiers.map((t) => [t.post, t.people.map((p) => p.name)]), [['Founder', ['Ludo']], ['Council', ['Kacper']], ['Horizon Team', ['Newbie']], ['Chief of Mods', ['Pressure']], ['Mod', []], ['Support', []]]);
+  assert.equal(orgChart({ members }).tiers[0].post, 'Owner', 'unchanged while governance is off');
+  const res = fakeRes();
+  route({ read: () => members, tiers: () => GOVERNED_TIERS })({}, res);
+  assert.deepEqual(JSON.parse(res.body).tiers.map((t) => t.key), ['owner', 'council', 'team', 'chiefmod', 'mod', 'support']);
+  assert.deepEqual(TIERS.map((t) => t.key), ['owner', 'team', 'chiefmod', 'mod', 'support']);
 });
