@@ -10,6 +10,7 @@ import * as board from '../board.js';
 import * as wb from './workboard.js';
 import * as kiraAi from './ai.js';
 import { columnText } from '../workkit.js';
+import * as polls from './poll.js';
 
 export const store = openStore(process.env.KIRA_AGENTS || dataFile('agents.json'));
 {
@@ -79,6 +80,18 @@ const agentName = (p) => `${p.name}'s agent`;
 
 export const api = {
   snapshot: () => wb.current(),
+  // Council polls through /poll's own code (src/features/poll.js): the opener is the token's member.
+  async pollOpen(p, args) {
+    const r = await polls.start(p.user, args, { via: 'agent' });
+    if (!r.ok) return { ok: false, why: r.why };
+    const q = r.poll;
+    return { ok: true, poll: q.id, kind: q.kind, threshold: q.threshold, where: q.where, endsAt: new Date(q.endsAt).toISOString(), link: `https://discord.com/channels/${GUILD_ID}/${q.channelId}/${q.messageId}` };
+  },
+  pollList(p) { // questions are people's text: wrapped as untrusted
+    const { open, closed } = polls.list(p.user);
+    const wrap = (x) => ({ ...x, question: x.question == null ? null : untrusted(x.question, 'discord') });
+    return { open: open.map(wrap), closed: closed.map(wrap) };
+  },
   isMaintainer,
   isActiveMember,
   audit,

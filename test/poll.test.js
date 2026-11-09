@@ -39,7 +39,7 @@ const makeChannel = (id) => ({
   id,
   send: async (m) => {
     sent.push([id, m]);
-    const msg = { id: `M${sent.length}`, channelId: id, content: m.content, components: m.components, edit: async (e) => { Object.assign(msg, e); }, delete: async () => { msg.deleted = true; }, startThread: async (t) => { msg.thread = t.name; } };
+    const msg = { id: `M${sent.length}`, channelId: id, content: m.content, components: m.components, edit: async (e) => { Object.assign(msg, e); }, delete: async () => { msg.deleted = true; }, startThread: async (t) => { msg.thread = t.name; const th = makeChannel(`T${msg.id}`); core.client.channels.cache.set(th.id, th); return th; } };
     msgs.set(msg.id, msg);
     return msg;
   },
@@ -200,4 +200,47 @@ test('the council cancelled the polls open on 2026-11-09: they never close, appl
   assert.ok(!dms.slice(dmsBefore).some(([, t]) => /P9[01]/.test(t)), 'no reminder');
   assert.equal(poll.log.all().length, logged + 1, 'only P92, a real poll, closed and was logged');
   assert.deepEqual(await poll.cancelStale(Date.UTC(2026, 10, 11)), [], 'nothing twice');
+});
+
+test('the MCP path (poll.start): council only, the same rules, the opener is the member, an agent mark and the thread text', async () => {
+  const refused = await poll.start(CAND, { kind: 'decision', question: 'Agents may open polls for members?' }, { via: 'agent' });
+  assert.deepEqual(refused, { ok: false, why: 'Only council members start a poll. Ask one of them.' });
+  assert.match((await poll.start(KACPER, { kind: 'mod', question: 'Make the candidate a moderator now?' })).why, /give the member and the role/);
+  const before = sent.length;
+  const r = await poll.start(KACPER, { kind: 'decision', question: 'Do we move the weekly call to Sunday?', thread: 'Context <@123>: the doodle says Sunday. @everyone' }, { via: 'agent' });
+  assert.equal(r.ok, true);
+  const p = r.poll;
+  assert.equal(p.openedBy, KACPER);
+  assert.equal(p.where, 'public');
+  const [ch, post] = sent[before];
+  assert.equal(ch, GOVERNANCE.channels.polls);
+  assert.match(post.content, new RegExp(`Started by <@${KACPER}> \\(through their AI agent\\)`));
+  const [thCh, thread] = sent[before + 1];
+  assert.equal(thCh, p.threadId);
+  assert.match(thread.content, new RegExp(`^🤖 From <@${KACPER}>'s AI agent:\\n`));
+  assert.deepEqual(thread.allowedMentions, { parse: [] }, 'nobody pinged from the thread text');
+  const again = await poll.start(KACPER, { kind: 'member-add', question: 'Add the candidate to the Horizon Team?', member: CAND, role: 'team' });
+  assert.equal(again.ok, true, 'role polls work the same way');
+});
+
+test('poll.list: counts while open (never who or what), questions of #council polls for council members only, results once closed', async () => {
+  const pub = Object.values(core.state.polls).find((p) => p.question.startsWith('Do we move'));
+  await press(LEVZZZ, pub.id, 'yes');
+  const priv = (await poll.start(KACPER, { kind: 'appeal', question: 'Second-level appeal of a quarantine: uphold it?' })).poll;
+  assert.equal(priv.where, 'council');
+  const mine = poll.list(KACPER);
+  const o = mine.open.find((x) => x.id === pub.id);
+  const n = kit.eligible(core.state.council ?? GOVERNANCE.founding, pub).length;
+  assert.deepEqual([o.voted, o.eligible, o.quorum, o.youVoted, o.ballots], [1, n, Math.ceil(n / 2), false, undefined]);
+  assert.match(o.link, /^https:\/\/discord\.com\/channels\//);
+  assert.equal(mine.open.find((x) => x.id === priv.id).question, priv.question);
+  const outsider = poll.list(CAND);
+  const hidden = outsider.open.find((x) => x.id === priv.id);
+  assert.deepEqual([hidden.question, hidden.kind, hidden.youVoted], [null, 'person', undefined]);
+  await press(RDBT, priv.id, 'no');
+  await poll.close(priv);
+  const closedOut = poll.list(CAND).closed.find((x) => x.id === priv.id);
+  assert.deepEqual([closedOut.question, closedOut.ballots, closedOut.result.passed], [null, null, false]);
+  assert.equal(poll.list(KACPER).closed.find((x) => x.id === priv.id).question, priv.question);
+  assert.equal(poll.list(CAND, { now: Date.now() + 30 * 24 * kit.HOUR }).closed.length, 0, 'only the last 14 days');
 });
