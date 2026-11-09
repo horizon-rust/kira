@@ -136,3 +136,71 @@ test('look-alike digits count as letters; a digit-laden username does not match 
   assert.equal(kit.matchLogin(['louis9987_98481'], ['Louistuis']), null, 'the weak match stays weak');
   assert.equal(kit.matchLogin(['short_fox'], ['TheGaner']), null);
 });
+
+// ── Ranks ────────────────────────────────────────────────────────────────────
+
+const RANKS = [
+  { key: 'contributor', min: 1, name: '🛠️ Contributor' }, { key: 'iron', min: 10, name: '⛏️ Iron' },
+  { key: 'gold', min: 40, name: '🥇 Gold' }, { key: 'diamond', min: 100, name: '💎 Diamond' }, { key: 'netherite', min: 200, name: '🟪 Netherite' },
+];
+
+test('the rank a count reaches, and the next one', () => {
+  assert.equal(kit.rankFor(RANKS, 0), null);
+  assert.equal(kit.rankFor(RANKS, 1).key, 'contributor');
+  assert.equal(kit.rankFor(RANKS, 9).key, 'contributor');
+  assert.equal(kit.rankFor(RANKS, 10).key, 'iron');
+  assert.equal(kit.rankFor(RANKS, 571).key, 'netherite');
+  assert.equal(kit.nextRank(RANKS, 39).key, 'gold');
+  assert.equal(kit.nextRank(RANKS, 200), null, 'nothing above the top');
+});
+
+test('ranks only go up with the same login; another login starts from its own count', () => {
+  assert.equal(kit.targetRank(RANKS, 35, 'ana', { key: 'gold', login: 'Ana' }).key, 'gold', 'a lower count keeps the rank reached');
+  assert.equal(kit.targetRank(RANKS, 120, 'ana', { key: 'gold', login: 'ana' }).key, 'diamond');
+  assert.equal(kit.targetRank(RANKS, 3, 'bo', { key: 'gold', login: 'ana' }).key, 'contributor');
+  assert.equal(kit.targetRank(RANKS, 12, 'ana', null).key, 'iron');
+});
+
+test('a member holds the base and their highest rank only', () => {
+  assert.deepEqual(kit.rankRoles(RANKS, ['contributor', 'iron'], RANKS[2]), { add: ['gold'], remove: ['iron'] });
+  assert.deepEqual(kit.rankRoles(RANKS, [], RANKS[1]), { add: ['contributor', 'iron'], remove: [] });
+  assert.deepEqual(kit.rankRoles(RANKS, ['contributor', 'iron', 'diamond'], RANKS[3]), { add: [], remove: ['iron'] });
+  assert.deepEqual(kit.rankRoles(RANKS, ['contributor'], RANKS[0]), { add: [], remove: [] }, 'the base is never removed');
+});
+
+test('a climb is announced; a first record or the same rank is not', () => {
+  assert.equal(kit.climbed(RANKS, { key: 'contributor' }, RANKS[1]), true);
+  assert.equal(kit.climbed(RANKS, { key: 'iron' }, RANKS[1]), false);
+  assert.equal(kit.climbed(RANKS, null, RANKS[4]), false, 'the backfill and a fresh verification stay quiet');
+  assert.equal(kit.climbed(RANKS, { key: null }, RANKS[0]), false, 'reaching the base is the welcome line, not a rank-up');
+  assert.equal(kit.climbed(RANKS, { key: null }, RANKS[1]), true);
+});
+
+test('the count sums the repos in one search', async () => {
+  const gh = fakeGh({ '/search/issues': { total_count: 7 } });
+  assert.equal(await kit.mergedCount(gh, 'horizon-rust', ['horizon', 'horizon-mods'], 'ana'), 7);
+  const q = decodeURIComponent(gh.calls[0]);
+  assert.match(q, /repo:horizon-rust\/horizon repo:horizon-rust\/horizon-mods is:pr is:merged author:ana/);
+});
+
+test('the rank roles go right above the given role, in order, and only the roles that move are sent', () => {
+  // @everyone, the two new ranks (made at the bottom), contributor, lvl50, booster
+  const sorted = ['E', 'iron', 'gold', 'contrib', 'lvl50', 'boost'];
+  assert.deepEqual(kit.rankPositions(sorted, 'lvl50', ['iron', 'gold']), [
+    { id: 'contrib', position: 1 }, { id: 'lvl50', position: 2 }, { id: 'iron', position: 3 }, { id: 'gold', position: 4 },
+  ]);
+  assert.deepEqual(kit.rankPositions(['E', 'contrib', 'lvl50', 'iron', 'gold', 'boost'], 'lvl50', ['iron', 'gold']), [], 'already in place');
+  assert.deepEqual(kit.rankPositions(sorted, 'missing', ['iron', 'gold']), []);
+});
+
+test('the leaderboard: top by count, ties by login, nobody at 0; the help says which repos count', () => {
+  const rows = [{ id: '1', login: 'b', count: 50, key: 'gold' }, { id: '2', login: 'a', count: 50, key: 'gold' }, { id: '3', login: 'c', count: 0, key: null }, { id: '4', login: 'd', count: 300, key: 'netherite' }];
+  assert.deepEqual(kit.topRanks(rows, 10).map((r) => r.id), ['4', '2', '1']);
+  assert.deepEqual(kit.topRanks(rows, 2).map((r) => r.id), ['4', '2']);
+  const text = kit.leaderboardText(RANKS, kit.topRanks(rows));
+  assert.match(text, /\*\*1\.\*\* 🟪 <@4> · d · 300/);
+  assert.match(text, /horizon-rust\/horizon and horizon-rust\/horizon-mods, summed/);
+  assert.match(kit.rankText(RANKS, { login: 'a', verified: true, entry: { count: 37 }, rank: RANKS[1] }), /⛏️ Iron.*37 merged pull requests.*next: \*\*🥇 Gold\*\* at 40 \(3 to go\)/);
+  assert.match(kit.rankText(RANKS, { login: 'a', verified: true, entry: { count: 250 }, rank: RANKS[4] }), /highest rank/);
+  assert.match(kit.rankText(RANKS, { login: 'a', verified: false }), /\/verify-github/);
+});

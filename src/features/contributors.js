@@ -2,9 +2,11 @@
 // code in their bio or a gist) and has at least one merged pull request in Horizon gets the role, which opens
 // #contributors. Granted when they verify, when Kira sees their pull request merge, and by a daily sweep; it is
 // never taken away because of a count, only when the link or the verification goes (src/contributor-kit.js).
+// Ranks (⛏️ Iron … 🟪 Netherite, CONTRIBUTORS.ranks) sit above it, from the merged pull requests in Horizon and
+// horizon-mods summed, settled on the same paths; they only go up, and go only with the link or the verification.
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { rateLimiter } from '../agents.js';
-import { CONTRIBUTORS, GITHUB, GUILD_ID, OWNER_ID, WORK } from '../config.js';
+import { CONTRIBUTORS, GITHUB, GUILD_ID, OWNER_ID, ROLES, WORK } from '../config.js';
 import { client, state, save, channel, isStaff, modlog } from '../core.js';
 import { makeGitHub } from '../github.js';
 import { githubToken } from '../github-app.js';
@@ -22,6 +24,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const guild = () => client.guilds.cache.get(GUILD_ID);
 const roleId = () => state.roles[CONTRIBUTORS.role];
 const merged = (login) => kit.mergedCount(gh, GITHUB.owner, WORK.repo, login);
+// The count the ranks use: every repo in CONTRIBUTORS.repos, summed.
+const mergedAll = (login) => kit.mergedCount(gh, GITHUB.owner, CONTRIBUTORS.repos, login);
+const RANKS = CONTRIBUTORS.ranks.map((r) => ({ ...r, name: ROLES.find((x) => x.key === r.key)?.name ?? r.key }));
+// A rank role's id: setup's (state.roles, which only setup writes) or the one the admin route made (work.rankRoles).
+const rankRole = (key) => state.roles[key] ?? work.rankRoles?.[key];
+const ranksReady = () => RANKS.every((r) => rankRole(r.key));
+const sameLogin = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 const verified = (id) => kit.isVerified(work, id, WORK.github);
 const fetchMember = (id) => guild()?.members.fetch(id).catch(() => null);
 // Staff write in #contributors anyway: the role is for everyone else.
@@ -33,17 +42,116 @@ const isTrusted = (id) => Object.hasOwn(CONTRIBUTORS.protectedMembers, id);
 
 // Gives the role to a member whose login is verified and has a merged pull request (`count`: what GitHub said, or
 // null when Kira just saw one merge). One welcome line in #contributors. Returns 'granted', 'has' or 'gone'.
-async function grant(id, login, count = null) {
+// The rank is settled on the way (`total`: the summed count, read here when not given).
+async function grant(id, login, count = null, total = null) {
   const member = await fetchMember(id);
   const role = roleId();
   if (!member || !role) return 'gone';
   delete work.grace?.[id];
-  if (member.roles.cache.has(role)) { save(); return 'has'; }
+  total ??= ranksReady() ? await mergedAll(login).catch(() => null) : null;
+  if (member.roles.cache.has(role)) {
+    if (total !== null) await settle(member, login, total);
+    save();
+    return 'has';
+  }
   await member.roles.add(role, 'verified GitHub account with a merged pull request');
   save();
   console.log(`contributors: role granted (${count === null ? 'seen merging' : `${count} merged`})`);
-  await channel(CONTRIBUTORS.channel)?.send({ content: kit.welcomeLine(id, login), allowedMentions: { users: [id] } }).catch((e) => console.error('contributors welcome', e.message));
+  const rank = total !== null ? await settle(member, login, total) : null;
+  const above = rank && kit.rankIndex(RANKS, rank.key) > 0 ? rank : null;
+  await channel(CONTRIBUTORS.channel)?.send({ content: kit.welcomeLine(id, login, above), allowedMentions: { users: [id] } }).catch((e) => console.error('contributors welcome', e.message));
   return 'granted';
+}
+
+// ── Ranks ────────────────────────────────────────────────────────────────────
+
+// A verified member who holds 🛠️ Contributor, at `count` merged pull requests (summed): the rank roles they should
+// hold (their highest rank only, never lower than the one reached with this login), work.ranks, and one line without
+// a ping in #contributors when they climbed. Nothing until every rank role exists. Returns the rank, or null.
+async function settle(member, login, count) {
+  if (!ranksReady() || member.id === OWNER_ID) return null; // Ludovic's pull requests are his agents'
+  const before = work.ranks?.[member.id];
+  const reached = before && sameLogin(before.login, login) ? before : null;
+  const rank = kit.targetRank(RANKS, count, login, reached);
+  const held = RANKS.filter((r) => member.roles.cache.has(rankRole(r.key))).map((r) => r.key);
+  const { add, remove } = kit.rankRoles(RANKS, held, rank);
+  const ids = (keys) => keys.filter((k) => k !== RANKS[0].key).map(rankRole);
+  try {
+    if (ids(remove).length) await member.roles.remove(ids(remove), 'a higher contributor rank');
+    if (ids(add).length) await member.roles.add(ids(add), `contributor rank: ${count} merged pull requests`);
+  } catch (e) { console.error('contributors rank roles', e.message); return reached ? RANKS[kit.rankIndex(RANKS, reached.key)] ?? null : null; }
+  (work.ranks ??= {})[member.id] = { key: rank?.key ?? null, login, count, at: Date.now() };
+  save();
+  if (kit.climbed(RANKS, reached, rank)) {
+    await channel(CONTRIBUTORS.channel)?.send({ content: kit.rankUpLine(member.id, rank, count), allowedMentions: { parse: [] } }).catch((e) => console.error('contributors rank line', e.message));
+  }
+  return rank;
+}
+
+// Reads a holder's count again (when /rank finds it old), one read at a time per member.
+const refreshing = new Set();
+function refresh(id) {
+  if (refreshing.has(id) || !ranksReady()) return;
+  refreshing.add(id);
+  (async () => {
+    const login = kit.loginOf(work, id, WORK.github);
+    const member = await fetchMember(id);
+    if (!login || !verified(id) || !member?.roles.cache.has(roleId())) return;
+    await settle(member, login, await mergedAll(login));
+  })().catch((e) => console.error('contributors rank refresh', e.message)).finally(() => refreshing.delete(id));
+}
+
+// /rank's contributor part (src/features/levels.js), from what is stored; an old count is read again in the background.
+export function rankNote(id) {
+  if (!enabled || id === OWNER_ID) return '';
+  const login = kit.loginOf(work, id, WORK.github);
+  if (!login) return '';
+  const isVerified = verified(id);
+  const stored = work.ranks?.[id];
+  const entry = stored && sameLogin(stored.login, login) ? stored : null;
+  if (isVerified && (!entry || Date.now() - entry.at > CONTRIBUTORS.rankRefreshMs)) refresh(id);
+  const rank = entry?.key ? RANKS[kit.rankIndex(RANKS, entry.key)] : null;
+  return kit.rankText(RANKS, { login, verified: isVerified, entry, rank });
+}
+
+// The verified members on the board: [{ id, login, count, key }] (their stored counts).
+export function rankRows() {
+  return Object.entries(work.ranks ?? {})
+    .filter(([id, e]) => id !== OWNER_ID && verified(id) && sameLogin(e.login, kit.loginOf(work, id, WORK.github)))
+    .map(([id, e]) => ({ id, login: e.login, count: e.count, key: e.key }));
+}
+
+// Makes the rank roles (CONTRIBUTORS.ranks above the base, specs in ROLES): `dry` lists what it would do. Each role is
+// found by its id in state.roles, else by its name, else created with no permissions; then they are put in ROLES'
+// order right above the role before them there (hoisted, so they show in the member list). After a real run the
+// sweep starts, which gives everyone their rank without announcing it (a first record is never announced).
+export async function ensureRankRoles({ dry = true } = {}) {
+  const g = guild();
+  if (!g) throw new Error('the guild is not known yet');
+  await g.roles.fetch();
+  const specs = ROLES.filter((r) => r.rank);
+  const out = { dry, roles: [], moved: 0 };
+  const found = {};
+  for (const spec of specs) {
+    let role = g.roles.cache.get(rankRole(spec.key)) ?? g.roles.cache.find((r) => r.name === spec.name);
+    out.roles.push({ key: spec.key, name: spec.name, action: role ? 'exists' : dry ? 'would create' : 'created' });
+    if (!role && !dry) {
+      role = await g.roles.create({ name: spec.name, colors: { primaryColor: spec.color }, hoist: !!spec.hoist, mentionable: false, permissions: [], reason: 'contributor rank' });
+    }
+    if (role) found[spec.key] = role.id;
+  }
+  if (dry) return out;
+  // Kira's own key: state.roles is setup's, and save() takes it back from disk.
+  for (const [key, id] of Object.entries(found)) (work.rankRoles ??= {})[key] = id;
+  save();
+  await g.roles.fetch();
+  const below = ROLES.slice(0, ROLES.indexOf(specs[0])).reverse().map((r) => state.roles[r.key]).find((id) => g.roles.cache.has(id));
+  const sorted = [...g.roles.cache.values()].sort((a, b) => a.position - b.position || (BigInt(a.id) < BigInt(b.id) ? -1 : 1)).map((r) => r.id);
+  const moves = kit.rankPositions(sorted, below, specs.map((s) => rankRole(s.key)), (id) => g.roles.cache.get(id).position);
+  if (moves.length) await g.roles.setPositions(moves.map(({ id, position }) => ({ role: id, position })));
+  out.moved = moves.length;
+  sweep().catch((e) => console.error('contributors sweep', e.message));
+  return out;
 }
 
 // For a verified member: reads the count on GitHub and grants. 'none': verified, no merged pull request yet.
@@ -56,10 +164,19 @@ async function tryGrant(id) {
 }
 
 // Kira's own feed of merges (the work board's refresh): a merged pull request by a verified login grants the role.
+// The feed lists recent pull requests on every refresh: a holder whose count was read well after their latest merge
+// is skipped (no search for nothing; the margin covers the search index lagging behind a merge).
 export async function afterRefresh(raw) {
-  const authors = new Set((raw?.pulls ?? []).filter((p) => p.merged_at && p.user?.login).map((p) => p.user.login.toLowerCase()));
+  const latest = new Map(); // lowercase login → the time of their latest merge in the feed
+  for (const p of raw?.pulls ?? []) {
+    if (!p.merged_at || !p.user?.login) continue;
+    const key = p.user.login.toLowerCase();
+    latest.set(key, Math.max(latest.get(key) ?? 0, Date.parse(p.merged_at) || 0));
+  }
   for (const [id, login] of kit.verifiedPairs(work, WORK.github)) {
-    if (id === OWNER_ID || !authors.has(login.toLowerCase())) continue;
+    if (id === OWNER_ID || !latest.has(login.toLowerCase())) continue;
+    const counted = work.ranks?.[id];
+    if (counted && sameLogin(counted.login, login) && counted.at > latest.get(login.toLowerCase()) + 10 * 60_000) continue;
     await grant(id, login).catch((e) => console.error('contributors feed', e.message));
   }
 }
@@ -67,13 +184,17 @@ export async function afterRefresh(raw) {
 // ── /link-github's side ──────────────────────────────────────────────────────
 
 // The link changed or went: its verification goes too, and the role with it (staff keep what they have).
+// The ranks above it go for everyone, staff included: they count the pull requests of a proved account.
 export async function relinked(id) {
   const had = !!work.verified?.[id];
   kit.clearVerification(work, id);
+  delete work.ranks?.[id];
   save();
   if (!had) return;
   const member = await fetchMember(id);
   const role = roleId();
+  const ranks = RANKS.slice(1).map((r) => rankRole(r.key)).filter((r) => r && member?.roles.cache.has(r));
+  if (ranks.length) await member.roles.remove(ranks, 'GitHub link changed: verify again').catch(() => {});
   if (member && role && member.roles.cache.has(role) && !isStaffMember(member) && !isTrusted(id)) await member.roles.remove(role, 'GitHub link changed: verify again').catch(() => {});
 }
 
@@ -139,12 +260,18 @@ async function verifyMyself(i, check) {
 }
 
 export const commands = enabled ? [
+  new SlashCommandBuilder().setName('ranks').setDescription('The top 10 contributors by merged pull requests (Horizon and horizon-mods)'),
   new SlashCommandBuilder().setName('verify-github').setDescription('Prove your linked GitHub account is yours (a merged Horizon PR then gives you Contributor)')
     .addBooleanOption((o) => o.setName('check').setDescription('I put the code on GitHub: check it now'))
     .addUserOption((o) => o.setName('member').setDescription('Mods: verify someone by hand')),
 ] : [];
 
 export const handlers = {
+  // Public in #contributors, only for the asker elsewhere. Names only: nobody is pinged.
+  async ranks(i) {
+    const here = i.channelId === state.channels[CONTRIBUTORS.channel];
+    return i.reply({ content: kit.leaderboardText(RANKS, kit.topRanks(rankRows(), 10)), allowedMentions: { parse: [] }, ...(here ? {} : { flags: MessageFlags.Ephemeral }) });
+  },
   async 'verify-github'(i) {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     try {
@@ -260,8 +387,8 @@ export async function cleanup({ dry = true } = {}) {
 
 // ── The daily sweep ──────────────────────────────────────────────────────────
 
-// Verified members with a merged pull request who lack the role get it; holders whose grace is over lose it unless
-// they have verified by now. Never removes the role for any other reason.
+// Verified members with a merged pull request who lack the role get it; verified holders get their rank settled;
+// holders whose grace is over lose it unless they have verified by now. Never removes the role for any other reason.
 export async function sweep() {
   work.sweepAt = Date.now();
   save();
@@ -271,11 +398,18 @@ export async function sweep() {
   for (const [id, login] of kit.verifiedPairs(work, WORK.github)) {
     if (id === OWNER_ID) continue;
     const member = await fetchMember(id);
-    if (!member || member.roles.cache.has(role)) continue;
+    if (!member) continue;
     try {
+      if (member.roles.cache.has(role)) {
+        if (!ranksReady()) continue;
+        const total = await mergedAll(login);
+        await sleep(CONTRIBUTORS.searchPaceMs);
+        await settle(member, login, total);
+        continue;
+      }
       const n = await merged(login);
       await sleep(CONTRIBUTORS.searchPaceMs);
-      if (n >= 1) await grant(id, login, n);
+      if (n >= 1) { await grant(id, login, n); await sleep(CONTRIBUTORS.searchPaceMs); }
     } catch (e) { console.error('contributors sweep', e.message); }
   }
   for (const id of kit.graceOver(work, Date.now())) {
@@ -300,4 +434,4 @@ export function setup() {
   });
 }
 
-export const _test = { work, setGitHub: (g) => { gh = g; } };
+export const _test = { work, RANKS, setGitHub: (g) => { gh = g; } };

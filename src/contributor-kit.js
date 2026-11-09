@@ -83,10 +83,12 @@ export async function codeIsPublished(gh, login, code, pub = publicGet) {
 
 // ── Merged pull requests ─────────────────────────────────────────────────────
 
-// How many pull requests by `login` were merged in owner/repo (the search API: its own limit, 30 a minute).
+// How many pull requests by `login` were merged in owner/repo (the search API: its own limit, 30 a minute). `repo`
+// may be a list: one search counts them summed (several repo: qualifiers are an OR).
 export async function mergedCount(gh, owner, repo, login) {
   if (!LOGIN.test(login)) return 0;
-  const q = encodeURIComponent(`repo:${owner}/${repo} is:pr is:merged author:${login}`);
+  const repos = [repo].flat().map((r) => `repo:${owner}/${r}`).join(' ');
+  const q = encodeURIComponent(`${repos} is:pr is:merged author:${login}`);
   const found = await gh.get(`/search/issues?q=${q}&per_page=1`);
   return Number(found?.total_count) || 0;
 }
@@ -122,6 +124,59 @@ export async function mergedAuthors(gh, owner, repo, { today = new Date(), sleep
   await window(first, today);
   return authors;
 }
+
+// ── Ranks ────────────────────────────────────────────────────────────────────
+// `ranks`: [{ key, min, name }] lowest first (CONTRIBUTORS.ranks with the role names); the first is the base role,
+// 🛠️ Contributor. The ranks above it are held one at a time (the highest reached), with the base kept. They count
+// merged pull requests in several repos, summed. Ranks only go up: `reached` ({ key, login } in work.ranks) keeps the
+// best one a member had with the login they still have verified; a new login starts again from its own count.
+
+export const rankIndex = (ranks, key) => ranks.findIndex((r) => r.key === key);
+// The highest rank `count` reaches, or null under the base.
+export const rankFor = (ranks, count) => ranks.filter((r) => count >= r.min).at(-1) ?? null;
+// The next rank above `count`, or null at the top.
+export const nextRank = (ranks, count) => ranks.find((r) => count < r.min) ?? null;
+
+// The rank a verified member should hold now: the count's, or the one already reached with this login if higher.
+export function targetRank(ranks, count, login, reached = null) {
+  const byCount = rankFor(ranks, count);
+  const kept = reached && same(reached.login, login) ? ranks[rankIndex(ranks, reached.key)] ?? null : null;
+  if (!kept) return byCount;
+  return !byCount || rankIndex(ranks, kept.key) > rankIndex(ranks, byCount.key) ? kept : byCount;
+}
+
+// The rank roles to add and remove (keys) so a member holds `target` and the base, and no other rank above the base.
+// `held`: the rank keys they hold now. The base is only added here, never removed.
+export function rankRoles(ranks, held, target) {
+  const want = new Set(target ? [ranks[0].key, target.key] : []);
+  const has = new Set(held);
+  return {
+    add: [...want].filter((k) => !has.has(k)),
+    remove: ranks.slice(1).map((r) => r.key).filter((k) => has.has(k) && !want.has(k)),
+  };
+}
+
+// True when the member climbed: a rank above the base, higher than the one recorded before. The first record of a
+// member (the backfill when ranks start, or a fresh verification, whose welcome line says the rank) is not announced.
+export function climbed(ranks, before, after) {
+  if (!before || !after) return false;
+  return rankIndex(ranks, after.key) > Math.max(0, rankIndex(ranks, before.key));
+}
+
+// The role moves that put the rank roles (`ranks`, lowest first) right above `below`, in order. `sorted`: every role
+// id of the server, lowest position first (@everyone first); `positionOf`: a role's position now (Discord's may repeat
+// or skip numbers). Returns [{ id, position }] for the roles whose position changes (positions are the indexes of the
+// new order), or [] when they are already there or `below` is unknown.
+export function rankPositions(sorted, below, ranks, positionOf = (id) => sorted.indexOf(id)) {
+  if (!sorted.includes(below) || !ranks.every((id) => sorted.includes(id))) return [];
+  const rest = sorted.filter((id) => !ranks.includes(id));
+  const order = [...rest.slice(0, rest.indexOf(below) + 1), ...ranks, ...rest.slice(rest.indexOf(below) + 1)];
+  return order.map((id, position) => ({ id, position })).filter(({ id, position }) => positionOf(id) !== position);
+}
+
+// The top `n` by merged pull requests: [{ id, login, count, key }] → the same, sorted, ties by login.
+export const topRanks = (rows, n = 10) => [...rows].filter((r) => r.count > 0)
+  .sort((a, b) => b.count - a.count || String(a.login).localeCompare(String(b.login))).slice(0, n);
 
 // ── Who is who: Discord names against GitHub logins ──────────────────────────
 
@@ -176,4 +231,29 @@ export const codeInstructions = (login, challenge) => [
   `It is valid until <t:${Math.floor(challenge.expires / 1000)}:t>. Then run \`/verify-github check:True\`. You can remove the code afterwards.`,
 ].join('\n');
 
-export const welcomeLine = (id, login) => `🛠️ Welcome <@${id}>! A pull request by **${login}** is merged in Horizon: you are a contributor now.`;
+export const welcomeLine = (id, login, rank = null) => `🛠️ Welcome <@${id}>! A pull request by **${login}** is merged in Horizon: you are a contributor now${rank ? `, at **${rank.name}** already` : ''}.`;
+
+export const COUNTED = 'merged pull requests in horizon-rust/horizon and horizon-rust/horizon-mods, summed';
+const plural = (n) => `${n} merged pull request${n === 1 ? '' : 's'}`;
+
+// One line in #contributors, no ping.
+export const rankUpLine = (id, rank, count) => `${rank.name.split(' ')[0]} <@${id}> reached **${rank.name}**: ${plural(count)} in Horizon.`;
+
+// /rank's contributor part. `entry`: { login, count, at } or null; `verified`: the member's GitHub is proved.
+export function rankText(ranks, { login = null, verified = false, entry = null, rank = null } = {}) {
+  if (!login) return 'No GitHub account linked: `/link-github <username>`, then `/verify-github`.';
+  if (!verified) return `GitHub **${login}** is linked but not verified: \`/verify-github\` counts its pull requests.`;
+  if (!entry) return `GitHub **${login}**: not counted yet, it is read at the next check.`;
+  const next = nextRank(ranks, entry.count);
+  const now = rank ? `**${rank.name}**` : 'no rank yet';
+  const ahead = next ? ` · next: **${next.name}** at ${next.min} (${next.min - entry.count} to go)` : ' · the highest rank';
+  return `${now} · ${plural(entry.count)} by **${login}**${ahead}\n-# Counted: ${COUNTED}.`;
+}
+
+// /ranks: the top 10, one line each, with the rank's emoji.
+export function leaderboardText(ranks, rows) {
+  if (!rows.length) return 'Nobody is counted yet: `/link-github` and `/verify-github` put you on it.';
+  const emoji = (key) => (ranks.find((r) => r.key === key)?.name ?? '').split(' ')[0];
+  const lines = rows.map((r, n) => `**${n + 1}.** ${emoji(r.key)} <@${r.id}> · ${r.login} · ${r.count}`);
+  return `**🏆 Contributor ranks**\n${lines.join('\n')}\n-# Counted: ${COUNTED}. ${ranks.slice(1).map((r) => `${r.name} ${r.min}+`).join(' · ')}`;
+}

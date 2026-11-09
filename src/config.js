@@ -73,6 +73,14 @@ export const ROLES = [
   { key: 'lvl20', name: 'lvl 20', color: 0x22a6b3, level: 20 },
   { key: 'lvl30', name: 'lvl 30', color: 0xf0932b, level: 30 },
   { key: 'lvl50', name: 'lvl 50', color: 0xeb4d4b, level: 50, hoist: true },
+  // Contributor ranks (Ludovic, 2026-11-09): Minecraft ores above 🛠️ Contributor, earned by the merged pull requests in
+  // horizon-rust/horizon and horizon-rust/horizon-mods, summed (`CONTRIBUTORS.ranks` has the thresholds). A member holds
+  // only their highest one, plus 🛠️ Contributor. Hoisted above the level roles so they show in the member list; no
+  // permissions. Made by POST /admin/contributor-ranks (src/features/contributors.js), or by setup.
+  { key: 'iron', name: '⛏️ Iron', color: 0xc9ced6, hoist: true, rank: true, about: 'a contributor rank: 10 merged pull requests in Horizon and horizon-mods, summed. `/rank` shows yours, `/ranks` the top 10.' },
+  { key: 'gold', name: '🥇 Gold', color: 0xf5c542, hoist: true, rank: true, about: 'a contributor rank: 40 merged pull requests in Horizon and horizon-mods, summed.' },
+  { key: 'diamond', name: '💎 Diamond', color: 0x4fe3e8, hoist: true, rank: true, about: 'a contributor rank: 100 merged pull requests in Horizon and horizon-mods, summed.' },
+  { key: 'netherite', name: '🟪 Netherite', color: 0x76608a, hoist: true, rank: true, about: 'the highest contributor rank: 200 merged pull requests in Horizon and horizon-mods, summed.' },
   { key: 'booster', managed: 'premium_subscriber', name: '💎 Booster', color: 0xf47fff, hoist: true, about: 'given by Discord to members who boost the server.' },
   { key: 'tester', name: '🧪 Horizon Tester', color: 0xffd166, hoist: true, about: 'given by the staff by hand.' },
   // Given by Ludovic by hand. 💚 Sponsor: who sponsors Horizon (Sculk Hosting's owner, 2026-10-27).
@@ -532,6 +540,19 @@ export const CONTRIBUTORS = {
   // Discord id → login of Ludovic's trusted reviewers (found by hand). Nothing automatic ever takes the role from
   // them: the clean-up gives an unlinked one the DM and 7 days, and the sweep and a changed link leave them the role.
   protectedMembers: { '437262688930889730': 'kacpherek', '777346923232886784': 'rdbtCVS', '1531466016054444261': 'Online5277' },
+  // The ranks count merged pull requests in these repos of GITHUB.owner, summed (Ludovic, 2026-11-09). 🛠️ Contributor
+  // itself still needs one merged in WORK.repo (horizon).
+  repos: ['horizon', 'horizon-mods'],
+  // Lowest first; the first is the base role. Thresholds from the merged-PR counts per author on 2026-11-09 (305
+  // authors, ludovic111 and bots left out): 98 had 10+, 34 had 40+, 13 had 100+, 5 had 200+.
+  ranks: [
+    { key: 'contributor', min: 1 },
+    { key: 'iron', min: 10 },
+    { key: 'gold', min: 40 },
+    { key: 'diamond', min: 100 },
+    { key: 'netherite', min: 200 },
+  ],
+  rankRefreshMs: 60 * 60_000, // /rank reads GitHub again when the stored count is older than this
 };
 
 // /notify (src/features/notify.js): DMs to a verified contributor who opted in, about their own pull requests and

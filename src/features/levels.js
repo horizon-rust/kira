@@ -2,6 +2,7 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits as P, MessageFlags } from 'discord.js';
 import { GUILD_ID, LEVELS, ROLES, COLOR } from '../config.js';
 import { client, state, saveSoon, save, channel } from '../core.js';
+import { rankNote } from './contributors.js';
 
 const LEVEL_ROLES = ROLES.filter((r) => r.level).sort((a, b) => a.level - b.level);
 // XP to go from level n to n+1 (the curve most servers know).
@@ -32,7 +33,7 @@ async function grant(member, amount, where) {
 }
 
 export const commands = [
-  new SlashCommandBuilder().setName('rank').setDescription('Your level and XP (or someone else\'s)')
+  new SlashCommandBuilder().setName('rank').setDescription('Your level, XP and contributor rank (or someone else\'s)')
     .addUserOption((o) => o.setName('member').setDescription('Who')),
   new SlashCommandBuilder().setName('leaderboard').setDescription('The top 10 by XP'),
   new SlashCommandBuilder().setName('givexp').setDescription('Give or take XP').setDefaultMemberPermissions(P.ManageGuild)
@@ -51,8 +52,10 @@ export const handlers = {
     const user = i.options.getUser('member') ?? i.user;
     const me = state.levels[user.id] ?? { xp: 0, messages: 0, voiceMin: 0 };
     const { level, into, next } = levelOf(me.xp);
-    return i.reply({ embeds: [new EmbedBuilder().setColor(COLOR).setAuthor({ name: user.username, iconURL: user.displayAvatarURL() })
-      .setDescription(`**Level ${level}** · rank #${rankOf(user.id) || '–'}\n${bar(into, next)}  ${into} / ${next} XP\n\n💬 ${me.messages} messages · 🔊 ${Math.round(me.voiceMin / 60 * 10) / 10} h in voice · ${me.xp} XP in all`)] });
+    // The contributor rank (src/features/contributors.js): merged pull requests and the next threshold.
+    const contributor = rankNote(user.id);
+    return i.reply({ allowedMentions: { parse: [] }, embeds: [new EmbedBuilder().setColor(COLOR).setAuthor({ name: user.username, iconURL: user.displayAvatarURL() })
+      .setDescription(`**Level ${level}** · rank #${rankOf(user.id) || '–'}\n${bar(into, next)}  ${into} / ${next} XP\n\n💬 ${me.messages} messages · 🔊 ${Math.round(me.voiceMin / 60 * 10) / 10} h in voice · ${me.xp} XP in all${contributor ? `\n\n🛠️ ${contributor}` : ''}`)] });
   },
   async leaderboard(i) {
     const top = Object.entries(state.levels).sort((a, b) => b[1].xp - a[1].xp).slice(0, 10);

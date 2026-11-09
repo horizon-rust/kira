@@ -20,7 +20,7 @@ export function validAgents(a) {
     && (t.name === undefined || typeof t.name === 'string') && (t.label == null || typeof t.label === 'string'));
 }
 
-export function adminRoutes({ hash, files, limiter, save, freeze, cleanup = null, gameTokens = null, exit = () => process.exit(75) }) { // non-zero: every restart policy starts it again
+export function adminRoutes({ hash, files, limiter, save, freeze, cleanup = null, ranks = null, gameTokens = null, exit = () => process.exit(75) }) { // non-zero: every restart policy starts it again
   if (!/^[0-9a-f]{64}$/.test(hash ?? '')) return {};
   const want = Buffer.from(hash, 'hex');
   const ok = (req) => {
@@ -61,6 +61,21 @@ export function adminRoutes({ hash, files, limiter, save, freeze, cleanup = null
       res.end(JSON.stringify(job.last ?? { running: false, last: null }));
     },
   };
+  // The contributor rank roles (src/features/contributors.js `ensureRankRoles`): POST lists what it would create and
+  // move; { "dry": false } creates the missing ones, puts them in order and starts the sweep that gives them out.
+  const rankRoutes = !ranks ? {} : {
+    'POST /admin/contributor-ranks': (req, res) => {
+      if (!ok(req)) { req.resume(); return deny(req, res); }
+      const chunks = [];
+      req.on('data', (c) => { if (chunks.length < 64) chunks.push(c); });
+      req.on('end', async () => {
+        let body = null;
+        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { /* a dry run */ }
+        const send = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+        try { send(200, await ranks({ dry: body?.dry !== false })); } catch (e) { send(500, { error: String(e.message).slice(0, 200) }); }
+      });
+    },
+  };
   // Game servers' tokens (Kira in a Minecraft server's chat): { action: 'issue', server, owner, days?, deliver: 'dm' }
   // DMs the token to the owner and answers its id only; deliver 'response' (a test token, a day at most) answers it.
   // { action: 'list' }, { action: 'revoke', id }.
@@ -86,6 +101,7 @@ export function adminRoutes({ hash, files, limiter, save, freeze, cleanup = null
   };
   return {
     ...cleanupRoutes,
+    ...rankRoutes,
     ...gameRoutes,
     'GET /admin/backup': (req, res) => {
       if (!ok(req)) return deny(req, res);

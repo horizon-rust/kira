@@ -91,7 +91,7 @@ already exists, and a voice channel's `bitrate` is its own (not "the most the bo
 | Team roles | A team's leader gives and takes back their team's role, and only it, with `/team add member:<user>`, `/team remove member:<user>` and `/team list` (Ludovic, 2026-11-03: Discord's Manage Roles would also let them edit every channel's overwrites). Refused: bots, 🔒 Quarantined members, a role Kira can't manage, a role that carries a moderation permission (`DANGEROUS` in the kit); 30 changes an hour per member. The mods, the Chief of Mods and 👑 ludovic may run it on any team (`team:`). Ephemeral replies, one line in #mod-log per change. Teams: `TEAMS` in `config.js` (now hexforge-horizons, led by azetech); [`src/features/teamroles.js`](src/features/teamroles.js), rules in [`src/team-roles-kit.js`](src/team-roles-kit.js) |
 | Applications | `/apply role:` (🤝 Support, 🛡️ Mod, 🌌 Horizon Team; Ludovic, 2026-10-30) is the Discord side of the applications on the website's staff dashboards ([docs/staff-api.md](docs/staff-api.md)): Kira asks the staff side whether the member may apply (one open application per role, 14 days after a no), then DMs a one-time link to the form (never in a channel; a refusal is said in words). Applications go to a vote on the dashboards, then Ludovic's 12-hour veto window: the staff side DMs him once through Kira's `dm` hook when it opens (`DECISION_TEXTS.vetoWindow`). When the decision is final, the dashboards call Kira's `decide` (`src/staff-hooks.js`): accept gives the role and DMs where to start, decline DMs a short no with the date they may apply again; each one is a line in #mod-log, and what failed (left the server, closed DMs) goes back to the card. `APPLY` in `config.js`; [`src/features/apply.js`](src/features/apply.js), texts in [`src/apply-kit.js`](src/apply-kit.js) |
 | Notifications | `/notify dm:on`: DMs about your own pull requests and issues (reviews, comments, merged/closed/reopened, a failing required check, merge conflicts, labels like needs-proof), batched: see [Notifications](#notifications-notify) |
-| Contributors | `/verify-github` proves a linked GitHub account is the member's; a merged pull request in Horizon then gives 🛠️ Contributor: see [Contributors](#contributors) |
+| Contributors | `/verify-github` proves a linked GitHub account is the member's; a merged pull request in Horizon then gives 🛠️ Contributor, and ranks (⛏️ Iron, 🥇 Gold, 💎 Diamond, 🟪 Netherite) count merged pull requests above it; `/rank`, `/ranks`: see [Contributors](#contributors) |
 | Triage | `/gh` (`label`, `close`, `reopen`, `duplicate`, `pause`, `resume`) for Ludovic's trusted reviewers, through Kira's GitHub token: see [Triage through Kira](#triage-through-kira) |
 | Agents | Kira's MCP server for contributors' AI agents, `/agent connect`, `/agent tokens`, `/agent revoke`, `#agent-log`: see below |
 | AI answers | A message that mentions Kira or replies to her gets one answer from Claude, grounded in the FAQ, Horizon's docs and release notes; what she can't answer goes to the team. Off unless `KIRA_AI` is set; `/kira-ai off\|on\|status`: see [AI answers](#ai-answers) |
@@ -465,6 +465,39 @@ horizon-rust/horizon. Members don't pick it any more (no button, not an Onboardi
   set, `POST /admin/contributors-cleanup` starts a **dry run** (nothing changes) and `{"dry": false}` the real one;
   `GET /admin/contributors-cleanup` returns the last result: counts, and the `matches` (Discord name and the GitHub
   login it was matched to) for the staff to read.
+
+### Ranks
+
+Above 🛠️ Contributor (Ludovic, 2026-11-09), Minecraft ores earned the same way, from the merged pull requests of the
+verified account in **horizon-rust/horizon and horizon-rust/horizon-mods, summed** (one search: `repo:… repo:…`).
+🛠️ Contributor itself still needs one merged in horizon.
+
+| Rank | Merged PRs | Authors at it or above (2026-11-09) |
+| --- | --- | --- |
+| 🛠️ Contributor | 1 (in horizon) | 305 |
+| ⛏️ Iron | 10 | 98 |
+| 🥇 Gold | 40 | 34 |
+| 💎 Diamond | 100 | 13 |
+| 🟪 Netherite | 200 | 5 |
+
+The thresholds (`CONTRIBUTORS.ranks` in `config.js`) come from the merged-PR count of every author in both repos on
+2026-11-09, ludovic111 (his agents) and bots left out: Netherite for a handful, Diamond for about the top 13.
+
+- **Holding**: a member holds their highest rank only, plus 🛠️ Contributor (the channels' permissions use it). Ranks
+  only go up (`work.ranks` keeps the best one reached with the verified login); a rank goes only when the link or the
+  verification goes, like the base role. Ludovic is left out.
+- **When**: on the same paths as the base role: verifying, the board's refresh when a verified author's pull request
+  merges, and the daily sweep (which now reads every verified holder's count). Climbing posts one line in
+  #contributors, no ping. A member's first record is not announced (the backfill when ranks start; a new
+  contributor's welcome line says their rank instead).
+- **Commands**: `/rank` (the XP card) adds the contributor rank, the count and the next threshold, from the stored count
+  (read again in the background when older than an hour). `/ranks`: the top 10, public in #contributors, only for the
+  asker elsewhere; names only, nobody pinged.
+- **The roles**: hoisted, distinct colours, no permissions, right above lvl 50 (so the member list shows them above
+  🛠️ Contributor and the levels). `POST /admin/contributor-ranks` (admin token) lists what it would create and move;
+  `{"dry": false}` creates the missing ones (found by name first), puts them in order, keeps their ids in
+  `work.rankRoles` (setup owns `state.roles`) and starts the sweep that hands them out. `npm run setup` also knows
+  them (`ROLES`, `rank: true`) and finds them by name. Nothing about ranks happens until all four exist.
 
 ## AI answers
 
