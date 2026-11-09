@@ -191,14 +191,14 @@ export async function cancel(p, why, now = Date.now()) {
   return true;
 }
 
-// The polls Kira opened from applications on 2026-11-09 (P4 onwards, ~21:57Z): the council cancelled every poll open
-// then (Ludovic: "enlève tous les votes que tu as envoyés"). Every poll started before CANCEL_BEFORE, or opened by
-// Kira herself, is cancelled at start. → the ids cancelled.
-export const CANCEL_BEFORE = Date.UTC(2026, 10, 9, 22, 15);
+// The polls Kira opened from applications on 2026-11-09 (P1-P20, 21:57Z): the council cancelled them (Ludovic:
+// "enlève tous les votes que tu as envoyés"). Only those ids, and only while Kira opened them: a time cutoff here
+// (2026-11-09, #143) also cancelled P21-P27, members' polls, at the next restart. → the ids cancelled.
+export const CANCELLED_IDS = Array.from({ length: 20 }, (_, n) => `P${n + 1}`);
 export async function cancelStale(now = Date.now()) {
   const out = [];
   for (const p of Object.values(polls())) {
-    if (p.startedAt < CANCEL_BEFORE || p.openedBy === 'kira') {
+    if (CANCELLED_IDS.includes(p.id) && p.openedBy === 'kira') {
       if (await cancel(p, 'cancelled by the council on 2026-11-09', now)) out.push(p.id);
     }
   }
