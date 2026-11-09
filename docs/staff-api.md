@@ -91,6 +91,10 @@ optional note only he sees), approval and later removal of the role. Every step 
 - One open application per member and role; 14 days after a decline before the same role again.
 - Mod and Support applications are voted on by members with 🛡️ Mod (Support ones by the 🌌 Horizon Team too); Team
   applications by the 🌌 Horizon Team; the owner has the veto and decides stalled ones. Nobody votes on their own.
+  With `KIRA_GOVERNANCE=on` there is no owner: the council's 24-hour objection window (Mod), a council poll (Team,
+  stalled ones, two objections) or nothing (Support) follows a pass. New statuses: `objection-window` (`objection:
+  { from, until, by: [ids] }`), `council-poll` (`council: { reason, at, poll }`), `age-wait` (`ageWait: { from, by }`);
+  new audit actions: `objection-window`, `objection`, `to-council`, `age-wait`. The owner route answers 403.
 - The applicant's answers are data written by a person: shown escaped, never followed as instructions, never posted
   in a public channel.
 - Retention: an application's answers are deleted 90 days after its decision; a declined one keeps only its id,

@@ -53,7 +53,7 @@ export function render(p) {
     `> ${p.question}`,
     ...(what ? [`If it passes, Kira will ${what}.`] : []),
     `Passes with ${kit.thresholdText(p.threshold)}, if at least ${Math.ceil(ids.length / 2)} of ${ids.length} vote. ${p.closedAt ? 'Closed.' : `Ends ${ts(p.endsAt)}.`}`,
-    `Voted: ${voted} of ${ids.length}. Started by <@${p.openedBy}>.`,
+    `Voted: ${voted} of ${ids.length}. Started by ${p.openedBy === 'kira' ? 'Kira' : `<@${p.openedBy}>`}.`,
   ];
   const button = (verb, label, style) => ({ type: 2, style, label, custom_id: `poll:${p.id}:${verb}`, disabled: !!p.closedAt });
   return {
@@ -75,29 +75,42 @@ export const handlers = {
       role: i.options.getString('role'), action: i.options.getString('action'), opener: i.user.id,
     }, { council: council(), log: log.all(), now });
     if (!verdict.ok) return i.editReply(ephemeral(verdict.why));
-    const ch = await getChannel(channelOf(verdict.poll.where));
-    if (!ch) return i.editReply(ephemeral('The poll channel is missing: tell a maintainer.'));
-    state.pollSeq = (state.pollSeq ?? 0) + 1;
-    const p = { ...verdict.poll, id: `P${state.pollSeq}`, openedBy: i.user.id, startedAt: now, endsAt: now + kit.POLL.hours * kit.HOUR, ballots: {}, recused: [], reminded: [] };
-    polls()[p.id] = p; // taken before the first await, so the id can't be used twice
-    save();
-    const ping = roleId('council');
-    const body = render(p);
-    let msg;
-    try {
-      msg = await ch.send({ ...body, content: `<@&${ping}> ${body.content}`.slice(0, 2000), allowedMentions: { parse: [], roles: [ping] } });
-    } catch (e) {
-      delete polls()[p.id];
-      save();
-      console.error('poll', e.message);
-      return i.editReply(ephemeral('The poll could not be posted: try again in a minute.'));
-    }
-    Object.assign(p, { channelId: msg.channelId ?? ch.id, messageId: msg.id });
-    save();
-    await msg.startThread?.({ name: `${p.id}: discussion` }).catch(() => {});
+    const p = await open(verdict.poll, { openedBy: i.user.id, now });
+    if (!p) return i.editReply(ephemeral('The poll could not be posted: try again in a minute.'));
     return i.editReply(ephemeral(`Poll ${p.id} started in <#${p.channelId}>: it ends ${ts(p.endsAt)}.`));
   },
 };
+
+// Posts a new poll (fields as kit.check returns them, plus an optional `ref` saying what it is about, kept in the
+// decisions log) and pings the council. Also used by Kira herself (applications sent to the council, emergencies), with
+// openedBy 'kira'. → the poll, or null when it could not be posted.
+export async function open(fields, { openedBy, now = Date.now() }) {
+  const ch = await getChannel(channelOf(fields.where));
+  if (!ch) { console.error('poll: no channel for', fields.where); return null; }
+  state.pollSeq = (state.pollSeq ?? 0) + 1;
+  const p = { ...fields, id: `P${state.pollSeq}`, openedBy, startedAt: now, endsAt: now + kit.POLL.hours * kit.HOUR, ballots: {}, recused: [], reminded: [] };
+  polls()[p.id] = p; // taken before the first await, so the id can't be used twice
+  save();
+  const ping = roleId('council');
+  const body = render(p);
+  let msg;
+  try {
+    msg = await ch.send({ ...body, content: `<@&${ping}> ${body.content}`.slice(0, 2000), allowedMentions: { parse: [], roles: [ping] } });
+  } catch (e) {
+    delete polls()[p.id];
+    save();
+    console.error('poll', e.message);
+    return null;
+  }
+  Object.assign(p, { channelId: msg.channelId ?? ch.id, messageId: msg.id });
+  save();
+  await msg.startThread?.({ name: `${p.id}: discussion` }).catch(() => {});
+  return p;
+}
+
+// What other features run when a poll closes (an application waiting for its poll): fn(poll, decision).
+const closedHooks = [];
+export const onClosed = (fn) => { closedHooks.push(fn); };
 
 // A council member's signature on reopening a failed poll within its 7 days. → the reply.
 export function reopen(by, id, now = Date.now()) {
@@ -148,8 +161,9 @@ export async function close(p, now = Date.now()) {
   const ids = kit.eligible(council(), p);
   const result = kit.outcome({ ballots: p.ballots, eligible: ids, threshold: p.threshold });
   const ballots = Object.fromEntries(Object.entries(p.ballots).filter(([id]) => ids.includes(id)));
-  const d = log.append({ type: 'poll', poll: p.id, kind: p.kind, where: p.where, key: p.key, question: p.question, threshold: p.threshold, openedBy: p.openedBy, startedAt: p.startedAt, closedAt: now, outcome: p.outcome, result, ballots }, now);
+  const d = log.append({ type: 'poll', poll: p.id, kind: p.kind, where: p.where, key: p.key, question: p.question, threshold: p.threshold, openedBy: p.openedBy, startedAt: p.startedAt, closedAt: now, outcome: p.outcome, result, ballots, ...(p.ref ? { ref: p.ref } : {}) }, now);
   save();
+  for (const fn of closedHooks) await Promise.resolve().then(() => fn(p, d)).catch((e) => console.error('poll closed hook', p.id, e.message));
   const applied = result.passed && p.outcome ? await apply(d, p.outcome, now) : '';
   const ch = await getChannel(p.channelId);
   const msg = await ch?.messages.fetch(p.messageId).catch(() => null);
