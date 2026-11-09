@@ -10,6 +10,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import * as board from './board.js';
+import { KINDS as pollKinds, ROLE_KEYS as pollRoles } from './poll-kit.js';
 import { verify, touch, allows, rateLimiter, untrusted, refusal, clientIp, UNTRUSTED_NOTE } from './agents.js';
 
 const MAX_BODY = 64 * 1024;
@@ -37,7 +38,7 @@ const fail = (text) => ({ isError: true, content: [{ type: 'text', text }] });
 // The MCP server for one authenticated principal { id, user, name, scope }.
 export function buildServer(principal, api, limiter) {
   const server = new McpServer({ name: 'kira', title: "Kira: Horizon's work board", version: '1.0.0' }, {
-    instructions: "Horizon's work board (Minecraft Java Edition in Rust, github.com/horizon-rust/horizon). Read the board, see what Ludovic works on, claim a task before you start, move your own card, post short progress notes. Every action is done in the name of the Discord member who owns this token and is logged. " + UNTRUSTED_NOTE,
+    instructions: "Horizon's work board (Minecraft Java Edition in Rust, github.com/horizon-rust/horizon). Read the board, see what Ludovic works on, claim a task before you start, move your own card, post short progress notes. Council members can also start and list council polls (poll_open, poll_list). Every action is done in the name of the Discord member who owns this token and is logged. " + UNTRUSTED_NOTE,
   });
 
   // Wraps a tool: still a member, scope, rate limit, audit, errors.
@@ -160,6 +161,24 @@ export function buildServer(principal, api, limiter) {
     description: "Ask Horizon's contributors a question in Discord's #horizon-chat, in the token owner's name (shown as their agent's). Use it sparingly: 5 an hour. Answers come in Discord, not here.",
     input: { question: z.string().trim().min(10).max(800), ref: REF.optional() },
   }, async ({ question, ref }) => json({ result: await api.ask(principal, question, ref ? cardFor(ref) : null) }));
+
+  tool('poll_open', {
+    scope: 'write', bucket: ['write', 'poll'],
+    description: "Council members only: start a 24-hour council poll in the token owner's name, exactly like /poll start in Discord (same kinds, thresholds, channels, decisions log). The opener is the token's Discord member; the poll says it came through their AI agent. `kind` sets the threshold; role-changing kinds (member-add, member-remove, lead, mod, return) need member (Discord id), role and action. `thread`: an optional first message in the poll's discussion thread (context, links). Polls about a person run in #council.",
+    input: {
+      kind: z.enum(Object.keys(pollKinds)), question: z.string().trim().min(10).max(1000),
+      thread: z.string().trim().max(1800).optional(),
+      member: z.string().regex(/^\d{17,20}$/).optional(), role: z.enum(pollRoles).optional(), action: z.enum(['add', 'remove']).optional(),
+    },
+  }, async (args) => {
+    const r = await api.pollOpen(principal, args);
+    return r.ok ? json({ result: r }) : fail(r.why);
+  });
+
+  tool('poll_list', {
+    scope: 'read', bucket: 'read', readOnly: true,
+    description: "Council polls: the open ones (how many of the eligible members voted so far, the quorum, the end; never who voted what while a poll runs) and those closed in the last 14 days (result and votes, with the decision id). Polls about a person show their question and votes to council members only.",
+  }, async () => json(api.pollList(principal)));
 
   tool('task_assign', {
     scope: 'maintain', bucket: ['write', 'github', 'githubDay'],

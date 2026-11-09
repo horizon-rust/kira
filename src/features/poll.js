@@ -11,7 +11,7 @@ import { client, state, save } from '../core.js';
 import { dataFile } from '../store.js';
 import * as kit from '../poll-kit.js';
 import * as gk from '../governance-kit.js';
-import { openLog, route } from '../decisions-kit.js';
+import { openLog, route, publicView } from '../decisions-kit.js';
 import * as age from './age.js';
 
 export const log = openLog(process.env.KIRA_DECISIONS || dataFile('decisions.json'));
@@ -53,7 +53,7 @@ export function render(p) {
     `> ${p.question}`,
     ...(what ? [`If it passes, Kira will ${what}.`] : []),
     `Passes with ${kit.thresholdText(p.threshold)}, if at least ${Math.ceil(ids.length / 2)} of ${ids.length} vote. ${p.closedAt ? 'Closed.' : `Ends ${ts(p.endsAt)}.`}`,
-    `Voted: ${voted} of ${ids.length}. Started by ${p.openedBy === 'kira' ? 'Kira' : `<@${p.openedBy}>`}.`,
+    `Voted: ${voted} of ${ids.length}. Started by ${p.openedBy === 'kira' ? 'Kira' : `<@${p.openedBy}>`}${p.via === 'agent' ? ' (through their AI agent)' : ''}.`,
   ];
   const button = (verb, label, style) => ({ type: 2, style, label, custom_id: `poll:${p.id}:${verb}`, disabled: !!p.closedAt });
   return {
@@ -69,17 +69,57 @@ export const handlers = {
     if (!GOVERNANCE.on) return i.editReply(ephemeral('Council polls are not on yet.'));
     if (!isCouncil(i.user.id)) return i.editReply(ephemeral('Only council members start or reopen a poll. Ask one of them.'));
     if (i.options.getSubcommand() === 'reopen') return i.editReply(ephemeral(reopen(i.user.id, i.options.getString('decision'))));
-    const now = Date.now();
-    const verdict = kit.check({
+    const r = await start(i.user.id, {
       kind: i.options.getString('kind'), question: i.options.getString('question'), member: i.options.getUser('member')?.id,
-      role: i.options.getString('role'), action: i.options.getString('action'), opener: i.user.id,
-    }, { council: council(), log: log.all(), now });
-    if (!verdict.ok) return i.editReply(ephemeral(verdict.why));
-    const p = await open(verdict.poll, { openedBy: i.user.id, now });
-    if (!p) return i.editReply(ephemeral('The poll could not be posted: try again in a minute.'));
+      role: i.options.getString('role'), action: i.options.getString('action'),
+    });
+    if (!r.ok) return i.editReply(ephemeral(r.why));
+    const p = r.poll;
     return i.editReply(ephemeral(`Poll ${p.id} started in <#${p.channelId}>: it ends ${ts(p.endsAt)}.`));
   },
 };
+
+// Starts a poll for council member `opener`: the one path behind `/poll start` and the MCP tool poll_open (src/mcp.js),
+// so both keep the same rules, channels and log. args: { kind, question, member?, role?, action?, thread? }; `thread`
+// (from an agent) is posted first in the poll's discussion thread; `via: 'agent'` marks a poll an agent opened.
+// → { ok: true, poll } or { ok: false, why }.
+export async function start(opener, args, { now = Date.now(), via = null } = {}) {
+  if (!GOVERNANCE.on) return { ok: false, why: 'Council polls are not on yet.' };
+  if (!isCouncil(opener)) return { ok: false, why: 'Only council members start a poll. Ask one of them.' };
+  const verdict = kit.check({ ...args, opener }, { council: council(), log: log.all(), now });
+  if (!verdict.ok) return verdict;
+  const p = await open({ ...verdict.poll, ...(via ? { via } : {}) }, { openedBy: String(opener), now });
+  if (!p) return { ok: false, why: 'The poll could not be posted: try again in a minute.' };
+  const text = String(args.thread ?? '').trim();
+  if (text && p.threadId) {
+    const th = await getChannel(p.threadId);
+    await th?.send({ content: `${via === 'agent' ? `🤖 From <@${opener}>'s AI agent:\n` : ''}${text}`.slice(0, 2000), allowedMentions: { parse: [] } }).catch((e) => console.error('poll thread', e.message));
+  }
+  return { ok: true, poll: p };
+}
+
+// The open polls and those closed in the last `days`, newest first, for `viewer`: how many voted (never who or what
+// while it runs, like the poll message), the result once closed. Polls in #council show their question and votes to
+// council members only. → { open: [...], closed: [...] }
+export function list(viewer, { now = Date.now(), days = 14 } = {}) {
+  const member = isCouncil(viewer);
+  const shown = (where, question) => (where === 'council' && !member ? null : question);
+  const link = (p) => (p.channelId && p.messageId ? `https://discord.com/channels/${GUILD_ID}/${p.channelId}/${p.messageId}` : null);
+  const open = Object.values(polls()).sort((a, b) => b.startedAt - a.startedAt).map((p) => {
+    const ids = kit.eligible(council(), p);
+    return {
+      id: p.id, kind: p.where === 'council' && !member ? 'person' : p.kind, question: shown(p.where, p.question), threshold: p.threshold,
+      where: p.where, startedAt: new Date(p.startedAt).toISOString(), endsAt: new Date(p.endsAt).toISOString(), openedBy: p.openedBy,
+      voted: Object.keys(p.ballots).filter((id) => ids.includes(id)).length, eligible: ids.length, quorum: Math.ceil(ids.length / 2),
+      youVoted: member ? Object.hasOwn(p.ballots, String(viewer)) : undefined, link: link(p),
+    };
+  });
+  const closed = publicView(log.all().filter((d) => d.type === 'poll' && now - d.closedAt < days * 24 * kit.HOUR)).reverse().map((d) => {
+    const full = member ? log.all().find((e) => e.id === d.id) : d;
+    return { decision: d.id, id: d.poll, kind: d.kind, question: full.question, threshold: d.threshold, where: d.where, closedAt: new Date(d.closedAt).toISOString(), result: d.result, ballots: full.ballots };
+  });
+  return { open, closed };
+}
 
 // Posts a new poll (fields as kit.check returns them, plus an optional `ref` saying what it is about, kept in the
 // decisions log) and pings the council. Also used by Kira herself (applications sent to the council, emergencies), with
