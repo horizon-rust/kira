@@ -553,6 +553,21 @@ the talking, the rules are in [`src/team-vote-kit.js`](src/team-vote-kit.js), th
   from anyone else are left out. The last 50 results are kept in `state.teamVoteLog`, and each one is in #mod-log.
 - **Kira never gives or takes the role.** A passed result says that a 🛡️ Chief of Mods or Ludovic applies it.
 
+## Governance (off until the launch)
+
+Horizon is run by a council of equals ([GOVERNANCE.md](https://github.com/horizon-rust/horizon/blob/main/GOVERNANCE.md)).
+Everything Kira does for it sits behind **`KIRA_GOVERNANCE=on`**, off by default: while it is off, Kira behaves exactly
+as before. [`src/governance-kit.js`](src/governance-kit.js) holds the rules, `GOVERNANCE` in `config.js` the data.
+
+- **The council registry**: the founding six (`GOVERNANCE.founding`, Discord id → GitHub login), then `state.council`
+  once a passed poll changes it. `isCouncil(id)` is false for everyone while the flag is off.
+- **Former owner powers**, sorted in `POWERS`: *council* (project decisions: the council holds them once the flag is
+  on), *account* (the account holder's own spending and accounts: they stay his), *unchanged* (operations, or rules
+  about his own data). With the flag on, `/team-vote` is refused (the Team is decided by a 2/3 council poll) and
+  🏛️ Council may manage every team role.
+- **The Discord side** was created hidden on 2026-11-09: the 🏛️ Council role, nine 🧭 lead roles, eight group roles,
+  #council and the 🧭 groups category (ids in `GOVERNANCE.roles` / `GOVERNANCE.channels`).
+
 ## AI answers
 
 Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`src/ai-kit.js`](src/ai-kit.js), [`src/features/ai.js`](src/features/ai.js)).

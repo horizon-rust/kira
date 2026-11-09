@@ -4,7 +4,7 @@
 // takes the role; the result line says who does (a Chief of Mods or Ludovic). One open vote per member; a candidate
 // for propose holds at least 🥇 Gold (Ludovic may skip that). Rules in src/team-vote-kit.js.
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { GUILD_ID, OWNER_ID, TEAM_VOTE } from '../config.js';
+import { GUILD_ID, OWNER_ID, TEAM_VOTE, GOVERNANCE } from '../config.js';
 import { client, state, save, modlog } from '../core.js';
 import { hasRank } from './contributors.js';
 import * as kit from '../team-vote-kit.js';
@@ -14,6 +14,7 @@ const votes = () => (state.teamVotes ??= {}); // subject id → { kind, subject,
 const teamRole = () => state.roles[TEAM_VOTE.role] ?? TEAM_VOTE.roleId;
 const teamChannel = () => state.channels[TEAM_VOTE.channel] ?? TEAM_VOTE.channelId;
 const guild = () => client.guilds.cache.get(GUILD_ID);
+export const GOVERNED = 'The Horizon Team is decided by the council now: a council member starts a 2/3 poll with `/poll` (GOVERNANCE.md). Votes already running still end and post their result.';
 const ANSWERS = [{ text: 'Yes', emoji: '✅' }, { text: 'No', emoji: '❌' }];
 
 const memberOption = (o, what) => o.setName('member').setDescription(what).setRequired(true);
@@ -26,6 +27,8 @@ export const commands = [
 export const handlers = {
   async 'team-vote'(i) {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
+    // Under the governance (GOVERNANCE.md 4.3) the council decides who joins or leaves the Team, by a 2/3 poll.
+    if (GOVERNANCE.on) return i.editReply(ephemeral(GOVERNED));
     const kind = i.options.getSubcommand();
     const user = i.options.getUser('member');
     const member = await i.guild.members.fetch(user.id).catch(() => null);
