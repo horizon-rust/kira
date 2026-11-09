@@ -565,6 +565,21 @@ as before. [`src/governance-kit.js`](src/governance-kit.js) holds the rules, `GO
   on), *account* (the account holder's own spending and accounts: they stay his), *unchanged* (operations, or rules
   about his own data). With the flag on, `/team-vote` is refused (the Team is decided by a 2/3 council poll) and
   🏛️ Council may manage every team role.
+- **`/poll start kind: question: [member:] [role:] [action:]`** (council members; rules in
+  [`src/poll-kit.js`](src/poll-kit.js), Discord in [`src/features/poll.js`](src/features/poll.js)): a 24-hour poll
+  with Yes / No / Abstain buttons (a ballot changes until the close), "Needs 2/3" (any member raises the threshold) and
+  "Recuse". It pings 🏛️ Council once and shows how many voted, not who; a thread holds the discussion.
+  - **Count**: quorum of half the eligible members (Abstain counts); simple = more Yes than No, a tie fails; two thirds
+    = Yes ≥ 2/3 of Yes + No and at least 3 Yes. The member a poll is about and recused members neither vote nor count.
+    It closes after 24 h, or as soon as everyone eligible voted. DMs to non-voters 12 h and 2 h before the end.
+  - **Where**: #polls-and-decisions; polls about a person (removals, appeals, 18+ cases) in #council, where only the
+    role change is posted publicly.
+  - **After a pass**: Kira gives or takes the role herself (reason `Council decision D<n>`); for 🏛️ Council she also
+    updates the registry. Team changes say that an org owner updates `horizon-team` on GitHub.
+  - **Asking again**: a failed poll can't be repeated for 7 days unless two members sign `/poll reopen decision:`.
+- **The decisions log** (`data/decisions.json`, `KIRA_DECISIONS`): append-only (`poll`, `applied`, `council`,
+  `reopen`), served as **`GET /decisions.json`** once the flag is on. Person polls show only their result and role
+  change there (no question, ballots or kind). Agents act on a decision only when they find it here.
 - **The Discord side** was created hidden on 2026-11-09: the 🏛️ Council role, nine 🧭 lead roles, eight group roles,
   #council and the 🧭 groups category (ids in `GOVERNANCE.roles` / `GOVERNANCE.channels`).
 

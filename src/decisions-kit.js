@@ -32,15 +32,16 @@ export function openLog(file) {
   };
 }
 
-// What the public sees. Polls about a person (where: 'council') show their kind, result and the role change, never
-// the question or the ballots (GOVERNANCE.md 4.2: only their result is public). Other polls show each ballot.
+// What the public sees. Polls about a person (where: 'council') show their result and role change only: never the
+// question, the ballots or the kind, since a kind like 'age' or 'appeal' would tell the reason (GOVERNANCE.md 4.7, 9).
+// Other polls show each ballot.
 export function publicView(entries) {
   return entries.map((e) => {
     if (e.type !== 'poll') return e;
     const { key, ...rest } = e;
     if (e.where !== 'council') return rest;
     const { question, ballots, ...open } = rest;
-    return { ...open, question: null, ballots: null };
+    return { ...open, kind: 'person', question: null, ballots: null };
   });
 }
 

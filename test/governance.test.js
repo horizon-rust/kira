@@ -14,6 +14,8 @@ const kit = await import('../src/governance-kit.js');
 const core = await import('../src/core.js');
 const tv = await import('../src/features/teamvote.js');
 const teamroles = await import('../src/features/teamroles.js');
+process.env.KIRA_DECISIONS = join(mkdtempSync(join(tmpdir(), 'kira-governance-')), 'decisions.json');
+const poll = await import('../src/features/poll.js');
 
 const KACPER = '437262688930889730';
 const OUTSIDER = '111111111111111111';
@@ -92,4 +94,12 @@ test('team roles: 🏛️ Council may manage every team once governance is on', 
     core.state.roles.council = 'R-COUNCIL';
     assert.equal(teamroles.staffRoles().at(-1), 'R-COUNCIL', "setup's id wins over the config fallback");
   } finally { GOVERNANCE.on = false; delete core.state.roles.council; }
+});
+
+test('/poll: off by default, no command, no /decisions.json, and the handler refuses', async () => {
+  assert.deepEqual(poll.commands, []);
+  assert.deepEqual(poll.routes(), {});
+  let out;
+  await poll.handlers.poll({ user: { id: OWNER_ID }, deferReply: async () => {}, editReply: async (m) => { out = m; } });
+  assert.match(out.content, /not on yet/);
 });

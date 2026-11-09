@@ -19,6 +19,7 @@ import * as github from './features/github.js';
 import * as workboard from './features/workboard.js';
 import * as contributors from './features/contributors.js';
 import * as teamvote from './features/teamvote.js';
+import * as poll from './features/poll.js';
 import * as notify from './features/notify.js';
 import * as site from './features/site.js';
 import * as smp from './features/smp.js';
@@ -47,7 +48,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [modcases, moderation, batchmod, levels, rooms, community, forums, github, workboard, contributors, notify, site, smp, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply, teamroles, teamvote];
+const FEATURES = [modcases, moderation, batchmod, levels, rooms, community, forums, github, workboard, contributors, notify, site, smp, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply, teamroles, teamvote, poll];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
@@ -159,6 +160,7 @@ if (port) {
     // The hub's org chart: the staff roles' holders, names and confirmed GitHub logins only (public, read-only, 5 minutes).
     '/staff.json': orgChart.route({ read: staffMembers, github: () => ({ ...WORK.github, ...ORG.github, ...workboard.creditedLogins() }), jobs: ORG.jobs }),
     ...kiraAi.usageRoutes({ limiter }),
+    ...poll.routes(), // GET /decisions.json: the council's decisions log (public, read-only), only when KIRA_GOVERNANCE is on
     ...smp.routes({ limiter }), // POST /smp/ingest/*, GET /smp/*.json: the official server's market for the hub, with KIRA_SMP_INGEST_TOKEN
     ...launcherGithub.routes({ limiter }), // GET /github/public/…: the launcher's release reads when GitHub rate-limits it (public, read-only)
     ...site.routes({ limiter }), // GET /github/proxy/…: the website's GitHub reads, with KIRA_SITE_REVALIDATE_SECRET

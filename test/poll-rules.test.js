@@ -127,6 +127,7 @@ test('the decisions log only appends; person polls show no question or ballots i
   assert.equal(pub[0].key, undefined);
   assert.equal(pub[1].question, null);
   assert.equal(pub[1].ballots, null);
+  assert.equal(pub[1].kind, 'person', 'the kind of a person poll could tell the reason');
   assert.deepEqual(pub[1].outcome, { member: B, role: 'council', action: 'remove' }, 'the result and the role change are public');
   let head; let body;
   decisions.route({ log, now: () => 0 })({}, { writeHead: (s, h) => { head = [s, h]; }, end: (x) => { body = JSON.parse(x); } });
