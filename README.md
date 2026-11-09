@@ -4,6 +4,9 @@ The bot of **Horizon**'s Discord server (Minecraft Java Edition rewritten in Rus
 Since 2026-10-14 the server is about Horizon only: everything else (music, AI coding, Ludovic's other
 projects) is talked about in #general (#off-topic was merged into it on 2026-10-30). Free: it runs on `ludothinkpad`, no paid bot.
 
+
+Open source under the [MIT licence](LICENSE): improvements are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md) and
+[Run your own copy](#run-your-own-copy).
 ## The server
 
 `npm run setup` makes sure the server has everything [`src/config.js`](src/config.js) lists (it is **additive**, see [Setup is additive](#setup-is-additive)). `LAYOUT` follows the live server, whose names and types are the truth (2026-11-01):
@@ -148,6 +151,30 @@ everything lives in `state.modcases`.
   1Password `Discord bot Kira` → a new `oauth_client_secret` field) is set and the redirect
   `https://playhorizon.dev/staff/api/appeal/callback` is added in the Developer Portal (Kira → OAuth2 → Redirects): the bot's
   token can't register it. The Moderation dashboard's **Cases** tab reads `GET mod/cases` (cases and appeals, no answers).
+
+## Run your own copy
+
+To work on Kira you need your own bot and a test server: never Horizon's.
+
+1. Create an application in the [Discord Developer Portal](https://discord.com/developers/applications), add a bot,
+   turn on the **Server Members** and **Message Content** intents, and invite it to an empty test server of yours
+   with the Administrator permission (setup creates channels, roles and AutoMod rules).
+2. `cp .env.example .env` and fill in `DISCORD_TOKEN`, `GUILD_ID` (your test server) and `KIRA_OWNER_ID` (you).
+   `.env` is ignored by git; never commit a token.
+3. Install and test, then build the layout on your server and start the bot (Node 20 or later):
+
+       npm ci
+       npm test                                   # no network, no tokens
+       node --env-file=.env src/setup.js          # creates what src/config.js lists; additive
+       node --env-file=.env src/bot.js
+
+Without Discord at all, `KIRA_DISCORD=off KIRA_HTTP_PORT=8787 node src/bot.js` starts only the work board and the
+MCP server (`GET /health`). Every other feature (GitHub, AI answers, X, the hub, staff dashboards) stays off until
+its variables are set; they are listed in the sections below and in `.env.example`.
+
+`src/config.js` holds Horizon's own channel and role IDs; on your server, setup creates them by name and Kira keeps
+their IDs in its state file, but the few features pinned to a fixed ID (staff roles, the Minecraft server's ops)
+won't find them. Change those locally if you need them; don't commit your server's IDs.
 
 ## Running it
 
@@ -553,7 +580,7 @@ Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`
   - Nothing else is ever done on the model's say: no bans, no warnings, no roles. Budget spent, the API down (the check pauses 5 minutes after an error) or switched off: nothing is read and the filters still run.
   - **Cost, measured** on 50 real messages from the language channels and #off-topic, before it merged into #general (`node scripts/measure-ai-mod.mjs`, read-only): $0.00009 per message (36 calls; the ~2K-token rules block read from cache, ~140 output tokens a call). 10,000 messages a day would cost about $0.90 of the daily budget.
 - **Off switch:** `/kira-ai off` (Ludovic and the mods) stops all of it (answers, bug reports, moderation) at once, `/kira-ai mod off` only the moderation (`mod on` restarts it), `/kira-ai on` restarts it, and `/kira-ai status` shows the day's use. Removing `KIRA_AI` (or setting it to `0`) turns it off for good.
-- **Variables:** `KIRA_AI`, `ANTHROPIC_API_KEY` (1Password `Horizon Claude API Key ludo47j`, set on Railway with the CLI, never printed), `KIRA_AI_DAILY_USD`, `KIRA_USAGE_TOKEN`, `KIRA_AI_BUGS`, `KIRA_AI_MOD`.
+- **Variables:** `KIRA_AI`, `ANTHROPIC_API_KEY` (1Password `Horizon Claude API Key`, set on Railway with the CLI, never printed), `KIRA_AI_DAILY_USD`, `KIRA_USAGE_TOKEN`, `KIRA_AI_BUGS`, `KIRA_AI_MOD`.
 - **Cost, measured** on 38 real questions from the server's history: $0.0013 per answer with Haiku and a warm cache. The 21K-token sources block is cached for an hour as the first block of the user turn: a breakpoint on the system prompt was never read back on this account.
 
 ## Batch moderation
@@ -803,7 +830,7 @@ a form at playhorizon.dev/apply. Who owns what between the dashboards and the Di
   password and ends the sessions at once (and at start, for what happened while Kira was away).
 - **Counters** ([`src/staff-counters.js`](src/staff-counters.js)): per day, counts only (messages, distinct authors,
   joins, leaves, reports, mod-mail threads, warns, timeouts, kicks, bans, AutoMod blocks), 120 days kept.
-- **Variables**: `STAFF_PROXY_KEY` (the same secret as the site's, `op://Agents/Horizon staff proxy key/credential`;
+- **Variables**: `STAFF_PROXY_KEY` (the same secret as the site's, `op://Agents/Horizon staff proxy key/password`;
   unset: no `/staff/api` routes at all), `STAFF_SITE_URL` (default `https://playhorizon.dev`: the Origin writes must
   come from, and the links' host), `KIRA_STAFF` (the file).
 - **Applications** ([`src/applications.js`](src/applications.js), routes in

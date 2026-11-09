@@ -4,8 +4,10 @@
 // Since 2026-10-14 the server is Horizon's alone: the channels about Ludovic's other projects, videos and
 // music were deleted (their messages were exported first), and the roles of the old scope are gone (RETIRED_ROLES).
 
-export const GUILD_ID = '1559227979002028052'; // "Horizon" (was "ludovic's server"), created 2026-10-12
-export const OWNER_ID = '622720516779802630'; // Ludovic
+// GUILD_ID and KIRA_OWNER_ID override these two for a copy run against your own test server (README: Run your own copy).
+const envId = (name) => (/^\d{17,20}$/.test((process.env[name] ?? '').trim()) ? process.env[name].trim() : null);
+export const GUILD_ID = envId('GUILD_ID') ?? '1559227979002028052'; // "Horizon" (was "ludovic's server"), created 2026-10-12
+export const OWNER_ID = envId('KIRA_OWNER_ID') ?? '622720516779802630'; // Ludovic
 export const SERVER = {
   name: 'Horizon',
   description: 'Minecraft Java Edition rewritten in Rust. Bugs, ideas, releases. playhorizon.dev · Not affiliated with Mojang/Microsoft.', // 120 max
@@ -213,7 +215,7 @@ export const LAYOUT = [
     ],
   },
   {
-    // The official server's chat bridge (Anthony S. via Ludovic, 2026-10-31): posted by its horizon-server through a webhook
+    // The official server's chat bridge (asked through Ludovic, 2026-10-31): posted by its horizon-server through a webhook
     // ([discord] in server.toml). `id` pins the channel that exists, so setup never makes a second one.
     key: 'smp', category: 'HORIZONSMP',
     channels: [
@@ -492,7 +494,7 @@ export const WORK = {
 export const ORG = {
   roles: { owner: '1559251767860920370', team: '1564768999655481485', chiefmod: '1566825954792181864', mod: '1559242168864997537', support: '1565697648269205699' },
   github: {
-    '663689837483655188': 'dezer-x', // Anthony S.
+    '663689837483655188': 'dezer-x',
     '777346923232886784': 'rdbtCVS', // rdbt
     '821858512975953993': 'levzzz5154', // levzzz
     '1130639426033295370': 'PointOfPressure', // pressure
