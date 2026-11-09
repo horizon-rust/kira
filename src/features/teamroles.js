@@ -4,13 +4,15 @@
 // it on any team. Replies are ephemeral; each change is one line in #mod-log.
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { rateLimiter } from '../agents.js';
-import { OWNER_ID, TEAMS } from '../config.js';
+import { OWNER_ID, TEAMS, GOVERNANCE } from '../config.js';
 import { state, modlog } from '../core.js';
 import * as kit from '../team-roles-kit.js';
 
 const limiter = rateLimiter({ team: [TEAMS.perHour, 3_600_000] });
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
 const quarantinedRole = () => state.roles?.quarantined || state.ownRoles?.quarantined || TEAMS.quarantinedRole;
+// The roles that may manage every team: the staff, and 🏛️ Council once the governance is on.
+export const staffRoles = () => (GOVERNANCE.on ? [...TEAMS.staffRoles, state.roles?.council || GOVERNANCE.roles.council] : TEAMS.staffRoles);
 const actorOf = (i) => ({ id: i.user.id, roles: [...(i.member?.roles?.cache?.keys?.() ?? i.member?.roles ?? [])] });
 
 const teamOption = (o) => {
@@ -58,7 +60,7 @@ async function list(i, team) {
 export const handlers = {
   async team(i) {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
-    const picked = kit.pickTeam(TEAMS.list, actorOf(i), i.options.getString('team'), TEAMS.staffRoles, OWNER_ID);
+    const picked = kit.pickTeam(TEAMS.list, actorOf(i), i.options.getString('team'), staffRoles(), OWNER_ID);
     if (!picked.team) return i.editReply(ephemeral(picked.why));
     const sub = i.options.getSubcommand();
     return sub === 'list' ? list(i, picked.team) : change(i, sub, picked.team);

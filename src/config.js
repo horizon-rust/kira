@@ -574,6 +574,32 @@ export const TEAM_VOTE = {
   checkEveryMs: 5 * 60_000,
 };
 
+// Governance (horizon-rust/horizon GOVERNANCE.md): a council of equals decides by 24-hour polls, and Kira applies the
+// role outcomes of passed polls. Everything that depends on it is off until the launch: KIRA_GOVERNANCE=on turns it
+// on (src/governance-kit.js). The founding council (GOVERNANCE.md 4.1), Discord id → GitHub login. Later changes come
+// from passed polls (state.council), never from editing this list.
+export const GOVERNANCE = {
+  on: ['1', 'on', 'true', 'yes'].includes((process.env.KIRA_GOVERNANCE ?? '').trim().toLowerCase()),
+  founding: {
+    '622720516779802630': 'ludovic111', // Ludovic (the founder: one vote, like everyone else)
+    '437262688930889730': 'kacpherek',
+    '821858512975953993': 'levzzz5154',
+    '777346923232886784': 'rdbtCVS',
+    '1531466016054444261': 'Online5277',
+    '663689837483655188': 'dezer-x',
+  },
+  maxSize: 9, // seats; more only by a 2/3 poll that changes this
+  // Discord, created hidden on 2026-11-09 (horizon-parity agent-state/governance-discord.md); state.roles/channels win.
+  roles: {
+    council: '1569448235008004291',
+    team: '1564768999655481485', chiefmod: '1566825954792181864', mod: '1559242168864997537', support: '1565697648269205699',
+    'lead-modding': '1569448237025329243', 'lead-rendering': '1569448239055249408', 'lead-performance': '1569448240569520303',
+    'lead-launcher': '1569448242922393741', 'lead-server': '1569448244717682798', 'lead-translations': '1569448246449930300',
+    'lead-website': '1569448248354144366', 'lead-parity': '1569448250560348221', 'lead-ui': '1569448252334678036',
+  },
+  channels: { council: '1569448273112993836', polls: '1569137355774763081' },
+};
+
 // /notify (src/features/notify.js): DMs to a verified contributor who opted in, about their own pull requests and
 // issues in GITHUB.owner's repos (asked by Isloka, 2026-11-01): 'public' = every public repository of the org (levzzz,
 // 2026-11-01), or a list of names. `checks`: per repo, the check runs whose failure is worth a DM (horizon's required
