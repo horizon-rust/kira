@@ -114,6 +114,12 @@ export function rankNote(id) {
   return kit.rankText(RANKS, { login, verified: isVerified, entry, rank });
 }
 
+// Whether a member holds the rank `key` or a higher one (by their rank roles), for /team-vote's candidates.
+export function hasRank(member, key) {
+  const from = kit.rankIndex(RANKS, key);
+  return from >= 0 && RANKS.slice(from).some((r) => { const id = rankRole(r.key); return !!id && !!member?.roles?.cache?.has(id); });
+}
+
 // The verified members on the board: [{ id, login, count, key }] (their stored counts).
 export function rankRows() {
   return Object.entries(work.ranks ?? {})

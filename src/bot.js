@@ -18,6 +18,7 @@ import * as forums from './features/forums.js';
 import * as github from './features/github.js';
 import * as workboard from './features/workboard.js';
 import * as contributors from './features/contributors.js';
+import * as teamvote from './features/teamvote.js';
 import * as notify from './features/notify.js';
 import * as site from './features/site.js';
 import * as smp from './features/smp.js';
@@ -46,7 +47,7 @@ import { dataFile, freeze } from './store.js';
 import { publicKey } from './secrets.js';
 import { applyBrand } from './brand.js';
 
-const FEATURES = [modcases, moderation, batchmod, levels, rooms, community, forums, github, workboard, contributors, notify, site, smp, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply, teamroles];
+const FEATURES = [modcases, moderation, batchmod, levels, rooms, community, forums, github, workboard, contributors, notify, site, smp, triage, agents, hub, updates, x, kiraAi, chatclear, sponsors, staff, support, apply, teamroles, teamvote];
 const DISCORD = process.env.KIRA_DISCORD !== 'off';
 const handlers = Object.assign({}, ...FEATURES.map((f) => f.handlers));
 const commands = FEATURES.flatMap((f) => f.commands);
