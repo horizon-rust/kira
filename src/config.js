@@ -604,6 +604,47 @@ export const GOVERNANCE = {
   channels: { council: '1569448273112993836', polls: '1569137355774763081' },
 };
 
+// Elections and body votes (GOVERNANCE.md 2.1, 5.3 and 7; src/elections-kit.js, src/features/elections.js): `/elect`,
+// `/vote body:`, the council's 24-hour veto, vacancies, the free-action log, `/grant` and the monthly reminders. Off
+// unless KIRA_ELECTIONS=on, and only with KIRA_GOVERNANCE on. Kira never opens an election by herself, except the
+// nominations of a seat that just became vacant (she never picks a candidate).
+export const ELECTIONS = {
+  on: ['1', 'on', 'true', 'yes'].includes((process.env.KIRA_ELECTIONS ?? '').trim().toLowerCase()),
+  // Where each body votes (state.channels wins by key). #staff-log does not exist yet: KIRA_STAFF_LOG_CHANNEL, else
+  // the free-action lines go to #mod-actions.
+  channels: {
+    mods: '1559242417796947988', // #mod-chat
+    team: '1564769057880940574', // #horizon-team
+    op: '1559242417796947988',   // the mods and the Server lead: #mod-chat (the Server lead also gets a DM)
+    stafflog: (process.env.KIRA_STAFF_LOG_CHANNEL ?? '').trim() || '1566489494721396801', // #mod-actions until #staff-log exists
+  },
+  // The theme groups (GOVERNANCE.md 6.1): the role members pick, the group's channel, the labels that count as its
+  // area on GitHub, and the helper role its lead gives (free action, `/grant`).
+  groups: {
+    modding: { name: 'Modding', role: '1559242163957534747', channel: '1566806648712855683', labels: ['mods'], helper: '1569334141508653157' },
+    rendering: { name: 'Shaders and rendering', role: '1569448253664137410', channel: '1569448276602781766', labels: ['rendering'] },
+    performance: { name: 'Performance', role: '1569448254993862817', channel: '1569448278322315415', labels: ['perf'] },
+    launcher: { name: 'Launcher', role: '1569448256658743427', channel: '1569448279681278035', labels: ['launcher'] },
+    server: { name: 'Server and SMP', role: '1569448257917026466', channel: '1569448281849729246', labels: ['server', 'multiplayer'] },
+    translations: { name: 'Translations', role: '1569448259305611315', channel: '1569353842317856778', labels: ['roadmap:languages'] },
+    website: { name: 'Website', role: '1569448261083861052', channel: '1569448283259281548', labels: ['website'] },
+    parity: { name: 'Vanilla accuracy', role: '1569448262342283345', channel: '1569448293925392545', labels: ['parity', 'parity-regression', 'full-parity'] },
+    ui: { name: 'UI', role: '1569448263873077393', channel: '1569448295514902634', labels: ['ui', 'accessibility'] },
+  },
+  // GitHub team membership for a passed Team election: with KIRA_GITHUB_ORG_TOKEN (members:write on the org) Kira
+  // does it herself; without it she lists the click for `clicks.github`. Server ops and panel sub-users are always
+  // clicks for `clicks.server`. Discord ids of the people named (today the founder holds both accounts).
+  github: { org: 'horizon-rust', team: 'horizon-team', token: (process.env.KIRA_GITHUB_ORG_TOKEN ?? '').trim() || null },
+  clicks: { github: '622720516779802630', server: '622720516779802630' },
+  // Free actions: who gives which role through `/grant` (GOVERNANCE.md 2.1). by: 'mods' or 'lead-<group>'; the
+  // council may give any of them too.
+  grants: {
+    support: { role: '1565697648269205699', label: '🤝 Support', by: 'mods' },
+    'modding-team': { role: '1569334141508653157', label: '🧩 Horizon Modding Team', by: 'lead-modding' },
+  },
+  searchPaceMs: 2_200, // between two GitHub searches (30 a minute)
+};
+
 // The 18+ declaration (GOVERNANCE.md section 9; src/age-kit.js, src/features/age.js). Its own switch, off by default,
 // and only with KIRA_GOVERNANCE on: KIRA_AGE_DECLARATION=on. Kira keeps only the member id, "yes" and the time.
 export const AGE = {
