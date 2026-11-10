@@ -133,6 +133,19 @@ test('hand-made changes of a watched role go to #staff-log with who did it; grou
   assert.deepEqual(await el.onMemberUpdate({ partial: true }, snap(members.get(B)), NOW), [], 'an uncached member: nothing');
 });
 
+test('monthly: a rate-limited member fetch posts nothing and leaves the month open for the next hourly run', async () => {
+  const g = core.client.guilds.cache.get(GUILD_ID);
+  const fetch = g.members.fetch;
+  const before = sent.length;
+  g.members.fetch = async (x) => (x === undefined ? Promise.reject(new Error('Request with opcode 8 was rate limited')) : fetch(x));
+  try {
+    await assert.rejects(el.monthly(NOW), /rate limited/);
+  } finally {
+    g.members.fetch = fetch;
+  }
+  assert.equal(sent.length, before, 'nothing posted');
+});
+
 test('monthly: a reminder only where a group has no lead, a private list in #council, once a month, never about age', async () => {
   core.state.work = { ranks: { [A]: { count: 55 } } };
   cards.set(A, { merged: 55, reviews: 25, declared: false });
