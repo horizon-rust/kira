@@ -612,6 +612,17 @@ as before. [`src/governance-kit.js`](src/governance-kit.js) holds the rules, `GO
     matters), simple majority, the same 24 hours, early close and veto. `private`: only the result is public.
   - **Council polls on money last 48 hours**, and rule or accounts polls when `/poll start two_days:` says it is this
     document, the licence or the organisation's ownership.
+  - **Vacancies**: every hour Kira compares the holders of 🛡️ Chief of Mods and the 🧭 lead roles with the last look. A
+    seat that was held and is empty opens 24 hours of nominations (`/elect` adds nominees), then the vote with all of
+    them; nobody nominated: the seat stays open. Kira never picks a candidate; seats never filled are left to the
+    monthly reminder.
+  - **Free actions**: `/grant role: member: [action:]` gives or takes 🤝 Support (a mod) or 🧩 Horizon Modding Team
+    (the Modding lead), or either (a council member), with one line in #staff-log (**`KIRA_STAFF_LOG_CHANNEL`**; until it
+    is set, #mod-actions). Hand-made changes of the posts' roles, Support and helper roles are logged there too, with who
+    did it; bans and unbans once #staff-log is its own channel.
+  - **Monthly**: a reminder in a group's channel only when it has no lead or someone in it meets the lead floor (no
+    names), and a private list of people at a floor in #council (the 18+ declaration is left out of it). Kira notes
+    when a group role or 🛡️ Mod was picked up, for the 14 days of an active group member and the Chief of Mods' 30 days.
 - **Applications are off** (the council, 2026-11-09: it recruits the people it wants itself). Unless
   **`KIRA_APPLICATIONS=on`**: no `/apply`, no form or dashboard application routes, no vote tick, no role given or DM sent
   for a decision. The polls Kira had opened from applications were cancelled (`cancelStale` in
