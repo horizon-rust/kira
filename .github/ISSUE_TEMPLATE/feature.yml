@@ -1,0 +1,29 @@
+name: Feature
+description: An idea for Kira. Open it before writing much code.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The server's layout and moderation are decided by the project (Horizon Team or council), so ask first.
+        A new feature ships behind a flag that is off by default.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or missing for members, staff or contributors today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What Kira would do. Does it send member data to an outside service? Say so.
+    validations:
+      required: true
+  - type: checkboxes
+    id: pr
+    attributes:
+      label: Pull request
+      options:
+        - label: I want to build it myself

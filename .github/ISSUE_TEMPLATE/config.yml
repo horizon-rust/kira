@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help
+    url: https://discord.gg/playhorizon
+    about: Ask in Horizon's Discord server (discord.gg/playhorizon), not here.
+  - name: Security problem
+    url: https://github.com/horizon-rust/kira/security/advisories/new
+    about: Report it privately with "Report a vulnerability", never in a public issue.
