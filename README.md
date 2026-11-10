@@ -588,6 +588,30 @@ as before. [`src/governance-kit.js`](src/governance-kit.js) holds the rules, `GO
   (`state.age.declared`), plus when each holder was asked: no age, no birth date, no ID. After `AGE.days` (7), the holders
   still not declared are listed once in #council; Kira pauses no role herself. A passed poll can't give a role of trust
   to someone who hasn't declared.
+- **Elections and body votes** (GOVERNANCE.md 2.1, 5.3 and 7; rules in [`src/elections-kit.js`](src/elections-kit.js),
+  Discord in [`src/features/elections.js`](src/features/elections.js), measures in
+  [`src/election-evidence.js`](src/election-evidence.js)): their own switch, **`KIRA_ELECTIONS=on`**, and only with
+  governance on. Off, every command and option is exactly as before.
+  - **`/elect post: member: [group:] [action:]`**: an election (or a recall) in the body that votes for the post: the
+    mods in #mod-chat (🛡️ Mod, 🛡️ Chief of Mods), the mods and the Server lead (server operator; the lead votes by DM),
+    a group's active members and the Team in the group's channel (group lead), the Team in #horizon-team (2/3). Kira
+    checks who may start it, the seat, the 30-day cooldown, the cap of 3 per body and the floor. A candidate below the
+    floor gets a private DM with what is missing; the starter only a neutral "not now"; nothing is posted.
+  - **Ballots**: Yes / No / Abstain (the candidate can decline); a second nominee for the same seat within 12 hours turns
+    it into an approval ballot, then a run-off of the top two if nobody has half of the voters. Quorum max(3, ⅓); a tie
+    fails, except that the Chief of Mods breaks ties in the mods' votes. Turnout only, never names. It closes at 24 h,
+    or as soon as the result can't change.
+  - **Result**: logged (`election` in the decisions log, ballots hidden in public), posted in the body's channel and in
+    #polls-and-decisions; Kira gives or takes the Discord role, the GitHub team with **`KIRA_GITHUB_ORG_TOKEN`**
+    (members:write), and lists what she can't do (a GitHub team without a token, the server's ops list) as clicks for
+    the person named in `ELECTIONS.clicks`.
+  - **Veto**: a button under a passed result for 24 hours. A council member's press opens a council poll (`veto`,
+    simple majority, in #council for elections); if it passes Kira undoes the change and the person can't be proposed
+    for that post for 30 days.
+  - **`/vote body:mods|team|group [group:] [private:]`**: a body's own decision (P41: the mods decide moderation
+    matters), simple majority, the same 24 hours, early close and veto. `private`: only the result is public.
+  - **Council polls on money last 48 hours**, and rule or accounts polls when `/poll start two_days:` says it is this
+    document, the licence or the organisation's ownership.
 - **Applications are off** (the council, 2026-11-09: it recruits the people it wants itself). Unless
   **`KIRA_APPLICATIONS=on`**: no `/apply`, no form or dashboard application routes, no vote tick, no role given or DM sent
   for a decision. The polls Kira had opened from applications were cancelled (`cancelStale` in
