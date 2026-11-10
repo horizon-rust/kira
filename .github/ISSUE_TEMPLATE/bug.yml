@@ -1,0 +1,26 @@
+name: Bug
+description: Kira does something it shouldn't, or doesn't do what the README says.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security problem? Don't file it here: use **Security → Report a vulnerability**.
+        No tokens, no real members' messages or IDs paired with moderation data.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what Kira did, and what you expected (README section or command name if you know it).
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines or screenshot
+      description: Redact tokens, IDs and member names.
+  - type: input
+    id: version
+    attributes:
+      label: Commit or date
+      description: Your checkout's `git rev-parse --short HEAD`, or the day you saw it on Horizon's server.

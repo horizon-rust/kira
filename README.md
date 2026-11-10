@@ -7,6 +7,13 @@ projects) is talked about in #general (#off-topic was merged into it on 2026-10-
 
 Open source under the [MIT licence](LICENSE): improvements are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md) and
 [Run your own copy](#run-your-own-copy).
+
+## Contributing
+
+Fixes and features are welcome: open an issue first for anything big, run your own bot on a test server, and send a
+small pull request with a test. New features sit behind a flag that is off by default, and merging to `main` deploys
+Kira live. See [CONTRIBUTING.md](CONTRIBUTING.md); security problems go to [SECURITY.md](SECURITY.md).
+
 ## The server
 
 `npm run setup` makes sure the server has everything [`src/config.js`](src/config.js) lists (it is **additive**, see [Setup is additive](#setup-is-additive)). `LAYOUT` follows the live server, whose names and types are the truth (2026-11-01):
