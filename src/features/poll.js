@@ -6,7 +6,7 @@
 // decisions log and, when it passed with a role change, applies it herself, citing the decision id. `/poll reopen`
 // signs a failed poll's reopening (two members lift the 7-day rule).
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { GUILD_ID, GOVERNANCE } from '../config.js';
+import { GUILD_ID, GOVERNANCE, ELECTIONS } from '../config.js';
 import { client, state, save } from '../core.js';
 import { dataFile } from '../store.js';
 import * as kit from '../poll-kit.js';
@@ -40,11 +40,15 @@ export const VOTE_TYPES = [
   ['appeal', 'Second-level moderation appeal, in #council (simple majority)'],
 ];
 
+// What src/features/elections.js plugs in when KIRA_ELECTIONS is on: `/vote body:` for any body but the council.
+export const hooks = { bodyVote: null };
+const electionsOn = () => GOVERNANCE.on && ELECTIONS.on;
+
 export const commands = GOVERNANCE.on ? [
   new SlashCommandBuilder().setName('poll').setDescription('Council polls (GOVERNANCE.md)')
     .addSubcommand((s) => s.setName('start').setDescription('Council: start a 24-hour poll')
       .addStringOption((o) => o.setName('kind').setDescription('What the poll decides (sets the threshold)').setRequired(true)
-        .addChoices(...Object.entries(kit.KINDS).map(([k, v]) => ({ name: `${k}: ${v.label}`.slice(0, 100), value: k }))))
+        .addChoices(...Object.entries(kit.KINDS).filter(([, v]) => !v.internal).map(([k, v]) => ({ name: `${k}: ${v.label}`.slice(0, 100), value: k }))))
       .addStringOption((o) => o.setName('question').setDescription('The question, in a full sentence').setRequired(true).setMaxLength(1000))
       .addUserOption((o) => o.setName('member').setDescription('The member the poll is about (they do not vote)'))
       .addStringOption((o) => o.setName('role').setDescription('The role a passed poll gives or takes')
@@ -60,7 +64,21 @@ export const commands = GOVERNANCE.on ? [
     .addStringOption((o) => o.setName('type').setDescription('What it decides (default: a project decision, simple majority)')
       .addChoices(...VOTE_TYPES.map(([value, name]) => ({ name, value }))))
     .addBooleanOption((o) => o.setName('two_thirds').setDescription('Needs two thirds instead of a simple majority')),
-] : [];
+].map(withElections) : [];
+
+// With KIRA_ELECTIONS on: /poll start takes two_days (GOVERNANCE.md 4.2), and /vote takes a body, a group and private.
+function withElections(cmd) {
+  if (!electionsOn()) return cmd;
+  if (cmd.name === 'poll') {
+    cmd.options.find((o) => o.name === 'start')?.addBooleanOption((o) => o.setName('two_days').setDescription('48 hours: this document, the licence or org ownership (money always is)'));
+    return cmd;
+  }
+  return cmd
+    .addStringOption((o) => o.setName('body').setDescription('Who votes (default: the council)')
+      .addChoices({ name: 'the council', value: 'council' }, { name: 'the mods', value: 'mods' }, { name: 'the Horizon Team', value: 'team' }, { name: 'a group', value: 'group' }))
+    .addStringOption((o) => o.setName('group').setDescription('For a group vote: which group').addChoices(...Object.entries(ELECTIONS.groups).map(([value, g]) => ({ name: g.name, value }))))
+    .addBooleanOption((o) => o.setName('private').setDescription('About a person: only the result is published'));
+}
 
 // The poll message: the question, what passing does, the threshold, the end, and how many voted (not who).
 export function render(p) {
@@ -84,6 +102,11 @@ export function render(p) {
 
 export const handlers = {
   async vote(i) {
+    const body = i.options.getString?.('body');
+    if (body && body !== 'council') {
+      if (electionsOn() && hooks.bodyVote) return hooks.bodyVote(i);
+      return i.reply(ephemeral('Votes of the mods, the Team and the groups are not on yet.'));
+    }
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const r = await start(i.user.id, { kind: i.options.getString('type') ?? 'decision', question: i.options.getString('question'), twoThirds: !!i.options.getBoolean('two_thirds') });
     if (!r.ok) return i.editReply(ephemeral(r.why));
@@ -97,7 +120,7 @@ export const handlers = {
     if (i.options.getSubcommand() === 'reopen') return i.editReply(ephemeral(reopen(i.user.id, i.options.getString('decision'))));
     const r = await start(i.user.id, {
       kind: i.options.getString('kind'), question: i.options.getString('question'), member: i.options.getUser('member')?.id,
-      role: i.options.getString('role'), action: i.options.getString('action'),
+      role: i.options.getString('role'), action: i.options.getString('action'), twoDays: !!i.options.getBoolean?.('two_days'),
     });
     if (!r.ok) return i.editReply(ephemeral(r.why));
     const p = r.poll;
@@ -115,7 +138,9 @@ export async function start(opener, args, { now = Date.now(), via = null } = {})
   if (!isCouncil(opener)) return { ok: false, why: 'Only council members start a poll. Ask one of them.' };
   const verdict = kit.check({ ...args, opener }, { council: council(), log: log.all(), now });
   if (!verdict.ok) return verdict;
-  const fields = { ...verdict.poll, ...(args.twoThirds ? { threshold: 'two-thirds' } : {}), ...(via ? { via } : {}) };
+  const long = kit.hoursFor(verdict.poll.kind, !!args.twoDays, electionsOn());
+  if (long.why) return { ok: false, why: long.why };
+  const fields = { ...verdict.poll, ...(args.twoThirds ? { threshold: 'two-thirds' } : {}), ...(via ? { via } : {}), ...(long.hours !== kit.POLL.hours ? { hours: long.hours } : {}) };
   const p = await open(fields, { openedBy: String(opener), now });
   if (!p) return { ok: false, why: 'The poll could not be posted: try again in a minute.' };
   const text = String(args.thread ?? '').trim();
@@ -156,7 +181,7 @@ export async function open(fields, { openedBy, now = Date.now() }) {
   const ch = await getChannel(channelOf(fields.where));
   if (!ch) { console.error('poll: no channel for', fields.where); return null; }
   state.pollSeq = (state.pollSeq ?? 0) + 1;
-  const p = { ...fields, id: `P${state.pollSeq}`, openedBy, startedAt: now, endsAt: now + kit.POLL.hours * kit.HOUR, ballots: {}, recused: [], reminded: [] };
+  const p = { ...fields, id: `P${state.pollSeq}`, openedBy, startedAt: now, endsAt: now + (fields.hours ?? kit.POLL.hours) * kit.HOUR, ballots: {}, recused: [], reminded: [] };
   polls()[p.id] = p; // taken before the first await, so the id can't be used twice
   save();
   const ping = roleId('council');

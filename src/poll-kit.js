@@ -27,7 +27,20 @@ export const KINDS = {
   appeal: { pass: 'simple', where: 'council', label: 'Second-level moderation appeal' },
   age: { pass: 'simple', where: 'council', label: 'An 18+ case' },
   return: { pass: 'simple', where: 'public', label: 'Bringing back someone who stepped down for inactivity', roles: 'any', action: 'add' },
+  // Opened only by the Veto button under a body's result (src/features/elections.js), never by /poll start.
+  veto: { pass: 'simple', where: 'public', label: "Council veto of a body's vote or election", internal: true },
 };
+
+// GOVERNANCE.md 4.2: 48 hours for this document, the licence, money and the GitHub organisation's ownership (money
+// always; a rule or accounts poll when its opener says it is one of those). Only with KIRA_ELECTIONS on.
+export const LONG = { hours: 48, always: ['money'], optional: ['rule', 'accounts'] };
+export function hoursFor(kind, long, on) {
+  if (!on) return { hours: POLL.hours };
+  if (LONG.always.includes(kind)) return { hours: LONG.hours };
+  if (!long) return { hours: POLL.hours };
+  if (LONG.optional.includes(kind)) return { hours: LONG.hours };
+  return { why: '48 hours is only for this document, the licence, money and the GitHub organisation\'s ownership.' };
+}
 
 export const LEAD_ROLES = ['lead-modding', 'lead-rendering', 'lead-performance', 'lead-launcher', 'lead-server', 'lead-translations', 'lead-website', 'lead-parity', 'lead-ui'];
 export const ROLE_KEYS = ['council', 'team', 'chiefmod', 'mod', 'support', ...LEAD_ROLES];
@@ -40,6 +53,7 @@ export function check(p, { council, log = [], now }) {
   const kind = KINDS[p.kind];
   if (!Object.hasOwn(council, String(p.opener))) return { ok: false, why: 'Only council members start a poll. Ask one of them to start it for you.' };
   if (!kind) return { ok: false, why: 'Unknown kind of poll.' };
+  if (kind.internal) return { ok: false, why: 'A veto starts from the Veto button under the result it is about.' };
   const question = String(p.question ?? '').replace(/\s+/g, ' ').trim();
   if (question.length < 10) return { ok: false, why: 'Write the question in a full sentence (10 characters or more).' };
   if (question.length > 1000) return { ok: false, why: 'The question is too long (1000 characters at most): link a thread for the details.' };
