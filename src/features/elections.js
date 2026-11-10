@@ -26,7 +26,7 @@ import { makeGitHub } from '../github.js';
 import { githubToken } from '../github-app.js';
 
 export const enabled = () => GOVERNANCE.on && ELECTIONS.on;
-const E = () => (state.elections ??= { seq: 0, vseq: 0, open: {}, closed: {}, seats: {}, roleSince: {}, lastMonthly: null });
+const E = () => (state.elections ??= { seq: 0, vseq: 0, open: {}, closed: {}, seats: {}, roleSince: {}, monthlyDone: null });
 const guild = () => client.guilds.cache.get(GUILD_ID);
 const roleId = (key) => state.roles?.[key] || GOVERNANCE.roles[key];
 const isCouncil = (id) => gk.isCouncil(id, { state, gov: GOVERNANCE });
@@ -658,10 +658,12 @@ export const reminderText = (g, hasLead) => [
 // Once a month: the group reminders, and the private list in #council. Never a word about anyone's age: the
 // declaration is left out of these checks. → { groups: [keys posted], suggestions: n }.
 export async function monthly(now = Date.now()) {
-  if (!enabled() || !kit.monthlyDue(E().lastMonthly, now)) return null;
-  E().lastMonthly = kit.monthOf(now); // first, so a crash half-way never posts twice
-  save();
+  if (!enabled() || !kit.monthlyDue(E().monthlyDone, now)) return null;
+  // Fetch first: a rate-limited member fetch (gateway opcode 8, common right after a boot) throws here, before the
+  // month is marked, so the next hourly run tries again. `lastMonthly` (11-10) was marked before a fetch that failed.
   const members = await allMembers();
+  E().monthlyDone = kit.monthOf(now); // before posting, so a crash half-way never posts twice
+  save();
   const byId = new Map(members.map((m) => [String(m.id), m]));
   const meets = async (m, post, group) => {
     const card = await ev().candidate(m, { post, group, kinds: kindsOfMember(m), modSince: E().roleSince[sinceKey('mod', m.id)] ?? null });
