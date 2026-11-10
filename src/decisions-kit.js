@@ -8,10 +8,14 @@
 // - applied: { id, type, at, of (the poll id), member, role, action, ok, error }
 // - council: { id, type, at, of, member, login, action } (the registry changed)
 // - reopen: { id, type, at, of (a failed poll id), by } (a signature that lifts the 7-day rule)
+// - election: { id, type, at, election, post, group, action, body, candidates, startedBy, startedAt, closedAt,
+//   vacancy, result, ballots } (an election by a body: GOVERNANCE.md 5.3)
+// - bodyvote: { id, type, at, vote, body, question, private, startedBy, startedAt, closedAt, result, ballots }
+// - veto: { id, type, at, of (the election or body vote's decision id), poll, post, group, action, member, passed }
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-const TYPES = new Set(['poll', 'applied', 'council', 'reopen']);
+const TYPES = new Set(['poll', 'applied', 'council', 'reopen', 'election', 'bodyvote', 'veto']);
 
 export function openLog(file) {
   let entries;
@@ -37,6 +41,8 @@ export function openLog(file) {
 // Other polls show each ballot.
 export function publicView(entries) {
   return entries.map((e) => {
+    if (e.type === 'election') { const { ballots, ...rest } = e; return { ...rest, ballots: null }; } // only the result
+    if (e.type === 'bodyvote') { const { ballots, question, ...rest } = e; return e.private ? { ...rest, question: null, ballots: null } : e; }
     if (e.type !== 'poll') return e;
     const { key, ...rest } = e;
     if (e.where !== 'council') return rest;
