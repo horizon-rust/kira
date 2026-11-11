@@ -12,7 +12,7 @@ export const SERVER = {
   name: 'Horizon',
   description: 'Minecraft Java Edition rewritten in Rust. Bugs, ideas, releases. playhorizon.dev · Not affiliated with Mojang/Microsoft.', // 120 max
   // Kira's About me (the application's description, 400 max).
-  about: "Kira, Horizon's front desk 🌅 /report a bug (it becomes a GitHub issue), ask /roadmap what's being built, /claim a task, /apply to help. I post every release and what changed in #updates, and help the mods keep things friendly. /help for the rest, or DM me to reach the mods. playhorizon.dev/hub",
+  about: "Kira, Horizon's front desk 🌅 /report a bug (it becomes a GitHub issue), ask /roadmap what's being built, /claim a task. I post every release and what changed in #updates, and help the mods keep things friendly. /help for the rest, or DM me to reach the mods. playhorizon.dev/hub",
   // Horizon's mark (horizon repo, docs/media/brand/social): the server icon and Kira's own avatar, on violet so
   // Kira reads apart from the project. src/brand.js applies them when they change.
   icon: 'assets/horizon-icon.png', // Horizon's avatar.svg at 512 px (README: Discord brand assets)
@@ -89,12 +89,12 @@ export const ROLES = [
   { key: 'sponsor', name: '💚 Sponsor', color: 0x2ecc40, hoist: true, about: 'for sponsors of Horizon on GitHub: `/sponsor github:<you>`. Every way to support Horizon is in #support-horizon.' },
   // Ludovic, 2026-10-30: members who help players in #horizon-support. No permission of its own: it answers anywhere in
   // that forum and manages its posts (the solved tag, closing) there only (`helpers` in LAYOUT). Given through /apply.
-  { key: 'support', name: '🤝 Support', color: 0x1abc9c, hoist: true, label: 'Support', about: 'members who help players in #horizon-support: they answer every post there and mark it solved. `/apply` for it.' },
+  { key: 'support', name: '🤝 Support', color: 0x1abc9c, hoist: true, label: 'Support', about: 'members who help players in #horizon-support: they answer every post there and mark it solved. The mods give it.' },
   {
     // No kick or ban (dezer-x in #horizon-team, 2026-10-29: a rogue mod could ban people for no reason): mods time
     // out and delete; a ban goes through the Team.
     key: 'mod', name: '🛡️ Mod', color: 0x2ecc71, hoist: true,
-    about: 'the moderators: they time out members and delete messages (bans go through the Horizon Team). `/apply` for it.',
+    about: 'the moderators: they time out members and delete messages (bans go through the Horizon Team). The mods elect new ones (`/elect`).',
     permissions: ['ModerateMembers', 'ManageMessages', 'ManageThreads', 'ManageNicknames', 'ViewAuditLog', 'MuteMembers', 'DeafenMembers', 'MoveMembers', 'BypassSlowmode', 'UseEmbeddedActivities', 'UseExternalApps'],
   },
   // Ludovic, 2026-11-02: pointofpressure leads the mods. The mods' permissions, shown above them, below the Team.
