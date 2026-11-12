@@ -4,6 +4,8 @@
 import { LINKS } from '../config.js';
 
 export const EVERY_MS = 5 * 60_000;
+// No slash command: bot.js maps every feature's `commands`, so a missing list crashed Kira at start.
+export const commands = [];
 
 // Returns how many captures the site deleted, or null when no token is set.
 export async function sweep({ token = process.env.PERF_SWEEP_TOKEN, fetchImpl = fetch } = {}) {
