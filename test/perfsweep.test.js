@@ -13,3 +13,14 @@ test('the sweep posts to the site with the token, and does nothing without one',
   assert.equal(calls[0].options.headers.Authorization, 'Bearer s3cret');
   await assert.rejects(sweep({ token: 's3cret', fetchImpl: async () => ({ ok: false, status: 403 }) }), /HTTP 403/);
 });
+
+test('every feature bot.js loads exports a commands list (a missing one crashed Kira at start)', async () => {
+  const src = (await import('node:fs')).readFileSync(new URL('../src/bot.js', import.meta.url), 'utf8');
+  const list = src.match(/const FEATURES = \[([^\]]+)\]/)[1].split(',').map((s) => s.trim());
+  for (const name of list) {
+    const file = src.match(new RegExp(`import \\* as ${name} from '\\./features/([\\w-]+)\\.js'`))?.[1];
+    if (!file) continue;
+    const m = await import(`../src/features/${file}.js`);
+    assert.ok(Array.isArray(m.commands), `${file}.js exports no commands array`);
+  }
+});
