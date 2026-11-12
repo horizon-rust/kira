@@ -293,7 +293,10 @@ test('council polls: money lasts 48 hours, a rule only when asked; veto is never
 });
 
 test('the timer closes votes at 24 hours and takes the veto button away after 24 more', async () => {
-  const e = openE().find((x) => x.stage === 'vote');
+  // Its own vote at NOW: /elect and /vote above start on the real clock, so which of theirs is still open depends on the day.
+  const { election: e } = await el.startVote(M1, { body: 'mods', question: 'Does the timer close this vote on time?' }, { now: NOW });
+  for (const [x, v] of [[M1, 'yes'], [M3, 'yes'], [M4, 'no']]) await press(x, e.id, v);
+  assert.ok(core.state.elections.open[e.id], 'two Yes and one No of five settle nothing early');
   await el.tick(e.endsAt + 1);
   assert.equal(core.state.elections.open[e.id], undefined);
   const left = Object.values(core.state.elections.closed).filter((c) => !c.vetoPoll);
