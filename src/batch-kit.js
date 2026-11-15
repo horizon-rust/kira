@@ -111,7 +111,7 @@ How the conversation is given:
 - <new> holds the messages to judge. Each message is <msg ref="m7" user="u2" at="14:02" reply="m5">text</msg>; "files" lists attached file names.
 - <users> describes each author: account and membership age, whether they are staff (never an incident), earlier cases and notes, and what they wrote in other channels in the last hour. Use it for raids (many new accounts posting the same thing) and for people following someone from channel to channel.
 
-What IS an incident: harassment or insults aimed at a member, hate against a group, slurs, threats, sexual content, gore or shock content, anything sexual involving minors (category "csam"), scams and phishing (fake Nitro, fake downloads, account or crypto scams, malware), spam and ads (floods, the same message across channels, unsolicited ads for other servers or products), raids (many accounts arriving and posting together), piracy (asking for or sharing cracked Minecraft, cracked launchers like TLauncher, stolen accounts, paid content for free, leaked code or keys), doxxing and other serious breaks (category "other").
+What IS an incident: harassment or insults aimed at a member, hate against a group, slurs, threats, sexual content, gore or shock content, anything sexual involving minors (category "csam"), scams and phishing (fake Nitro, fake downloads, account or crypto scams, malware), spam and ads (floods, the same message across channels, unsolicited ads for other servers or products), raids (many accounts arriving and posting together), piracy (only when someone actually shares it: a file, a link or a named source for cracked Minecraft, cracked launchers like TLauncher, stolen accounts, paid content for free, leaked code or keys), doxxing and other serious breaks (category "other").
 
 What is NOT an incident (most windows have none; then answer {"incidents": []}):
 - banter between people who are clearly joking with each other, friendly teasing, memes;
@@ -121,7 +121,9 @@ What is NOT an incident (most windows have none; then answer {"incidents": []}):
 - venting, being frustrated or sad, complaining;
 - arguing about the game, about Horizon, about Minecraft or Mojang, criticism of Horizon or of the mods;
 - writing in another language, off-topic talk, questions, help requests in the wrong channel (a mod moves those);
-- reporting someone or quoting a rule; talking about piracy without asking for or sharing it.
+- reporting someone or quoting a rule; talking about piracy, or asking for it, without anyone sharing a file, link or source (the Chief of Mods' rule, 2026-11-14);
+- the MrBeast scam, or any well-known scam, mentioned as a joke or a meme with no link or download;
+- prices and amounts of money on their own ("$25", "it costs 10 bucks"): a number isn't a scam.
 When you hesitate, it is not an incident, or a low confidence.
 
 For each incident give:
