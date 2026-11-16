@@ -209,7 +209,7 @@ export const LAYOUT = [
         // The title and a line of text say what it is; matching the words "what"/"this" closed complete posts.
         check: { media: true, min: 20 },
       },
-      { key: 'modding', name: '🧩│modding', type: 'text', topic: 'Making Horizon mods: content mods (.hmod), native mods, porting Java mods, the registry. Ask for help, share work in progress, compare notes. Finished mods go in #showcase; published ones on playhorizon.dev/mods. Guides: docs/mods.md and docs/native-mods.md.' },
+      { key: 'modding', name: '🧩│modding', type: 'text', topic: 'Making Horizon mods, porting Java mods, the registry. Ask for help and share work in progress. Finished mods go in #showcase. Development guide: docs/modding/src (shared .hmod packages, native exact-build SDK and WebAssembly); check published release notes for availability.' },
       { key: 'releases', name: '📰│releases', type: 'text', readonly: true, topic: 'Every new Horizon version and launcher, posted by Kira. Pick the 📦 Releases role to get pinged.' },
       { key: 'updates', name: '📰│updates', type: 'text', readonly: true, topic: 'What changed in Horizon: merged work grouped by roadmap item, releases, the weekly summary, and the board at a glance. The full kanban and roadmap: playhorizon.dev/hub. Talk about it in #horizon-chat.' },
     ],
@@ -855,6 +855,7 @@ export const FAQ = [
 // The questions asked most in #horizon-chat and #general (2026-10-27): a second FAQ embed, under the first's 4096 characters.
 export const FAQ_MORE = [
   ['Do Java mods work? Fabric, Forge, OptiFine?', 'No: Horizon is not the Java game, so Java mods don\'t run in it. Horizon has its own mods: open **Mods** in the launcher, or browse https://playhorizon.dev/mods. Modders can port a Java mod to Horizon (with its author\'s licence or permission).'],
+  ['Which modding guide and SDK should I use?', 'The development guide is https://github.com/horizon-rust/horizon/blob/main/docs/modding/src/introduction.md: one .hmod package for content, native and WebAssembly mods. Native builds use an exact Horizon build, target, side and Rust toolchain SDK, not a full-game rebuild per mod; WebAssembly uses the shared runtime. This describes development, not confirmed published availability: check your game and launcher release notes before using it. Ask in #modding if unsure.'],
   ['Shaders?', 'Java shader packs (Iris, OptiFine) don\'t run in Horizon. Horizon\'s own shader support is being built: follow #updates.'],
   ['Can I play on servers (2b2t, Hypixel…)?', 'Horizon is Minecraft Java Edition 26.3: it joins servers that accept 26.3 clients. Online-mode servers need Microsoft sign-in (see above). A server\'s own rules and anti-cheat still apply: check them before you join with a different client.'],
   ['Which computers? Linux, Mac, Windows?', 'Windows (x64), macOS (Apple Silicon) and Linux (x86_64), from https://playhorizon.dev. Phones, consoles, Bedrock and app stores: no, Horizon is Java Edition for computers.'],

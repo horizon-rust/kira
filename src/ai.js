@@ -1,6 +1,6 @@
 // Kira's answers with the Claude API: the sources she answers from, and the call itself.
 //
-// Sources: the FAQ and the server guide (config.js: channels, roles, rules, /help; texts.js builds it), and from horizon-rust/horizon's main branch the README and docs/*.md (refreshed daily),
+// Sources: the FAQ and server guide, and Horizon main's README, docs/*.md and docs/modding/src/**/*.md (daily),
 // plus the notes of the latest published releases (hourly). They are read through github.js's makePublicGitHub (the
 // GitHub App, else no token; never Ludovic's token); unchanged files cost nothing (a doc is fetched again only when its
 // blob sha changes, and conditional GETs answered 304 aren't counted). A failed refresh keeps the last good copy, and
@@ -23,6 +23,14 @@ export const RELEASES_EVERY_MS = 60 * 60_000;
 const RELEASE_CHARS = 16_000; // newest game releases' notes, up to this much (about the last dozen)
 const LAUNCHER_RELEASES = 2;
 const DOC_CHARS = 40_000; // one read_doc answer at most
+const MAX_DOCS = 512;
+const MAX_DOC_BYTES = 1_000_000;
+const MAX_DOCS_BYTES = 8_000_000;
+const MODDING = 'docs/modding/src/';
+const docUrl = (name) => `https://github.com/${REPO}/blob/main/${name}`;
+const docPath = (name) => typeof name === 'string'
+  && (/^docs\/[^/]+\.md$/i.test(name) || (name.startsWith(MODDING) && /\.md$/i.test(name)))
+  && name.split('/').every((p) => /^[\w.-]+$/.test(p) && p !== '.' && p !== '..');
 // Model calls per answer: Haiku may look things up twice, then must answer; Sonnet (the expensive one) once.
 const ROUNDS = { fast: 3, careful: 2 };
 const LONG_CONTEXT = { messages: 4, chars: 3_000 }; // a thread this long goes to the careful model
@@ -32,7 +40,8 @@ const isGame = (r) => /^v\d/.test(r.tag_name) || /^nightly(?:-|$)/.test(r.tag_na
 const isLauncher = (r) => /^launcher[@-]v?\d/.test(r.tag_name);
 
 export function makeSources({ gh, faq = [...FAQ, ...FAQ_MORE], guide = serverGuideText(), file = null, log = console.error, info = console.log }) {
-  const docs = new Map(); // 'docs/x.md' → { sha, text, summary }
+  const docs = new Map(); // repo-relative chapter path → { sha, text, summary }
+  const pending = new Map(); // bounded staging only; failed refreshes never expose these as knowledge
   let readme = null;
   let releases = [];
   const at = { docs: 0, releases: 0 };
@@ -42,7 +51,7 @@ export function makeSources({ gh, faq = [...FAQ, ...FAQ_MORE], guide = serverGui
   if (file) {
     try {
       const saved = JSON.parse(readFileSync(file, 'utf8'));
-      for (const d of saved.docs ?? []) if (d?.path && d.sha && typeof d.text === 'string') docs.set(d.path, { sha: d.sha, text: d.text, summary: kit.docSummary(d.path, d.text) });
+      for (const d of saved.docs ?? []) if (typeof d?.path === 'string' && docPath(d.path) && d.sha && typeof d.text === 'string') docs.set(d.path, { sha: d.sha, text: d.text, summary: kit.docSummary(d.path, d.text) });
       readme = typeof saved.readme === 'string' ? saved.readme : null;
       releases = Array.isArray(saved.releases) ? saved.releases.filter((r) => r?.name && typeof r.body === 'string') : [];
       at.docs = Number(saved.at?.docs) || 0;
@@ -75,14 +84,42 @@ export function makeSources({ gh, faq = [...FAQ, ...FAQ_MORE], guide = serverGui
   async function refreshDocs() {
     const list = await gh.get(`/repos/${REPO}/contents/docs?ref=main`);
     if (!Array.isArray(list)) throw new Error('docs: no listing');
-    const files = list.filter((f) => f.type === 'file' && /\.md$/i.test(f.name));
-    for (const f of files) {
-      if (docs.get(f.path)?.sha === f.sha) continue;
-      const text = decode(await gh.get(`/repos/${REPO}/git/blobs/${f.sha}`, { cache: false }));
-      if (text != null) docs.set(f.path, { sha: f.sha, text, summary: kit.docSummary(f.path, text) });
+    const files = list.filter((f) => f.type === 'file' && docPath(f.path));
+    const modding = list.find((f) => f.type === 'dir' && f.path === 'docs/modding');
+    if (modding) {
+      // One bounded subtree request, not a walk through all repository directories.
+      const tree = await gh.get(`/repos/${REPO}/git/trees/${modding.sha}?recursive=1`);
+      if (!Array.isArray(tree?.tree) || tree.truncated) throw new Error('docs: incomplete modding tree');
+      for (const f of tree.tree) {
+        const path = `docs/modding/${f.path}`;
+        if (f.type === 'blob' && docPath(path)) files.push({ ...f, path });
+      }
     }
-    for (const name of [...docs.keys()]) if (!files.some((f) => f.path === name)) docs.delete(name);
-    readme = decode(await gh.get(`/repos/${REPO}/readme?ref=main`)) ?? readme;
+    if (files.length > MAX_DOCS) throw new Error(`docs: over ${MAX_DOCS} chapters`);
+    for (const [name, d] of pending) if (!files.some((f) => f.path === name && f.sha === d.sha)) pending.delete(name);
+    // Commit a complete snapshot only. A failed late blob must not replace working chapters,
+    // or delete a chapter from the on-disk last-good copy when releases refresh successfully.
+    const next = new Map();
+    let bytes = 0;
+    for (const f of files) {
+      if (f.size > MAX_DOC_BYTES) throw new Error(`docs: ${f.path} too large`);
+      let doc = docs.get(f.path)?.sha === f.sha ? docs.get(f.path) : pending.get(f.path);
+      if (doc?.sha !== f.sha) {
+        const text = decode(await gh.get(`/repos/${REPO}/git/blobs/${f.sha}`, { cache: false }));
+        if (text == null) throw new Error(`docs: missing blob ${f.path}`);
+        doc = { sha: f.sha, text, summary: kit.docSummary(f.path, text) };
+      }
+      const size = Buffer.byteLength(doc.text);
+      if (size > MAX_DOC_BYTES || (bytes += size) > MAX_DOCS_BYTES) throw new Error('docs: content size limit');
+      pending.set(f.path, doc);
+      next.set(f.path, doc);
+    }
+    const nextReadme = decode(await gh.get(`/repos/${REPO}/readme?ref=main`));
+    if (nextReadme == null) throw new Error('docs: missing README');
+    docs.clear();
+    for (const [name, doc] of next) docs.set(name, doc);
+    pending.clear();
+    readme = nextReadme;
     return `${docs.size} docs${readme ? ' and the README' : ''}`;
   }
 
@@ -134,9 +171,44 @@ export function makeSources({ gh, faq = [...FAQ, ...FAQ_MORE], guide = serverGui
   // Ready once anything was ever loaded (here or from the saved copy); the FAQ and the server guide are always there.
   const ready = () => !!readme || releases.length > 0 || docs.size > 0;
 
+  // Local retrieval over the same last-good chapters used by read_doc. Distinct query
+  // words select an actual paragraph, not just the chapter's often generic introduction.
+  function searchDocs(query) {
+    const terms = kit.searchTerms(query, 24).filter((term) => !/^(how|what|why|where|which|who|whom|whose|do|i|me|use|using)$/.test(term)).slice(0, 12);
+    if (!terms.length) return [];
+    const words = (text) => new Set(text.toLowerCase().match(/[\p{L}\p{N}_-]+/gu) ?? []);
+    const frequency = new Map(terms.map((term) => [term, 0]));
+    for (const doc of docs.values()) {
+      const tokens = words(doc.text);
+      for (const term of terms) if (tokens.has(term)) frequency.set(term, frequency.get(term) + 1);
+    }
+    // Rare words distinguish the specific SDK check from generic download/build guidance.
+    const weight = new Map(terms.map((term) => [term, Math.log(1 + docs.size / (1 + frequency.get(term)))]));
+    const matches = (text) => {
+      const tokens = words(text);
+      return terms.reduce((n, term) => n + (tokens.has(term) ? weight.get(term) : 0), 0);
+    };
+    const hits = [];
+    for (const [name, doc] of docs) {
+      let excerpt = '';
+      let best = 0;
+      for (const para of doc.text.split(/\n\s*\n/)) {
+        if (/^#{1,6}\s+[^\n]+$/.test(para.trim())) continue; // headings locate a chapter, but don't answer it
+        for (let start = 0; start < para.length; start += 800) {
+          const window = para.slice(start, start + 1000);
+          const score = matches(window);
+          if (score > best) { best = score; excerpt = window.trim(); }
+        }
+      }
+      if (best) hits.push({ name, url: docUrl(name), title: doc.summary.title, excerpt, score: 3 * best + matches(doc.summary.title) });
+    }
+    return hits.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).slice(0, 3);
+  }
+
   return {
     refresh,
     ready,
+    searchDocs,
     // GitHub's webhook said it changed (a push to main, a release): the next question reloads that part.
     stale(part) { if (part in at) at[part] = 0; },
     names: () => [...docs.keys()].sort(),
@@ -146,7 +218,7 @@ export function makeSources({ gh, faq = [...FAQ, ...FAQ_MORE], guide = serverGui
       readme,
       knownIssues: docs.get('docs/known-issues.md')?.text ?? null,
       releases,
-      docs: [...docs.keys()].sort().map((k) => docs.get(k).summary),
+      docs: [...docs.keys()].sort().map((k) => ({ ...docs.get(k).summary, url: docUrl(k) })),
     }),
     readDoc(name) {
       const text = name === 'README.md' ? readme : docs.get(name)?.text;
@@ -220,7 +292,9 @@ export function makeAnswerer({ client, sources, models = kit.MODELS, rules = kit
   return async function answer(question) {
     const context = question.context ?? [];
     const long = context.length >= LONG_CONTEXT.messages || context.reduce((n, m) => n + String(m.text ?? '').length, 0) >= LONG_CONTEXT.chars;
-    const turn = kit.userTurn(question);
+    const found = sources.searchDocs(question.text);
+    const retrieved = found.length ? `<sources>\n${found.map((d) => `<source name="${d.name}" url="${d.url}" status="development documentation, not release evidence">\n${kit.asData(d.excerpt)}\n</source>`).join('\n')}\n</sources>\n\n` : '';
+    const turn = retrieved + kit.userTurn(question);
     const spent = { models: [], cost: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, lookups: [] };
     const run = (model) => {
       spent.models.push(model);
