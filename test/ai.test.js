@@ -13,9 +13,14 @@ const b64 = (s) => ({ content: Buffer.from(s).toString('base64'), encoding: 'bas
 const R = '/repos/horizon-rust/horizon';
 
 // A fake GitHub with a docs folder, a README and releases; every GET is recorded.
-function fakeGitHub() {
+function fakeGitHub({ modding = false } = {}) {
   const gets = [];
   const files = { 'docs/hosting.md': ['s1', '# Hosting\n\nRun a server.'], 'docs/known-issues.md': ['s2', '# Known issues\n\n- Shader packs are removed.'] };
+  if (modding) {
+    files['docs/how-horizon-is-built.md'] = ['m0', '# How Horizon is built\n\nWho writes Horizon, how changes are checked, and why it is safe to run.\n\nEvery release has a SHA256SUMS file, a fingerprint of each download, and SHA256SUMS.sig, a signature of that list made with Horizon\'s release key.'];
+    files['docs/modding/src/start/first-mod.md'] = ['m1', '# Your first native mod\n\nA native mod is a Rust crate that implements hooks from the mod API.\n\nThe launcher downloads the prebuilt game for the pinned Horizon build, compiles your crate against it, and makes that build the one the instance plays.'];
+    files['docs/modding/src/reference/sdk/01-release.md'] = ['m1sdk', '# The release\n\nThe index. Readers ignore fields they don\'t know and refuse a schema they don\'t know.\n\n## How a download is checked\n\n1. `SHA256SUMS` carries Horizon\'s signature for the tag `sdk-<build id>`. That signature never passes for a game release, and a game release\'s never passes for an SDK.\n2. `sdk.json` is the file those sums list, names this build, has a schema and package format the reader knows, and lists only assets of known kinds and codecs under plain file names.\n3. Every other file has the size and SHA-256 `sdk.json` gives, checked before it is decoded. An archive unpacks into a temporary folder, renamed into place only when every entry unpacked, and is refused past an unpacked size limit or for any entry that is not a plain file or folder inside it.'];
+  }
   const releases = [
     { tag_name: 'v0.2.90', name: 'Horizon 0.2.90', body: '### Fixed\n- Decorated pot', published_at: '2026-10-27T18:10:00Z' },
     { tag_name: 'v0.2.89', name: 'Horizon 0.2.89', body: '### Fixed\n- Riptide', published_at: '2026-10-27T17:45:00Z' },
@@ -32,7 +37,8 @@ function fakeGitHub() {
     async get(path) {
       gets.push(path);
       if (gh.fail) throw new Error('HTTP 500');
-      if (path.startsWith(`${R}/contents/docs`)) return Object.entries(files).map(([p, [sha]]) => ({ type: 'file', name: p.slice(5), path: p, sha })).concat([{ type: 'dir', name: 'api', path: 'docs/api', sha: 'd' }]);
+      if (path.startsWith(`${R}/contents/docs`)) return Object.entries(files).filter(([p]) => /^docs\/[^/]+$/.test(p)).map(([p, [sha]]) => ({ type: 'file', name: p.slice(5), path: p, sha })).concat([{ type: 'dir', name: 'api', path: 'docs/api', sha: 'd' }], modding ? [{ type: 'dir', name: 'modding', path: 'docs/modding', sha: 'md' }] : []);
+      if (path === `${R}/git/trees/md?recursive=1`) return { truncated: false, tree: Object.entries(files).filter(([p]) => p.startsWith('docs/modding/')).map(([p, [sha, text]]) => ({ type: 'blob', path: p.slice('docs/modding/'.length), sha, size: Buffer.byteLength(text) })).concat([{ type: 'blob', path: 'examples/ignored.md', sha: 'ignored' }, { type: 'blob', path: 'src/images/ignored.svg', sha: 'ignored' }]) };
       const blob = path.match(/\/git\/blobs\/(\w+)$/);
       if (blob) return b64(Object.values(files).find(([sha]) => sha === blob[1])[1]);
       if (path.startsWith(`${R}/readme`)) return b64('# Horizon\nMinecraft in Rust.');
@@ -71,6 +77,74 @@ test('sources: docs, README and published releases only; unchanged docs are not 
   gh.fail = true;
   assert.equal(await s.refresh(t0 + 3 * ai.DOCS_EVERY_MS), true);
   assert.ok(s.text().includes('Run a dedicated server.'));
+});
+
+test('nested modding chapters rank SDK verification evidence for a real question and survive a partial refresh and restart', async () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'kira-modding-')), 'ai-sources.json');
+  const gh = fakeGitHub({ modding: true });
+  const options = { gh, file, faq: [], guide: '', log: () => {}, info: () => {} };
+  const sources = ai.makeSources(options);
+  const now = Date.UTC(2026, 10, 16);
+  await sources.refresh(now);
+  const question = 'How is an SDK download checked before it is decoded?';
+  const [best] = sources.searchDocs(question);
+  assert.equal(best.name, 'docs/modding/src/reference/sdk/01-release.md');
+  assert.equal(best.url, 'https://github.com/horizon-rust/horizon/blob/main/docs/modding/src/reference/sdk/01-release.md');
+  assert.match(best.excerpt, /SHA256SUMS.*signature/s);
+  assert.match(best.excerpt, /sdk\.json.*names this build/s);
+  assert.match(best.excerpt, /size and SHA-256.*checked before it is decoded/s);
+  assert.match(sources.readDoc(best.name), /temporary folder.*renamed into place/s);
+  assert.ok(sources.names().includes('docs/modding/src/start/first-mod.md'));
+  assert.ok(!sources.names().some((n) => /examples|images/.test(n)));
+  const original = sources.text();
+  const matches = sources.searchDocs(question);
+
+  // A successful early blob followed by a failed chapter cannot publish a partial snapshot.
+  gh.files['docs/hosting.md'] = ['changed', '# Wrong partial snapshot'];
+  gh.files[best.name] = ['failed', '# Replacement not fetched'];
+  const get = gh.get;
+  gh.get = async (path) => {
+    if (path.endsWith('/git/blobs/failed')) throw new Error('HTTP 500');
+    return get(path);
+  };
+  gh.releases[0].body += '\n- Another published fix'; // saves the independent successful release refresh
+  assert.equal(await sources.refresh(now + ai.DOCS_EVERY_MS), true);
+  assert.deepEqual(sources.searchDocs(question), matches);
+  assert.equal(sources.readDoc('docs/hosting.md'), '# Hosting\n\nRun a server.');
+  assert.ok(sources.text().includes('Another published fix'));
+  assert.notEqual(sources.text(), original);
+
+  gh.fail = true;
+  const restarted = ai.makeSources(options);
+  await restarted.refresh(now + 2 * ai.DOCS_EVERY_MS);
+  assert.deepEqual(restarted.searchDocs(question), matches);
+  assert.equal(restarted.readDoc('docs/hosting.md'), '# Hosting\n\nRun a server.');
+
+  // Recovery completes the staged snapshot without exposing its earlier partial state.
+  gh.fail = false;
+  gh.get = get;
+  await sources.refresh(now + 3 * ai.DOCS_EVERY_MS);
+  assert.equal(sources.readDoc('docs/hosting.md'), '# Wrong partial snapshot');
+  assert.equal(sources.readDoc(best.name), '# Replacement not fetched');
+});
+
+test('modding discovery refuses incomplete trees and oversized refreshes without losing retrieved knowledge', async () => {
+  const gh = fakeGitHub({ modding: true });
+  const sources = ai.makeSources({ gh, log: () => {}, info: () => {} });
+  const now = Date.UTC(2026, 10, 16);
+  await sources.refresh(now);
+  const expected = sources.searchDocs('SDK signature verification download');
+  const get = gh.get;
+  let tree = { truncated: true, tree: [] };
+  gh.get = async (path) => path.includes('/git/trees/') ? tree : get(path);
+  await sources.refresh(now + ai.DOCS_EVERY_MS);
+  assert.deepEqual(sources.searchDocs('SDK signature verification download'), expected);
+  tree = { tree: Array.from({ length: 513 }, (_, i) => ({ type: 'blob', path: `src/extra-${i}.md`, sha: `extra${i}` })) };
+  await sources.refresh(now + 2 * ai.DOCS_EVERY_MS);
+  assert.deepEqual(sources.searchDocs('SDK signature verification download'), expected);
+  tree = { tree: [{ type: 'blob', path: 'src/huge.md', sha: 'huge', size: 1_000_001 }] };
+  await sources.refresh(now + 3 * ai.DOCS_EVERY_MS);
+  assert.deepEqual(sources.searchDocs('SDK signature verification download'), expected);
 });
 
 test('sources: nothing loaded means not ready', async () => {

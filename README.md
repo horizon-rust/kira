@@ -658,11 +658,12 @@ Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`
 - **From what:**
   - the FAQ in `config.js` (both lists, `FAQ` and `FAQ_MORE`);
   - the **server guide**, built from `config.js` by `serverGuideText()` in [`src/texts.js`](src/texts.js) (no GitHub call, always there): the welcome text, every channel by category with its topic and, for forums, the how-to-post guide and template, the roles (`about` in `ROLES`), the rules, `/help` and the official server. So "how does this server work", "where do I ask for help", "how do I become a mod" are answered from the server's own texts; `#channel-name` in a reply becomes a clickable mention;
-  - from horizon-rust/horizon main, the README and `docs/*.md` (refreshed daily) and the notes of the latest published releases (hourly).
-  - All of it is read through `github.js`'s `makePublicGitHub`: the GitHub App with a reserve of its own (`KIRA_GITHUB_PUBLIC_KEEP`, default 100, so the sources still load when the board has stopped for the hour at `KIRA_GITHUB_KEEP`), else without a token (60 an hour per IP); never Ludovic's token. A doc is fetched again only when its sha changes.
-  - A failed refresh keeps the last good copy, saved in `/data/ai-sources.json` (`KIRA_AI_SOURCES`): a restart during a GitHub outage or a held-back hour still answers from it. "Sources not loaded" (passed to the team) only when nothing was ever loaded. A failure is logged once until that part loads again.
+  - from horizon-rust/horizon main, the README, `docs/*.md` and the actual chapters below `docs/modding/src/` (refreshed daily), plus notes of the latest published releases (hourly). Discovery reads the docs directory and one recursive **modding subtree**, not the whole repository. A truncated tree, more than 512 Markdown files, a chapter over 1,000,000 bytes, or over 8,000,000 bytes total rejects the refresh.
+  - All of it is read through `github.js`'s `makePublicGitHub`: the GitHub App with a reserve of its own (`KIRA_GITHUB_PUBLIC_KEEP`, default 100, so the sources still load when the board has stopped for the hour at `KIRA_GITHUB_KEEP`), else without a token (60 an hour per IP); never Ludovic's token. A doc is fetched again only when its sha changes. Successful staged blobs survive failed refreshes in memory, so an interrupted cold load can progress across GitHub budget resets without exposing a partial snapshot.
+  - A failed refresh keeps the last good copy, saved in `/data/ai-sources.json` (`KIRA_AI_SOURCES`): a restart during a GitHub outage or a held-back hour still answers from it. "Sources not loaded" (passed to the team) only when nothing was ever loaded. A failure is logged once until that part loads again. Docs retry after 15 minutes; releases after 5.
   - When sources disagree, the FAQ wins, then the server guide, then the release notes, known issues, the README and the docs.
 - **Models:** `claude-haiku-5-5`. `claude-sonnet-5-5` only when Haiku says it is unsure, or for a reply chain of 4 messages or more. The model's only tool is `read_doc` (read-only). Its output is JSON: answer, pass, or unsure.
+  - Local retrieval ranks paragraphs from those same cached chapters against the question (up to three 1,000-character excerpts), with chapter paths and GitHub source URLs. These excerpts follow the cached prefix; the model can still use `read_doc` for context. Main-branch chapters are development documentation, not evidence that a feature shipped. The shared `.hmod`, native exact-build/target/side/toolchain SDK and shared WebAssembly runtime are described as development architecture; published availability must be established by fetched release facts, never by a merge or this book alone.
 - **Safety:**
   - Member text goes in as data inside `<member_message>`/`<context>` tags, and our own tags inside it are defused.
   - Every reply goes through `checkReply()` before it is posted. It allows links only to playhorizon.dev, github.com/{ludovic111,horizon-rust}/*, the server invite and microsoft.com/link (the FAQ's sign-in page). It blocks code blocks, commands, dates and promises, strips pings, and caps the length. A reply that fails is replaced by "passed to the team".
@@ -679,6 +680,35 @@ Kira answers questions herself with the Claude API ([`src/ai.js`](src/ai.js), [`
 - **Off switch:** `/kira-ai off` (Ludovic and the mods) stops all of it (answers, bug reports, moderation) at once, `/kira-ai mod off` only the moderation (`mod on` restarts it), `/kira-ai on` restarts it, and `/kira-ai status` shows the day's use. Removing `KIRA_AI` (or setting it to `0`) turns it off for good.
 - **Variables:** `KIRA_AI`, `ANTHROPIC_API_KEY` (1Password `Horizon Claude API Key`, set on Railway with the CLI, never printed), `KIRA_AI_DAILY_USD`, `KIRA_USAGE_TOKEN`, `KIRA_AI_BUGS`, `KIRA_AI_MOD`.
 - **Cost, measured** on 38 real questions from the server's history: $0.0013 per answer with Haiku and a warm cache. The 21K-token sources block is cached for an hour as the first block of the user turn: a breakpoint on the system prompt was never read back on this account.
+
+### Controlled retrieval check and deployment refresh
+
+From the Kira checkout, run this local support smoke with no Discord connection, Claude call, credentials or public posts:
+
+```sh
+node --test --test-name-pattern='nested modding chapters|modding discovery' test/ai.test.js
+```
+
+It ranks a real SDK-download verification question against nested chapter content, checks the signature/checksum evidence and exact source URL, then proves that a late failed blob cannot replace working knowledge even when releases save successfully and the process restarts. It also checks truncated and oversized discovery. The normal narrow suite is `node --test test/ai.test.js test/ai-kit.test.js test/server-guide.test.js test/texts.test.js`.
+
+Merging the reviewed change to `main` deploys through Railway; preserve `/data/ai-sources.json` and the existing credentials. A Horizon main push marks docs stale and a release event marks release notes stale; the next question refreshes them. A restart alone does not invalidate a fresh saved cache.
+
+For an explicit refresh, stop the bot first to avoid concurrent cache writers. From the deployed Kira checkout and environment, run this read-only public-GitHub operation (no Discord or model imports):
+
+```sh
+KIRA_AI_SOURCES=/data/ai-sources.json node --input-type=module <<'JS'
+import { makeSources } from './src/ai.js';
+import { makePublicGitHub } from './src/github.js';
+const sources = makeSources({ gh: makePublicGitHub(), file: process.env.KIRA_AI_SOURCES });
+sources.stale('docs');
+sources.stale('releases');
+await sources.refresh();
+console.log(JSON.stringify(sources.searchDocs('How is an SDK download checked before it is decoded?'), null, 2));
+JS
+```
+
+This uses no token and works best with a warm deployed cache; for a cold load spanning the anonymous hourly limit, keep the process alive and invoke `sources.refresh()` again after reset so staged blobs are retained. Never delete the last-good cache. Require both `ai sources: docs loaded` and `ai sources: releases loaded` (or their recovery messages), and inspect the ranked source before treating a refresh as complete: `refresh()` returning true means usable knowledge, not necessarily a successful refresh. Restart the bot to load the saved snapshot. Recheck fetched published release notes before asserting SDK/native/wasm availability; no announcement or setup command is part of this operation.
+
 
 ## Batch moderation
 
