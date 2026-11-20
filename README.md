@@ -84,7 +84,7 @@ already exists, and a voice channel's `bitrate` is its own (not "the most the bo
 | Chat clears | Every 6 hours the messages older than 24 h in #horizon-chat and #general are deleted (bulk deletes under 14 days, one by one beyond, paced); pins and messages that started a thread stay, nothing else is touched. One line in `#mod-log` per run. `/clear-chat [older_than:<hours>]` (Manage Messages) does it now in the current chat channel. `CLEAR` in `config.js`; [`src/features/chatclear.js`](src/features/chatclear.js) |
 | Logs | `#mod-actions`: the numbered cases (timeouts, quarantines, bans, unbans, kicks, appeals' outcomes; the one channel mods watch) and warnings. `#join-leave`: joins (id, account age, ⚠️ under 7 days, avatar, **which invite**) and leaves grouped every minute. `#kira-handoffs`: Kira's AI answers, the questions she passes to the team, their cost. `#mod-log`: deleted and edited messages, nicknames, AutoMod and the filters' removals (each with its Undo), everything else. A split-off channel not there yet: its lines go to #mod-log |
 | Reports | `/report-member` and "Report to mods" (right-click a message → Apps) → `#reports` (`/report` is the bug form: below) |
-| Mod-mail | DM kira → a thread in `#mod-mail`; mods answer in the thread (`//` for notes, `//close` or `/close`). Each thread's name starts with its status: 🟢 Open (the member wrote last), 🟡 Waiting (a mod answered), ⚪ Closed; buttons set it by hand. Every day from 09:00 UTC, #mod-chat gets the threads Open for more than 12 h |
+| Mod-mail | DM kira → a thread in `#mod-mail`; mods answer in the thread (`//` for notes, `//close` or `/close`). Each thread's name starts with its status: 🟢 Open (the member wrote last), 🟡 Waiting (a mod answered), ⚪ Closed; buttons set it by hand. |
 | Levels | XP for messages (once a minute) and for voice time with others; lvl 5/10/20/30/50 roles; `/rank`, `/leaderboard`, `/givexp` |
 | Voice rooms | Join **➕ create your room** → your own channel; `/room lock / unlock / private / public / invite / kick / limit / rename / claim / transfer`; deleted when empty. **🎙️ ludovic** is locked: people wait in **⏳ waiting room** and Ludovic or a mod `/pull`s them in |
 | Forums | Each new post is checked against its template; Kira lists what's missing and closes it after an hour if it's still missing. `/done` closes your post with its tag (solved, taken, found, filled, done) |
@@ -143,8 +143,7 @@ everything lives in `state.modcases`.
 - **Where it goes.** Each appeal is a thread in `#mod-mail` (a text channel: it has no forum tags, so the name carries the
   status: `⚖️ 🟢 Appeal · case #12 · name`, then `⚖️ ⚪` once decided), with the case (action, evidence) and the answers,
   pinging 🛡️ Mod (Minecraft cases: the ops in `MC_OPS`: luzW). **Waiting** marks it 🟡 (waiting on evidence, a
-  second opinion) and back. An appeal not decided after 24 hours pings again in its thread, then every day, and appeals
-  not decided after 12 hours are on #mod-chat's daily list with the mod-mail threads.
+  second opinion) and back. An appeal not decided after 24 hours pings again in its thread, then every day.
 - **Deciding.** Buttons **Uphold**, **Shorten** (a new total length from the action), **Lift**, and on a quarantine **Uphold +
   ban** (the Team only). They are refused to the mod who acted (anyone may decide on Kira's own actions; Minecraft cases:
   the ops). Each takes a one-line reason the person reads. Lift ends the timeout, gives the roles back, or unbans; Shorten

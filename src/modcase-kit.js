@@ -21,7 +21,6 @@ export const APPEAL = {
   remindMs: DAY,           // an open appeal older than this pings the mods in its thread, then again every day
   linkMs: 30 * DAY,        // a web appeal link (banned users) works for 30 days, also to read the outcome
   max: { what: 1000, why: 1000, more: 1000, ign: 16, banText: 300, evidence: 1000, note: 200 },
-  staleMs: 12 * HOUR,      // appeals not decided after this go on #mod-chat's daily list too
 };
 // The form's questions (a Discord modal, and the web page for banned users): fixed, answered once.
 export const QUESTIONS = [
@@ -29,7 +28,6 @@ export const QUESTIONS = [
   { id: 'why', label: 'Why should it be lifted or shortened?', max: APPEAL.max.why, required: true },
   { id: 'more', label: 'Anything else the mods should know?', max: APPEAL.max.more, required: false },
 ];
-export const MODMAIL = { staleMs: 12 * HOUR };
 // The official Minecraft server's ops decide its appeals (Ludovic, 2026-10-30: luzW, his own account, and bunchy7s;
 // bunchy7s stepped down as mod on 2026-11-02). Ops on 2026-11-04: Ludovic (ludovic1), rdbt (in game rdbtclient) and
 // levzzz5154; luzW (Discord luzgardinho) and azetech_ (Discord yn4p) added on 2026-11-05, ids confirmed by Ludovic.
@@ -344,9 +342,6 @@ export function dueReminders(mc, now = Date.now()) {
   return Object.values(blank(mc).appeals).filter((a) => a.status !== 'decided' && now - a.at >= APPEAL.remindMs && now - (a.remindedAt ?? 0) >= APPEAL.remindMs);
 }
 
-// Appeals not decided after 12 hours (the daily list in #mod-chat), oldest first.
-export const staleAppeals = (mc, now = Date.now()) => Object.values(blank(mc).appeals).filter((a) => a.status !== 'decided' && now - a.at > APPEAL.staleMs).sort((x, y) => x.at - y.at);
-
 // Waiting: a mod marks the appeal as waiting on something (the acting mod's evidence, a second opinion); Open again.
 export function setWaiting(a, waiting) {
   if (a.status === 'decided') throw fail('This appeal was decided already.');
@@ -412,12 +407,6 @@ export function mailSet(mc, threadId, { status, userId = null }, now = Date.now(
   if (t.status !== status) { t.status = status; t.since = now; }
   if (status === 'closed') t.closedAt = now;
   return t;
-}
-
-// Threads Open for more than 12 hours, oldest first.
-export function staleMail(mc, now = Date.now()) {
-  return Object.entries(blank(mc).modmail).filter(([, t]) => t.status === 'open' && now - t.since > MODMAIL.staleMs)
-    .sort(([, x], [, y]) => x.since - y.since).map(([threadId, t]) => ({ threadId, ...t }));
 }
 
 // A thread's name may change twice in 10 minutes (Discord): renames come at most every 5 minutes, the last wins.
