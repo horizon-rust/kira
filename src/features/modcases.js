@@ -10,8 +10,7 @@
 // - Appeals: a form (a Discord modal with fixed questions; the website's /hub/appeal for banned users), one thread per
 //   appeal in #mod-mail, decided with buttons by a mod who didn't act. The person hears the outcome by DM (or in
 //   #appeal, or on the website).
-// - Mod-mail statuses: 🟢 Open / 🟡 Waiting / 🔒 Closed in each thread's name; a daily list in #mod-chat of the
-//   threads Open for more than 12 hours.
+// - Mod-mail statuses: 🟢 Open / 🟡 Waiting / 🔒 Closed in each thread's name.
 import {
   SlashCommandBuilder, PermissionFlagsBits as P, MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   ModalBuilder, TextInputBuilder, TextInputStyle, ThreadAutoArchiveDuration, ChannelType,
@@ -515,22 +514,6 @@ async function onMailButton(i) {
   return i.reply(ephemeral(`Marked ${kit.MAIL[what].label}.`));
 }
 
-// Once a day (from 09:00 UTC), #mod-chat gets the threads Open for more than 12 hours.
-async function mailReminder(now = Date.now()) {
-  const day = new Date(now).toISOString().slice(0, 10);
-  if (mc.mailReminderDay === day || new Date(now).getUTCHours() < 9) return;
-  mc.mailReminderDay = day;
-  save();
-  const stale = kit.staleMail(mc, now).filter((t) => mailUser(t.threadId));
-  const appeals = kit.staleAppeals(mc, now).filter((a) => a.threadId);
-  if (!stale.length && !appeals.length) return;
-  const lines = [
-    ...(stale.length ? ['📬 **Mod-mail** open for more than 12 h (the member wrote last, nobody answered):', ...stale.slice(0, 20).map((t) => `- <#${t.threadId}> (<@${t.userId}>), open since <t:${Math.floor(t.since / 1000)}:R>`)] : []),
-    ...(appeals.length ? ['⚖️ **Appeals** not decided after 12 h (a mod who didn\'t act decides):', ...appeals.slice(0, 20).map((a) => `- <#${a.threadId}>: case #${a.case}, ${a.status}, sent <t:${Math.floor(a.at / 1000)}:R>`)] : []),
-  ];
-  await channel('modchat')?.send({ content: lines.join('\n').slice(0, 2000), allowedMentions: { parse: [] } });
-}
-
 // ── Every minute: lengths that ran out; every hour: reminders on open appeals ──
 
 async function tick(now = Date.now()) {
@@ -545,7 +528,6 @@ async function tick(now = Date.now()) {
     expect(c.userId, 'unban', { by: kit.KIRA, reason: `the shortened ban of case #${c.n} ran out`, about: c.n });
     await guild()?.bans.remove(c.userId, `case #${c.n} ran out`).catch((e) => console.error('ban end', e.message));
   }
-  await mailReminder(now).catch((e) => console.error('mail reminder', e.message));
 }
 
 async function remind(now = Date.now()) {

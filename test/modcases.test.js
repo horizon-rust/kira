@@ -153,8 +153,6 @@ test('reminders after 24 h, then daily; the web link; the views', () => {
   a.remindedAt = T0 + D;
   assert.deepEqual(kit.dueReminders(mc, T0 + D + H), []);
   assert.deepEqual(kit.dueReminders(mc, T0 + 2 * D), [a]);
-  assert.deepEqual(kit.staleAppeals(mc, T0 + 11 * H), []);
-  assert.deepEqual(kit.staleAppeals(mc, T0 + 13 * H), [a], 'the daily list: not decided after 12 h');
   kit.setWaiting(a, true);
   assert.equal(kit.appealName(c, 'joe', a.status), `⚖️ 🟡 Appeal · case #${c.n} · joe`);
   assert.deepEqual(kit.dueReminders(mc, T0 + 3 * D), [a], 'waiting still reminds');
@@ -173,7 +171,7 @@ test('reminders after 24 h, then daily; the web link; the views', () => {
   assert.ok(!JSON.stringify(s).includes('"what"'), 'no answers on the dashboard list');
 });
 
-test('mod-mail statuses: who spoke last, the name, the 12-hour list, renames spaced out', async () => {
+test('mod-mail statuses: who spoke last, the name, renames spaced out', async () => {
   assert.equal(kit.mailAfter(null, 'member'), 'open');
   assert.equal(kit.mailAfter('open', 'mod'), 'waiting');
   assert.equal(kit.mailName('joe', 'open'), '🟢 joe');
@@ -183,7 +181,6 @@ test('mod-mail statuses: who spoke last, the name, the 12-hour list, renames spa
   kit.mailSet(mc, 't1', { status: 'open', userId: 'a' }, T0);
   kit.mailSet(mc, 't2', { status: 'waiting', userId: 'b' }, T0);
   kit.mailSet(mc, 't3', { status: 'open', userId: 'c' }, T0 + 6 * H);
-  assert.deepEqual(kit.staleMail(mc, T0 + 13 * H).map((t) => t.threadId), ['t1']);
   kit.mailSet(mc, 't1', { status: 'open' }, T0 + 13 * H);
   assert.equal(mc.modmail.t1.since, T0, 'the member writing again keeps the time it opened');
   let now = 0;
